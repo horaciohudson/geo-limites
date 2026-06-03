@@ -1,0 +1,219 @@
+{
+  "description": "📍 PROPERTY LANDMARKS CRUD TEST DATA - JSON para testes no Postman",
+  "baseUrl": "http://localhost:9010/api",
+  "authentication": "Bearer Token required in Authorization header",
+  "note": "Replace {{propertyId}} with actual property ID from previous tests",
+  
+  "testData": {
+    
+    "createLandmark1": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "landmarkName": "M1",
+        "landmarkType": "LANDMARK",
+        "coordinateX": 323456.78,
+        "coordinateY": 7654321.09,
+        "coordinateZ": 750.50,
+        "entranceAzimuth": 0.0000,
+        "exitAzimuth": 90.0000,
+        "previousDistance": 0.00,
+        "description": "Starting point - concrete landmark at street corner",
+        "landmarkMaterial": "Concrete",
+        "sequenceOrder": 1
+      }
+    },
+
+    "createLandmark2": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "landmarkName": "M2",
+        "landmarkType": "LANDMARK",
+        "coordinateX": 323472.28,
+        "coordinateY": 7654321.09,
+        "coordinateZ": 750.45,
+        "entranceAzimuth": 90.0000,
+        "exitAzimuth": 180.0000,
+        "previousDistance": 15.50,
+        "description": "Northeast corner - iron pipe landmark",
+        "landmarkMaterial": "Iron pipe",
+        "sequenceOrder": 2
+      }
+    },
+
+    "createLandmark3": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "landmarkName": "M3",
+        "landmarkType": "LANDMARK",
+        "coordinateX": 323472.28,
+        "coordinateY": 7654291.01,
+        "coordinateZ": 750.30,
+        "entranceAzimuth": 180.0000,
+        "exitAzimuth": 270.0000,
+        "previousDistance": 30.08,
+        "description": "Southeast corner - concrete landmark with metal plate",
+        "landmarkMaterial": "Concrete with metal plate",
+        "sequenceOrder": 3
+      }
+    },
+
+    "createLandmark4": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "landmarkName": "M4",
+        "landmarkType": "LANDMARK",
+        "coordinateX": 323456.78,
+        "coordinateY": 7654291.01,
+        "coordinateZ": 750.35,
+        "entranceAzimuth": 270.0000,
+        "exitAzimuth": 0.0000,
+        "previousDistance": 15.50,
+        "description": "Southwest corner - closing point",
+        "landmarkMaterial": "Concrete",
+        "sequenceOrder": 4
+      }
+    },
+
+    "createVertex1": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "landmarkName": "V1",
+        "landmarkType": "VERTEX",
+        "coordinateX": 323464.53,
+        "coordinateY": 7654306.05,
+        "coordinateZ": 750.42,
+        "description": "Intermediate vertex on north boundary",
+        "landmarkMaterial": "Virtual point",
+        "sequenceOrder": 5
+      }
+    },
+
+    "createReferencePoint": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "landmarkName": "RP1",
+        "landmarkType": "REFERENCE_POINT",
+        "coordinateX": 323500.00,
+        "coordinateY": 7654350.00,
+        "coordinateZ": 751.00,
+        "description": "Municipal reference point - used for coordinate validation",
+        "landmarkMaterial": "Bronze plate",
+        "sequenceOrder": 6
+      }
+    },
+
+    "updateLandmark": {
+      "method": "PUT",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks/{{landmarkId}}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "landmarkName": "M1-Updated",
+        "landmarkType": "LANDMARK",
+        "coordinateX": 323456.80,
+        "coordinateY": 7654321.10,
+        "coordinateZ": 750.52,
+        "description": "Starting point - concrete landmark at street corner (updated coordinates)",
+        "landmarkMaterial": "Reinforced concrete"
+      }
+    }
+  },
+
+  "landmarkTypes": {
+    "description": "Available landmark types for landmarkType field",
+    "types": [
+      "LANDMARK",
+      "VERTEX", 
+      "REFERENCE_POINT"
+    ]
+  },
+
+  "materialExamples": {
+    "description": "Common materials for landmarkMaterial field",
+    "materials": [
+      "Concrete",
+      "Iron pipe",
+      "Steel rod",
+      "Concrete with metal plate",
+      "Bronze plate",
+      "Stone marker",
+      "Wooden post",
+      "Virtual point",
+      "Reinforced concrete"
+    ]
+  },
+
+  "otherEndpoints": {
+    "listLandmarks": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "deleteLandmark": {
+      "method": "DELETE",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks/{{landmarkId}}",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "deleteAllLandmarks": {
+      "method": "DELETE",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "countLandmarks": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks/count",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    }
+  },
+
+  "coordinateNotes": {
+    "system": "SIRGAS 2000 / UTM zone 23S",
+    "xRange": "X coordinates (Easting) typically 200,000 - 800,000",
+    "yRange": "Y coordinates (Northing) typically 7,000,000 - 8,000,000", 
+    "zRange": "Z coordinates (Altitude) in meters above sea level",
+    "azimuthRange": "Azimuth in decimal degrees (0.0000 - 359.9999)"
+  }
+}

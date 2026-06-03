@@ -1,0 +1,27 @@
+{
+  "id": "memorial_descritivo",
+  "name": "Memorial Descritivo",
+  "description": "Template para memorial descritivo de levantamento topográfico",
+  "type": "memorial_descritivo",
+  "fields": [
+    {
+      "name": "proprietario",
+      "label": "Proprietário",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "localizacao",
+      "label": "Localização",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "area_total",
+      "label": "Área Total (m²)",
+      "type": "number",
+      "required": true
+    }
+  ],
+  "template": "MEMORIAL DESCRITIVO\n\nProprietário: {{proprietario}}\nLocalização: {{localizacao}}\nÁrea Total: {{area_total}} m²"
+}

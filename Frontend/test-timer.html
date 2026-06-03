@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste Timer Memorial</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .timer { background: #2c3e50; color: white; padding: 15px; border-radius: 8px; margin: 10px 0; }
+        .progress { background: #ecf0f1; height: 20px; border-radius: 10px; overflow: hidden; }
+        .progress-fill { background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; transition: width 0.5s ease; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .start { background: #27ae60; color: white; }
+        .stop { background: #e74c3c; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste do Timer do Memorial</h1>
+    
+    <div class="timer">
+        <div>⏱️ Tempo: <span id="timer">0:00</span></div>
+        <div>📊 Progresso: <span id="progress">0</span>%</div>
+        <div>🔄 Status: <span id="status">Parado</span></div>
+    </div>
+    
+    <div class="progress">
+        <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+    </div>
+    
+    <button class="start" onclick="startTimer()">▶️ Iniciar</button>
+    <button class="stop" onclick="stopTimer()">⏹️ Parar</button>
+    <button onclick="resetTimer()">🔄 Reset</button>
+    
+    <div id="log" style="margin-top: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; max-height: 300px; overflow-y: auto;"></div>
+
+    <script>
+        let startTime = null;
+        let timerInterval = null;
+        let progress = 0;
+        let isRunning = false;
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function updateDisplay(elapsed, prog, status) {
+            document.getElementById('timer').textContent = formatTime(elapsed);
+            document.getElementById('progress').textContent = prog;
+            document.getElementById('status').textContent = status;
+            document.getElementById('progressBar').style.width = prog + '%';
+        }
+
+        function startTimer() {
+            if (isRunning) {
+                log('❌ Timer já está rodando!');
+                return;
+            }
+
+            log('🚀 Iniciando timer...');
+            startTime = Date.now();
+            isRunning = true;
+            progress = 0;
+
+            updateDisplay(0, 0, 'Iniciando...');
+
+            // Timer principal - atualiza a cada segundo
+            timerInterval = setInterval(() => {
+                if (!isRunning) return;
+
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                
+                // Simular progresso
+                if (progress < 90) {
+                    progress += Math.random() * 5;
+                    progress = Math.min(progress, 90);
+                }
+
+                const status = progress < 30 ? 'Processando...' : 
+                              progress < 60 ? 'Analisando dados...' : 
+                              progress < 90 ? 'Gerando memorial...' : 'Finalizando...';
+
+                updateDisplay(elapsed, Math.round(progress), status);
+                
+                log(`⏱️ Timer tick: ${elapsed}s, progresso: ${Math.round(progress)}%`);
+
+                // Simular conclusão após 30 segundos
+                if (elapsed >= 30) {
+                    completeTimer();
+                }
+            }, 1000);
+
+            log('✅ Timer iniciado com sucesso!');
+        }
+
+        function stopTimer() {
+            if (!isRunning) {
+                log('❌ Timer não está rodando!');
+                return;
+            }
+
+            log('🛑 Parando timer...');
+            isRunning = false;
+            
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+
+            updateDisplay(0, 0, 'Parado');
+            log('✅ Timer parado!');
+        }
+
+        function resetTimer() {
+            log('🔄 Resetando timer...');
+            stopTimer();
+            startTime = null;
+            progress = 0;
+            updateDisplay(0, 0, 'Resetado');
+            log('✅ Timer resetado!');
+        }
+
+        function completeTimer() {
+            log('🎉 Timer completado!');
+            isRunning = false;
+            progress = 100;
+            
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            updateDisplay(elapsed, 100, 'Concluído!');
+            log('✅ Geração simulada concluída!');
+        }
+
+        // Log inicial
+        log('🧪 Teste do timer carregado. Clique em "Iniciar" para testar.');
+    </script>
+</body>
+</html>

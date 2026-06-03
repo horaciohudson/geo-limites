@@ -1,0 +1,23 @@
+[Unit]
+Description=GeoLimites Backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/geolimites/backend
+EnvironmentFile=/opt/geolimites/backend/.env
+ExecStart=/usr/bin/java -jar /opt/geolimites/backend/app.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+# Hardening basico
+NoNewPrivileges=true
+PrivateTmp=true
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

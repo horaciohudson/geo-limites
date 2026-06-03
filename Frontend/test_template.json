@@ -1,0 +1,19 @@
+{
+  "template_id": "teste_template_001",
+  "descricao": "Template de teste para verificar funcionamento do sistema",
+  "versao": "1.0",
+  "norma_referencia": "NBR-17047:2024",
+  "modo_texto": "texto corrido cartorial",
+  "estrutura": {
+    "cabecalho": "MEMORIAL DESCRITIVO DE TESTE\n\nTerreno: {{tipo_terreno}} | Proprietário: {{proprietario}} | Localização: {{logradouro}}",
+    "situacao_antes": "SITUAÇÃO ANTES\n\nTERRENO {{id_terreno}}\nUm imóvel localizado na {{logradouro}}, com área de {{area_total}} m².",
+    "situacao_depois": "SITUAÇÃO DEPOIS\n\nLOTE {{numero_lote}}\nUm imóvel com área de {{area_total}} m².",
+    "declaracao_final": "E por ser verdade, firmamos o presente memorial descritivo."
+  },
+  "placeholders": {
+    "proprietario": "Nome do proprietário",
+    "logradouro": "Nome da rua",
+    "area_total": "Área em metros quadrados"
+  },
+  "observacoes": ["Template de teste para validação do sistema"]
+}

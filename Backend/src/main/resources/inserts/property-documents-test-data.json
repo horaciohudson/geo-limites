@@ -1,0 +1,332 @@
+{
+  "description": "📄 PROPERTY DOCUMENTS CRUD TEST DATA - JSON para testes no Postman",
+  "baseUrl": "http://localhost:9010/api",
+  "authentication": "Bearer Token required in Authorization header",
+  "note": "Replace {{propertyId}} with actual property ID from previous tests",
+  
+  "testData": {
+    
+    "createDeedDocument": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "DEED",
+        "fileName": "escritura_imovel_2024.pdf",
+        "description": "Escritura pública do imóvel registrada em cartório",
+        "filePath": "/documents/properties/{{propertyId}}/deed/escritura_imovel_2024.pdf",
+        "fileSize": 2048576,
+        "mimeType": "application/pdf"
+      }
+    },
+
+    "createRegistrationDocument": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "REGISTRATION",
+        "fileName": "matricula_12345.pdf",
+        "description": "Matrícula do imóvel no cartório de registro de imóveis",
+        "filePath": "/documents/properties/{{propertyId}}/registration/matricula_12345.pdf",
+        "fileSize": 1024000,
+        "mimeType": "application/pdf"
+      }
+    },
+
+    "createPlanDocument": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "PLAN",
+        "fileName": "planta_baixa_arquitetonica.dwg",
+        "description": "Planta baixa arquitetônica do imóvel",
+        "filePath": "/documents/properties/{{propertyId}}/plans/planta_baixa_arquitetonica.dwg",
+        "fileSize": 5120000,
+        "mimeType": "application/acad"
+      }
+    },
+
+    "createSurveyDocument": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "SURVEY",
+        "fileName": "levantamento_topografico.pdf",
+        "description": "Levantamento topográfico planialtimétrico do terreno",
+        "filePath": "/documents/properties/{{propertyId}}/surveys/levantamento_topografico.pdf",
+        "fileSize": 3072000,
+        "mimeType": "application/pdf"
+      }
+    },
+
+    "createPhotoDocument": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "PHOTO",
+        "fileName": "foto_fachada_principal.jpg",
+        "description": "Fotografia da fachada principal do imóvel",
+        "filePath": "/documents/properties/{{propertyId}}/photos/foto_fachada_principal.jpg",
+        "fileSize": 512000,
+        "mimeType": "image/jpeg"
+      }
+    },
+
+    "createCertificateDocument": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "CERTIFICATE",
+        "fileName": "certidao_negativa_debitos.pdf",
+        "description": "Certidão negativa de débitos municipais",
+        "filePath": "/documents/properties/{{propertyId}}/certificates/certidao_negativa_debitos.pdf",
+        "fileSize": 256000,
+        "mimeType": "application/pdf"
+      }
+    },
+
+    "createContractDocument": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "CONTRACT",
+        "fileName": "contrato_compra_venda.pdf",
+        "description": "Contrato de compra e venda do imóvel",
+        "filePath": "/documents/properties/{{propertyId}}/contracts/contrato_compra_venda.pdf",
+        "fileSize": 1536000,
+        "mimeType": "application/pdf"
+      }
+    },
+
+    "createReportDocument": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "REPORT",
+        "fileName": "laudo_avaliacao_imovel.pdf",
+        "description": "Laudo de avaliação técnica do imóvel",
+        "filePath": "/documents/properties/{{propertyId}}/reports/laudo_avaliacao_imovel.pdf",
+        "fileSize": 4096000,
+        "mimeType": "application/pdf"
+      }
+    },
+
+    "updateDocument": {
+      "method": "PUT",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents/{{documentId}}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "documentType": "DEED",
+        "fileName": "escritura_imovel_2024_atualizada.pdf",
+        "description": "Escritura pública do imóvel registrada em cartório (versão atualizada)",
+        "fileSize": 2150000
+      }
+    }
+  },
+
+  "documentTypes": {
+    "description": "Available document types for documentType field",
+    "types": [
+      {
+        "code": "DEED",
+        "name": "Escritura",
+        "description": "Escritura pública do imóvel"
+      },
+      {
+        "code": "REGISTRATION", 
+        "name": "Matrícula",
+        "description": "Matrícula do imóvel no cartório"
+      },
+      {
+        "code": "PLAN",
+        "name": "Planta",
+        "description": "Plantas arquitetônicas e técnicas"
+      },
+      {
+        "code": "PHOTO",
+        "name": "Foto",
+        "description": "Fotografias do imóvel"
+      },
+      {
+        "code": "SURVEY",
+        "name": "Levantamento",
+        "description": "Levantamentos topográficos"
+      },
+      {
+        "code": "CERTIFICATE",
+        "name": "Certidão",
+        "description": "Certidões diversas"
+      },
+      {
+        "code": "CONTRACT",
+        "name": "Contrato",
+        "description": "Contratos relacionados ao imóvel"
+      },
+      {
+        "code": "PERMIT",
+        "name": "Alvará",
+        "description": "Alvarás e licenças"
+      },
+      {
+        "code": "LICENSE",
+        "name": "Licença",
+        "description": "Licenças ambientais e outras"
+      },
+      {
+        "code": "REPORT",
+        "name": "Laudo",
+        "description": "Laudos técnicos e avaliações"
+      },
+      {
+        "code": "OTHER",
+        "name": "Outros",
+        "description": "Outros documentos"
+      }
+    ]
+  },
+
+  "mimeTypes": {
+    "description": "Common MIME types for different file formats",
+    "types": {
+      "PDF": "application/pdf",
+      "Word": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "Excel": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "AutoCAD": "application/acad",
+      "DWG": "image/vnd.dwg",
+      "DXF": "image/vnd.dxf",
+      "JPEG": "image/jpeg",
+      "PNG": "image/png",
+      "TIFF": "image/tiff",
+      "ZIP": "application/zip",
+      "RAR": "application/x-rar-compressed"
+    }
+  },
+
+  "otherEndpoints": {
+    "listDocuments": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "listDocumentsByType": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents/type/DEED",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "getDocument": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents/{{documentId}}",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "deleteDocument": {
+      "method": "DELETE",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents/{{documentId}}",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "deleteAllDocuments": {
+      "method": "DELETE",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "countDocuments": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents/count",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "getTotalFileSize": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents/size",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "getDocumentTypes": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/documents/types",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    }
+  },
+
+  "testSequence": {
+    "description": "Recommended test sequence for documents",
+    "steps": [
+      "1. Create property first using property-test-data.json",
+      "2. Copy the propertyId from response",
+      "3. Replace {{propertyId}} in URLs above",
+      "4. Create different types of documents (DEED, REGISTRATION, PLAN, etc.)",
+      "5. Test list documents and filter by type",
+      "6. Test get document by ID",
+      "7. Test update document",
+      "8. Test count and file size endpoints",
+      "9. Test delete operations"
+    ]
+  },
+
+  "fileUploadNotes": {
+    "description": "Notes about file upload implementation",
+    "currentImplementation": "This CRUD manages document metadata only",
+    "fileStorage": "Actual file upload/storage would require additional endpoints",
+    "recommendations": [
+      "Implement separate file upload endpoint: POST /api/properties/{propertyId}/documents/{documentId}/upload",
+      "Use multipart/form-data for file uploads",
+      "Store files in cloud storage (AWS S3, Google Cloud, etc.)",
+      "Generate secure download URLs for file access",
+      "Implement file type validation and size limits"
+    ]
+  }
+}

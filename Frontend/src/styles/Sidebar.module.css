@@ -1,0 +1,123 @@
+.sidebar {
+  width: 250px;
+  background-color: #34495e;
+  color: white;
+  padding: 0.2rem 0 0.65rem;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sidebarActions {
+  padding-top: 0.15rem;
+}
+
+.sidebarActions + .sidebarActions {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #41586d;
+}
+
+.sidebarSectionTitle {
+  padding: 0.3rem 1.2rem 0.35rem;
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: #9fb1c1;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.05rem;
+}
+
+.sidebarActionBtn {
+  width: 100%;
+  background: none;
+  border: none;
+  color: #bdc3c7;
+  text-decoration: none;
+  padding: 0.56rem 1.2rem;
+  transition: all 0.3s ease;
+  border-left: 3px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.62rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  border-radius: 0 12px 12px 0;
+}
+
+.active {
+  background: linear-gradient(90deg, #3498db 0%, #3fa0ea 100%);
+  color: white;
+  border-left-color: #7cc5ff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.sidebarActionBtn:hover:not(:disabled) {
+  background-color: #2c3e50;
+  color: white;
+}
+
+.sidebarActionBtnMuted {
+  opacity: 0.58;
+}
+
+.sidebarCountBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  margin-left: 0.45rem;
+  padding: 0 0.42rem;
+  border-radius: 999px;
+  background: rgba(52, 152, 219, 0.18);
+  color: #d7efff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.sidebarActionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sidebarIcon {
+  font-size: 1rem;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sidebarLabel {
+  font-size: 0.82rem;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Botões do menu superior (estilo igual às ações) */
+.sidebarMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  padding: 0.12rem 0;
+  margin: 0;
+  list-style: none;
+}
+
+.sidebarLink {
+  composes: sidebarActionBtn;
+}
+
+.sidebarLink.active {
+  background-color: #3498db;
+  color: white;
+  border-left-color: #2980b9;
+}

@@ -1,0 +1,389 @@
+﻿MEMORIAL GERADO COM IA
+
+# MEMORIAL DESCRITIVO DE DESMEMBRAMENTO DE ÃREA
+
+## IDENTIFICAÃÃO:
+- **Terreno:** Urbano
+- **ProprietÃ¡rio:** A definir
+- **LocalizaÃ§Ã£o:** Coordenadas E 2932,61m e N 1508,96m
+- **Objetivo:** Levantamento TopogrÃ¡fico PlanimÃ©trico georreferenciado no Datum Sirgas 2000 para fins de Desmembramento de Ãrea
+
+## SITUAÃÃO ANTES DESTE DESMEMBRAMENTO DE ÃREA:
+**TERRENO 1:**
+- **DescriÃ§Ã£o completa do terreno original:**
+  - **Coordenadas REAIS:** P01 coordenadas E 2932,61m e N 1508,96m
+  - **PerÃ­metro total calculado:** 100,00 m (exemplo, a ser ajustado conforme dados reais)
+  - **Ãrea territorial calculada:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+  - **ConfrontaÃ§Ãµes detalhadas:**
+    - **AO NORTE:** LOTE 12
+    - **AO SUL:** Rua Principal
+    - **AO LESTE:** LOTE 11
+    - **AO OESTE:** LOTE 10
+  - **Medidas lineares precisas calculadas:** 25,00 m (exemplo, a ser ajustado conforme dados reais)
+  - **ReferÃªncias a propriedades vizinhas:** LOTE 10, LOTE 11, LOTE 12
+
+## SITUAÃÃO DEPOIS DESTE DESMEMBRAMENTO DE ÃREA:
+### LOTE 01:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P01-P04 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P01(2888,27,1468,78) 
+  - P02(2910,44,1468,78) 
+  - P03(2910,44,1488,87) 
+  - P04(2888,27,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 02
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 03
+  - **AO OESTE:** LOTE 04
+
+### LOTE 02:
+- **LocalizaÃ§Ã£o:** 
+  - P05(2910,44,1468,78) 
+  - P06(2932,61,1468,78) 
+  - P07(2932,61,1488,87) 
+  - P08(2910,44,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 03
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 04
+  - **AO OESTE:** LOTE 01
+
+### LOTE 03:
+- **LocalizaÃ§Ã£o:** 
+  - P09(2932,61,1468,78) 
+  - P10(2954,78,1468,78) 
+  - P11(2954,78,1488,87) 
+  - P12(2932,61,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 04
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 05
+  - **AO OESTE:** LOTE 02
+
+### LOTE 04:
+- **LocalizaÃ§Ã£o:** 
+  - P13(2954,78,1468,78) 
+  - P14(2976,95,1468,78) 
+  - P15(2976,95,1488,87) 
+  - P16(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 05
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 06
+  - **AO OESTE:** LOTE 03
+
+### LOTE 05:
+- **LocalizaÃ§Ã£o:** 
+  - P17(2976,95,1468,78) 
+  - P18(2999,12,1468,78) 
+  - P19(2999,12,1488,87) 
+  - P20(2976,95,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 06
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 07
+  - **AO OESTE:** LOTE 04
+
+### LOTE 06:
+- **LocalizaÃ§Ã£o:** 
+  - P21(2999,12,1468,78) 
+  - P22(2999,12,1488,87) 
+  - P23(2976,95,1488,87) 
+  - P24(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 07
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 08
+  - **AO OESTE:** LOTE 05
+
+### LOTE 07:
+- **LocalizaÃ§Ã£o:** 
+  - P25(2999,12,1468,78) 
+  - P26(2999,12,1488,87) 
+  - P27(2976,95,1488,87) 
+  - P28(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 08
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 09
+  - **AO OESTE:** LOTE 06
+
+### LOTE 08:
+- **LocalizaÃ§Ã£o:** 
+  - P29(2999,12,1468,78) 
+  - P30(2999,12,1488,87) 
+  - P31(2976,95,1488,87) 
+  - P32(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 09
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 10
+  - **AO OESTE:** LOTE 07
+
+### LOTE 09:
+- **LocalizaÃ§Ã£o:** 
+  - P33(2999,12,1468,78) 
+  - P34(2999,12,1488,87) 
+  - P35(2976,95,1488,87) 
+  - P36(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 10
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 11
+  - **AO OESTE:** LOTE 08
+
+### LOTE 10:
+- **LocalizaÃ§Ã£o:** 
+  - P37(2999,12,1468,78) 
+  - P38(2999,12,1488,87) 
+  - P39(2976,95,1488,87) 
+  - P40(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 11
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 12
+  - **AO OESTE:** LOTE 09
+
+### LOTE 11:
+- **LocalizaÃ§Ã£o:** 
+  - P41(2999,12,1468,78) 
+  - P42(2999,12,1488,87) 
+  - P43(2976,95,1488,87) 
+  - P44(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 12
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 13
+  - **AO OESTE:** LOTE 10
+
+### LOTE 12:
+- **LocalizaÃ§Ã£o:** 
+  - P45(2999,12,1468,78) 
+  - P46(2999,12,1488,87) 
+  - P47(2976,95,1488,87) 
+  - P48(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 13
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 14
+  - **AO OESTE:** LOTE 11
+
+### LOTE 13:
+- **LocalizaÃ§Ã£o:** 
+  - P49(2999,12,1468,78) 
+  - P50(2999,12,1488,87) 
+  - P51(2976,95,1488,87) 
+  - P52(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 14
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 15
+  - **AO OESTE:** LOTE 12
+
+### LOTE 14:
+- **LocalizaÃ§Ã£o:** 
+  - P53(2999,12,1468,78) 
+  - P54(2999,12,1488,87) 
+  - P55(2976,95,1488,87) 
+  - P56(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 15
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 16
+  - **AO OESTE:** LOTE 13
+
+### LOTE 15:
+- **LocalizaÃ§Ã£o:** 
+  - P57(2999,12,1468,78) 
+  - P58(2999,12,1488,87) 
+  - P59(2976,95,1488,87) 
+  - P60(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 16
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 17
+  - **AO OESTE:** LOTE 14
+
+### LOTE 16:
+- **LocalizaÃ§Ã£o:** 
+  - P61(2999,12,1468,78) 
+  - P62(2999,12,1488,87) 
+  - P63(2976,95,1488,87) 
+  - P64(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 17
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 18
+  - **AO OESTE:** LOTE 15
+
+### LOTE 17:
+- **LocalizaÃ§Ã£o:** 
+  - P65(2999,12,1468,78) 
+  - P66(2999,12,1488,87) 
+  - P67(2976,95,1488,87) 
+  - P68(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 18
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 19
+  - **AO OESTE:** LOTE 16
+
+### LOTE 18:
+- **LocalizaÃ§Ã£o:** 
+  - P69(2999,12,1468,78) 
+  - P70(2999,12,1488,87) 
+  - P71(2976,95,1488,87) 
+  - P72(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 19
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 20
+  - **AO OESTE:** LOTE 17
+
+### LOTE 19:
+- **LocalizaÃ§Ã£o:** 
+  - P73(2999,12,1468,78) 
+  - P74(2999,12,1488,87) 
+  - P75(2976,95,1488,87) 
+  - P76(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 20
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 21
+  - **AO OESTE:** LOTE 18
+
+### LOTE 20:
+- **LocalizaÃ§Ã£o:** 
+  - P77(2999,12,1468,78) 
+  - P78(2999,12,1488,87) 
+  - P79(2976,95,1488,87) 
+  - P80(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 21
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 22
+  - **AO OESTE:** LOTE 19
+
+### LOTE 21:
+- **LocalizaÃ§Ã£o:** 
+  - P81(2999,12,1468,78) 
+  - P82(2999,12,1488,87) 
+  - P83(2976,95,1488,87) 
+  - P84(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 22
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 23
+  - **AO OESTE:** LOTE 20
+
+### LOTE 22:
+- **LocalizaÃ§Ã£o:** 
+  - P85(2999,12,1468,78) 
+  - P86(2999,12,1488,87) 
+  - P87(2976,95,1488,87) 
+  - P88(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 23
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 24
+  - **AO OESTE:** LOTE 21
+
+### LOTE 23:
+- **LocalizaÃ§Ã£o:** 
+  - P89(2999,12,1468,78) 
+  - P90(2999,12,1488,87) 
+  - P91(2976,95,1488,87) 
+  - P92(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 24
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 25
+  - **AO OESTE:** LOTE 22
+
+### LOTE 24:
+- **LocalizaÃ§Ã£o:** 
+  - P93(2999,12,1468,78) 
+  - P94(2999,12,1488,87) 
+  - P95(2976,95,1488,87) 
+  - P96(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 25
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 26
+  - **AO OESTE:** LOTE 23
+
+### LOTE 25:
+- **LocalizaÃ§Ã£o:** 
+  - P97(2999,12,1468,78) 
+  - P98(2999,12,1488,87) 
+  - P99(2976,95,1488,87) 
+  - P100(2954,78,1488,87)
+- **PerÃ­metro:** 88,00 m (exemplo, a ser ajustado conforme dados reais)
+- **Ãrea territorial:** 500,00 mÂ² (exemplo, a ser ajustado conforme dados reais)
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 26
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 27
+  - **AO OESTE:** LOTE 24
+
+## REFERÃNCIAS NORMATIVAS:
+- ABNT NBR 13133:1994 - Memoriais Descritivos
+
+## DIAGNÃSTICO DE PROBLEMAS:
+- NÃ£o foram encontrados dados adicionais nos arquivos DXF que pudessem complementar as informaÃ§Ãµes do memorial.
+- SugestÃµes para correÃ§Ã£o: Verificar a integridade dos arquivos DXF e garantir que todos os dados necessÃ¡rios estejam presentes.
+
+## MEMORIAL INCOMPLETO:
+- O memorial foi gerado com base nas informaÃ§Ãµes disponÃ­veis, mas pode haver limitaÃ§Ãµes em relaÃ§Ã£o a dados especÃ­ficos de perÃ­metros e Ã¡reas que precisam ser ajustados conforme mediÃ§Ãµes reais.
+
+---
+
+**Nota:** Os valores de perÃ­metro e Ã¡rea sÃ£o exemplos e devem ser ajustados conforme os dados reais extraÃ­dos do DXF.

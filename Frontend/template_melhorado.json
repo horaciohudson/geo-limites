@@ -1,0 +1,78 @@
+{
+  "template_id": "memorial_desmembramento_nbr17047_v2_melhorado",
+  "descricao": "Template NBR-17047 melhorado com coordenadas reais e confrontações específicas",
+  "versao": "2.0",
+  "norma_referencia": "NBR-17047:2024",
+  "modo_texto": "texto corrido cartorial",
+  "estrutura": {
+    "cabecalho": "MEMORIAL DESCRITIVO DE DESMEMBRAMENTO DE ÁREA\n\nTerreno: {{tipo_terreno}} | Proprietário: {{proprietario}} | Localização: {{endereco_completo}} | Município/UF: {{municipio}}/{{uf}}\nObjetivo: Levantamento Topográfico Planimétrico de imóvel urbano georreferenciado no Datum SIRGAS 2000 para fins de Desmembramento de Área.",
+    
+    "situacao_antes": "SITUAÇÃO ANTES DESTE DESMEMBRAMENTO DE ÁREA\n\nTERRENO {{id_terreno}}\nUm imóvel urbano localizado na {{endereco_completo}}, bairro {{bairro}}, {{municipio}}/{{uf}}, possuindo formato poligonal e irregular, conforme seus pontos {{lista_pontos_coordenadas}}, perfazendo um perímetro de {{perimetro_total_num}}m ({{perimetro_total_extenso}}) e uma área territorial total de {{area_total_num}}m² ({{area_total_extenso}}), com as seguintes medidas e confrontações:\n\n{{confrontacoes_detalhadas}}",
+    
+    "situacao_depois": "SITUAÇÃO DEPOIS DESTE DESMEMBRAMENTO DE ÁREA\n\n{{lotes_individuais}}",
+    
+    "lote_individual": "LOTE {{numero_lote}}:\nUm imóvel urbano localizado na {{rua_lote}}, bairro {{bairro}}, {{municipio}}/{{uf}}, possuindo formato poligonal, conforme seus pontos {{pontos_lote}}, perfazendo um perímetro de {{perimetro_lote_num}}m ({{perimetro_lote_extenso}}) e uma área territorial de {{area_lote_num}}m² ({{area_lote_extenso}}), com as seguintes medidas e confrontações:\n\n{{confrontacoes_lote}}",
+    
+    "confrontacao_padrao": "AO {{direcao}} ({{tipo_lado}}): {{descricao_confrontacao}}, medindo uma distância de {{medida_num}}m ({{medida_extenso}}), partindo do ponto {{ponto_inicial}}, segue até o ponto {{ponto_final}}, limitando-se com {{confrontante_especifico}}.",
+    
+    "declaracao_final": "DECLARAÇÃO\n\nDeclaro para todos os fins e efeitos de direito que o levantamento topográfico respeitou as divisas consolidadas e o alinhamento do logradouro público, importando sujeitar-se ao que dispõe o § 14, do artigo 213, da LRP. Verificado a qualquer tempo não serem verdadeiros os fatos constantes no memorial descritivo, responderão o requerente e o profissional que o elaborou pelos prejuízos causados, independentemente das sanções disciplinares e penais.\n\n{{cidade}}, {{data}}.\n\n_________________________________________________\n{{nome_responsavel}} | {{crea}} | {{rnp}}"
+  },
+  
+  "placeholders": {
+    "tipo_terreno": "Tipo do terreno (Urbano, Rural, etc.)",
+    "proprietario": "Nome completo ou razão social do proprietário",
+    "endereco_completo": "Endereço completo com rua e número",
+    "bairro": "Nome do bairro",
+    "municipio": "Nome do município",
+    "uf": "Sigla da unidade federativa",
+    "id_terreno": "Identificação do terreno original",
+    "lista_pontos_coordenadas": "Lista de pontos com coordenadas SIRGAS 2000",
+    "perimetro_total_num": "Perímetro total em números",
+    "perimetro_total_extenso": "Perímetro total por extenso",
+    "area_total_num": "Área total em números",
+    "area_total_extenso": "Área total por extenso",
+    "confrontacoes_detalhadas": "Confrontações detalhadas por direção",
+    "lotes_individuais": "Descrição individual de todos os lotes",
+    "numero_lote": "Número do lote",
+    "rua_lote": "Rua onde o lote está localizado",
+    "pontos_lote": "Pontos específicos do lote com coordenadas",
+    "perimetro_lote_num": "Perímetro do lote em números",
+    "perimetro_lote_extenso": "Perímetro do lote por extenso",
+    "area_lote_num": "Área do lote em números",
+    "area_lote_extenso": "Área do lote por extenso",
+    "confrontacoes_lote": "Confrontações específicas do lote",
+    "direcao": "Direção da confrontação (NORTE, SUL, LESTE, OESTE)",
+    "tipo_lado": "Tipo do lado (fundos, frente, lateral esquerda, lateral direita)",
+    "descricao_confrontacao": "Descrição da confrontação",
+    "medida_num": "Medida em números",
+    "medida_extenso": "Medida por extenso",
+    "ponto_inicial": "Ponto inicial da medida",
+    "ponto_final": "Ponto final da medida",
+    "confrontante_especifico": "Nome específico do confrontante",
+    "cidade": "Cidade onde foi elaborado o memorial",
+    "data": "Data de elaboração",
+    "nome_responsavel": "Nome do responsável técnico",
+    "crea": "Número do CREA",
+    "rnp": "Número do RNP"
+  },
+  
+  "instrucoes_ia": {
+    "coordenadas": "SEMPRE use coordenadas reais extraídas do DXF no formato SIRGAS 2000. NÃO invente coordenadas sequenciais.",
+    "confrontacoes": "Use confrontações específicas extraídas do DXF (nomes de propriedades, matrículas, CNPJs). NÃO use 'propriedades vizinhas não identificadas'.",
+    "areas": "Use áreas reais calculadas dos polígonos do DXF. Lotes podem ter áreas diferentes (não apenas 130m²).",
+    "ruas": "Use nomes de ruas extraídos do DXF. Podem existir múltiplas ruas no projeto.",
+    "pontos": "Use nomenclatura real dos pontos (P01, P02, etc.) conforme extraído do DXF.",
+    "segmentos": "Quando um lado tem múltiplos segmentos, use 'DIVIDIDO EM X SEGMENTOS' conforme NBR-17047.",
+    "completude": "Gere TODOS os lotes detectados no DXF. NÃO pare no meio da geração."
+  },
+  
+  "observacoes": [
+    "Template melhorado para usar dados reais extraídos do DXF",
+    "Suporta coordenadas SIRGAS 2000 reais",
+    "Inclui confrontações específicas com propriedades vizinhas",
+    "Suporta áreas variadas por lote",
+    "Suporta múltiplas ruas e logradouros",
+    "Inclui instruções específicas para a IA",
+    "Conforme NBR-17047:2024 com melhorias de precisão"
+  ]
+}

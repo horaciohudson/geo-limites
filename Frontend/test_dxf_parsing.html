@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test DXF Parsing</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .data { background: #f5f5f5; padding: 10px; white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; }
+        input[type="file"] { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test DXF Parsing - MemorialPro</h1>
+    
+    <div class="section">
+        <h2>📁 Carregar Arquivo DXF Local</h2>
+        <input type="file" id="fileInput" accept=".dxf" />
+        <button onclick="parseLocalFile()">🔍 Analisar Arquivo</button>
+    </div>
+    
+    <div class="section">
+        <h2>🌐 Testar API do Backend</h2>
+        <input type="text" id="fileId" placeholder="ID do arquivo (ex: 1)" />
+        <button onclick="testBackendAPI()">📡 Testar API</button>
+    </div>
+    
+    <div class="section">
+        <h2>📊 Resultado do Parsing</h2>
+        <div id="parsing-result" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>🔍 Conteúdo Bruto do DXF</h2>
+        <div id="raw-content" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>🎯 Entidades Encontradas</h2>
+        <div id="entities-found" class="data"></div>
+    </div>
+
+    <script>
+        // Implementação simplificada do parser DXF para teste
+        class TestDXFParser {
+            constructor(content) {
+                this.content = content;
+                this.lines = content.split('\n').map(line => line.trim());
+                this.currentIndex = 0;
+            }
+
+            parse() {
+                console.log('🔍 Iniciando parsing de teste...');
+                console.log('📏 Tamanho do conteúdo:', this.content.length);
+                console.log('📄 Número de linhas:', this.lines.length);
+                
+                const entities = [];
+                const layers = [];
+                
+                // Procurar seção ENTITIES
+                const entitiesStart = this.findSection('ENTITIES');
+                if (entitiesStart !== -1) {
+                    console.log('✅ Seção ENTITIES encontrada na linha:', entitiesStart);
+                    this.currentIndex = entitiesStart;
+                    this.parseEntities(entities);
+                } else {
+                    console.log('❌ Seção ENTITIES não encontrada');
+                }
+                
+                // Procurar seção TABLES
+                const tablesStart = this.findSection('TABLES');
+                if (tablesStart !== -1) {
+                    console.log('✅ Seção TABLES encontrada na linha:', tablesStart);
+                    this.currentIndex = tablesStart;
+                    this.parseLayers(layers);
+                } else {
+                    console.log('❌ Seção TABLES não encontrada');
+                }
+                
+                const result = {
+                    entities,
+                    layers,
+                    entityCounts: this.countEntities(entities),
+                    layerCounts: this.countLayers(entities),
+                    rawLines: this.lines.slice(0, 50), // Primeiras 50 linhas para debug
+                    totalLines: this.lines.length
+                };
+                
+                console.log('🏁 Parsing concluído:', result);
+                return result;
+            }
+            
+            findSection(sectionName) {
+                for (let i = 0; i < this.lines.length - 1; i++) {
+                    if (this.lines[i] === '0' && this.lines[i + 1] === 'SECTION') {
+                        for (let j = i + 2; j < this.lines.length - 1; j++) {
+                            if (this.lines[j] === '2' && this.lines[j + 1] === sectionName) {
+                                return j + 2;
+                            }
+                            if (this.lines[j] === '0') break;
+                        }
+                    }
+                }
+                return -1;
+            }
+            
+            parseEntities(entities) {
+                let entityCount = 0;
+                
+                while (this.currentIndex < this.lines.length - 1) {
+                    const line = this.lines[this.currentIndex];
+                    
+                    if (line === '0') {
+                        const nextLine = this.lines[this.currentIndex + 1];
+                        
+                        if (nextLine === 'ENDSEC') {
+                            console.log('🏁 Fim da seção ENTITIES. Entidades processadas:', entityCount);
+                            break;
+                        }
+
+                        if (['LINE', 'CIRCLE', 'ARC', 'TEXT', 'MTEXT', 'POLYLINE', 'LWPOLYLINE', 'INSERT', 'POINT'].includes(nextLine)) {
+                            const entity = this.parseEntity(nextLine);
+                            if (entity) {
+                                entities.push(entity);
+                                entityCount++;
+                                if (entityCount <= 10) {
+                                    console.log(`📍 Entidade ${entityCount}:`, entity);
+                                }
+                            }
+                        }
+                    }
+                    
+                    this.currentIndex++;
+                }
+            }
+            
+            parseEntity(entityType) {
+                const entity = {
+                    type: entityType,
+                    layer: '0',
+                    properties: {}
+                };
+
+                this.currentIndex += 2;
+
+                while (this.currentIndex < this.lines.length - 1) {
+                    const code = this.lines[this.currentIndex];
+                    const value = this.lines[this.currentIndex + 1];
+
+                    if (code === '0') {
+                        this.currentIndex--;
+                        break;
+                    }
+
+                    // Armazenar todas as propriedades para análise
+                    entity.properties[`code_${code}`] = value;
+                    
+                    // Propriedades específicas
+                    switch (code) {
+                        case '8': entity.layer = value; break;
+                        case '10': entity.properties.x = parseFloat(value); break;
+                        case '20': entity.properties.y = parseFloat(value); break;
+                        case '30': entity.properties.z = parseFloat(value); break;
+                        case '11': entity.properties.x2 = parseFloat(value); break;
+                        case '21': entity.properties.y2 = parseFloat(value); break;
+                        case '40': entity.properties.radius = parseFloat(value); break;
+                        case '1': entity.properties.text = value; break;
+                    }
+
+                    this.currentIndex += 2;
+                }
+
+                return entity;
+            }
+            
+            parseLayers(layers) {
+                // Implementação simplificada
+                console.log('🏷️ Parsing de layers (simplificado)');
+            }
+            
+            countEntities(entities) {
+                const counts = {};
+                entities.forEach(entity => {
+                    counts[entity.type] = (counts[entity.type] || 0) + 1;
+                });
+                return counts;
+            }
+            
+            countLayers(entities) {
+                const counts = {};
+                entities.forEach(entity => {
+                    counts[entity.layer] = (counts[entity.layer] || 0) + 1;
+                });
+                return counts;
+            }
+        }
+        
+        function parseLocalFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Por favor, selecione um arquivo DXF');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                
+                // Mostrar conteúdo bruto
+                document.getElementById('raw-content').innerHTML = 
+                    `<div class="success">✅ Arquivo carregado: ${file.name}</div>` +
+                    `<div>Tamanho: ${content.length} caracteres</div>` +
+                    `<div>Primeiras 1000 caracteres:</div>` +
+                    `<pre>${content.substring(0, 1000)}</pre>`;
+                
+                // Fazer parsing
+                try {
+                    const parser = new TestDXFParser(content);
+                    const result = parser.parse();
+                    
+                    document.getElementById('parsing-result').innerHTML = 
+                        `<div class="success">✅ Parsing concluído</div>` +
+                        `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                    
+                    // Mostrar entidades
+                    let entitiesHtml = `<div class="success">✅ ${result.entities.length} entidades encontradas</div>`;
+                    result.entities.slice(0, 20).forEach((entity, index) => {
+                        entitiesHtml += `<div><strong>${index + 1}. ${entity.type}</strong> (Layer: ${entity.layer})</div>`;
+                        entitiesHtml += `<pre>${JSON.stringify(entity.properties, null, 2)}</pre><hr>`;
+                    });
+                    
+                    document.getElementById('entities-found').innerHTML = entitiesHtml;
+                    
+                } catch (error) {
+                    document.getElementById('parsing-result').innerHTML = 
+                        `<div class="error">❌ Erro no parsing: ${error.message}</div>`;
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        async function testBackendAPI() {
+            const fileId = document.getElementById('fileId').value;
+            
+            if (!fileId) {
+                alert('Por favor, digite o ID do arquivo');
+                return;
+            }
+            
+            try {
+                document.getElementById('parsing-result').innerHTML = 
+                    '<div class="warning">⏳ Fazendo requisição para o backend...</div>';
+                
+                const response = await fetch(`/api/dxf/${fileId}/download`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const content = await response.text();
+                
+                // Mostrar conteúdo bruto
+                document.getElementById('raw-content').innerHTML = 
+                    `<div class="success">✅ Resposta do backend recebida</div>` +
+                    `<div>Status: ${response.status}</div>` +
+                    `<div>Tamanho: ${content.length} caracteres</div>` +
+                    `<div>Primeiras 1000 caracteres:</div>` +
+                    `<pre>${content.substring(0, 1000)}</pre>`;
+                
+                // Fazer parsing
+                const parser = new TestDXFParser(content);
+                const result = parser.parse();
+                
+                document.getElementById('parsing-result').innerHTML = 
+                    `<div class="success">✅ Parsing do backend concluído</div>` +
+                    `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                
+                // Mostrar entidades
+                let entitiesHtml = `<div class="success">✅ ${result.entities.length} entidades encontradas</div>`;
+                result.entities.slice(0, 20).forEach((entity, index) => {
+                    entitiesHtml += `<div><strong>${index + 1}. ${entity.type}</strong> (Layer: ${entity.layer})</div>`;
+                    entitiesHtml += `<pre>${JSON.stringify(entity.properties, null, 2)}</pre><hr>`;
+                });
+                
+                document.getElementById('entities-found').innerHTML = entitiesHtml;
+                
+            } catch (error) {
+                document.getElementById('parsing-result').innerHTML = 
+                    `<div class="error">❌ Erro na requisição: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,622 @@
+{
+	"info": {
+		"_postman_id": "memorial-pro-api-collection",
+		"name": "GeoLimites API Collection",
+		"description": "Coleção completa de endpoints da API GeoLimites",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "🔐 Autenticação",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin@geolimites.com\",\n  \"password\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Registrar Usuário",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"usuario@teste.com\",\n  \"password\": \"senha123\",\n  \"fullName\": \"Usuário de Teste\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"refresh"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"logout"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Usuário Atual",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"me"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "👥 Usuários",
+			"item": [
+				{
+					"name": "Listar Usuários",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Usuário",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"novo@usuario.com\",\n  \"fullName\": \"Novo Usuário\",\n  \"password\": \"senha123\",\n  \"active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obter Usuário por ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/users/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"1"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📁 Arquivos DXF",
+			"item": [
+				{
+					"name": "Upload Arquivo DXF",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "description",
+									"value": "Arquivo de teste",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/dxf/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"dxf",
+								"upload"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Meus Arquivos",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/dxf/my-files",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"dxf",
+								"my-files"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Comparar Arquivos DXF",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fileIdA\": \"{{file_id_1}}\",\n  \"fileIdB\": \"{{file_id_2}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/dxf/compare",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"dxf",
+								"compare"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📋 Memorial Descritivo",
+			"item": [
+				{
+					"name": "Gerar Memorial com GPT",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fileId\": 1,\n  \"propertyInfo\": {\n    \"owner\": \"João Silva\",\n    \"location\": \"Rua das Flores, 123\",\n    \"city\": \"São Paulo\",\n    \"state\": \"SP\"\n  },\n  \"additionalInstructions\": \"Incluir informações sobre confrontações\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/memorial/generate-gpt",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"memorial",
+								"generate-gpt"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Gerar Memorial Padrão",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fileId\": 1,\n  \"propertyInfo\": {\n    \"owner\": \"Maria Santos\",\n    \"location\": \"Av. Principal, 456\",\n    \"city\": \"Rio de Janeiro\",\n    \"state\": \"RJ\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/memorial/generate-standard",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"memorial",
+								"generate-standard"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Exportar Memorial",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"memorialContent\": \"Conteúdo do memorial descritivo...\",\n  \"format\": \"PDF\",\n  \"fileName\": \"memorial_teste\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/memorial/export",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"memorial",
+								"export"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📝 Templates",
+			"item": [
+				{
+					"name": "Listar Templates",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/templates",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"templates"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Template",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Template Padrão\",\n  \"content\": \"Conteúdo do template...\",\n  \"description\": \"Template para memoriais padrão\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/templates",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"templates"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Gerar com Template",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"templateId\": 1,\n  \"fileId\": 1,\n  \"variables\": {\n    \"proprietario\": \"João Silva\",\n    \"endereco\": \"Rua das Flores, 123\",\n    \"cidade\": \"São Paulo\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/templates/generate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"templates",
+								"generate"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📊 Memorial Standards",
+			"item": [
+				{
+					"name": "Listar Standards",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/memorial-standards",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"memorial-standards"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Standard",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"ABNT NBR 13133\",\n  \"description\": \"Norma para execução de levantamento topográfico\",\n  \"standardText\": \"Conteúdo da norma conforme ABNT NBR 13133...\",\n  \"promptTemplate\": \"Gere um memorial descritivo seguindo a norma ABNT NBR 13133 com as seguintes informações: {dados_terreno}\",\n  \"isDefault\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/memorial-standards",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"memorial-standards"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:9010",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

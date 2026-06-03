@@ -1,0 +1,45 @@
+{
+  "entities": [
+    {
+      "type": "LINE",
+      "layer": "BOUNDARY",
+      "x": 325000.00,
+      "y": 7650000.00,
+      "x2": 325020.00,
+      "y2": 7650000.00,
+      "fingerprint": "line_north_boundary"
+    },
+    {
+      "type": "LINE", 
+      "layer": "BOUNDARY",
+      "x": 325020.00,
+      "y": 7650000.00,
+      "x2": 325020.00,
+      "y2": 7649970.00,
+      "fingerprint": "line_east_boundary"
+    },
+    {
+      "type": "LINE",
+      "layer": "BOUNDARY", 
+      "x": 325020.00,
+      "y": 7649970.00,
+      "x2": 325000.00,
+      "y2": 7649970.00,
+      "fingerprint": "line_south_boundary"
+    },
+    {
+      "type": "LINE",
+      "layer": "BOUNDARY",
+      "x": 325000.00,
+      "y": 7649970.00,
+      "x2": 325000.00,
+      "y2": 7650000.00,
+      "fingerprint": "line_west_boundary"
+    }
+  ],
+  "fileName": "test_property.dxf",
+  "projectName": "Teste com StandardId",
+  "projectDescription": "Teste para verificar se o standardId está sendo enviado corretamente",
+  "standardId": "12fb339a-89ce-457c-8292-b0109de2a1f1",
+  "propertyId": null
+}

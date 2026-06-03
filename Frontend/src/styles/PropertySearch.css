@@ -1,0 +1,255 @@
+/* Estilos para o componente PropertySearch */
+
+.property-search {
+  padding: 20px;
+  max-width: 100%;
+}
+
+.search-header h2 {
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.section-description {
+  color: #666;
+  margin-bottom: 20px;
+  font-size: 0.9em;
+}
+
+/* Controles de pesquisa */
+.search-controls {
+  margin-bottom: 20px;
+}
+
+.search-input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.btn-refresh {
+  padding: 10px 15px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-refresh:hover {
+  background: #218838;
+}
+
+.search-stats {
+  color: #666;
+  font-size: 0.9em;
+}
+
+/* Estados de loading e erro */
+.loading-state, .error-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.btn-retry {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Tabela de propriedades */
+.properties-table-container {
+  overflow-x: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.properties-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.properties-table th {
+  background: #f8f9fa;
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #dee2e6;
+  color: #495057;
+}
+
+.properties-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #dee2e6;
+  vertical-align: top;
+}
+
+.properties-table tr:hover {
+  background: #f8f9fa;
+}
+
+.properties-table tr.selected {
+  background: #e3f2fd;
+}
+
+/* Células específicas */
+.property-name {
+  display: flex;
+  flex-direction: column;
+}
+
+.property-name small {
+  color: #666;
+  font-size: 0.8em;
+}
+
+.address-cell {
+  max-width: 200px;
+  word-wrap: break-word;
+  font-size: 0.9em;
+}
+
+.owner-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.owner-cell strong {
+  margin-bottom: 2px;
+}
+
+.owner-cell small {
+  color: #666;
+  font-size: 0.8em;
+}
+
+.files-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.file-count {
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.files-cell small {
+  color: #666;
+  font-size: 0.8em;
+  text-align: center;
+}
+
+.status-badge {
+  display: inline-block;
+  font-weight: bold;
+}
+
+/* Botões de ação */
+.btn-select {
+  padding: 6px 12px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.btn-select:hover {
+  background: #218838;
+}
+
+/* Estado vazio */
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.empty-state button {
+  background: none;
+  border: none;
+  color: #007bff;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Propriedade selecionada */
+.selected-property-info {
+  background: #e8f5e8;
+  border: 1px solid #28a745;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.selected-property-info h3 {
+  color: #155724;
+  margin-bottom: 15px;
+}
+
+.selected-details {
+  margin-bottom: 15px;
+}
+
+.selected-details p {
+  margin: 5px 0;
+  color: #155724;
+}
+
+.selection-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-clear {
+  padding: 8px 16px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-clear:hover {
+  background: #c82333;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .properties-table {
+    font-size: 12px;
+  }
+  
+  .properties-table th,
+  .properties-table td {
+    padding: 8px 4px;
+  }
+  
+  .address-cell {
+    max-width: 150px;
+  }
+}

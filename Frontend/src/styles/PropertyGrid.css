@@ -1,0 +1,250 @@
+/* PropertyGrid.css */
+
+.property-grid-container {
+  padding: 20px;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.property-grid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.property-grid-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.property-grid-header p {
+  margin: 5px 0 0 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.refresh-button {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.refresh-button:hover {
+  background: #0056b3;
+}
+
+/* Estados de carregamento e erro */
+.loading-state, .error-state, .empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.retry-button {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 15px;
+}
+
+.retry-button:hover {
+  background: #c82333;
+}
+
+/* Grade de propriedades */
+.property-grid {
+  display: grid;
+  grid-template-columns: 80px 200px 150px 180px 250px 120px 120px 100px 120px;
+  gap: 1px;
+  background-color: #ddd;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 1200px;
+}
+
+.grid-header {
+  display: contents;
+}
+
+.grid-header .grid-cell {
+  background-color: #f8f9fa;
+  font-weight: bold;
+  color: #495057;
+  padding: 12px 8px;
+  text-align: center;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.grid-row {
+  display: contents;
+}
+
+.grid-row:hover .grid-cell {
+  background-color: #f0f8ff;
+}
+
+.grid-row.selected .grid-cell {
+  background-color: #e3f2fd;
+  border-left: 4px solid #2196f3;
+}
+
+.grid-cell {
+  background-color: white;
+  padding: 10px 8px;
+  border-bottom: 1px solid #eee;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+/* Botão de seleção */
+.select-button {
+  width: 40px;
+  height: 30px;
+  border: 2px solid #ddd;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s;
+  margin: 0 auto;
+}
+
+.select-button:hover {
+  border-color: #007bff;
+  background: #f0f8ff;
+}
+
+.select-button.selected {
+  background: #28a745;
+  border-color: #28a745;
+  color: white;
+}
+
+/* Badges de tipo e status */
+.property-type {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.property-type.urban {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.property-type.rural {
+  background: #e8f5e8;
+  color: #388e3c;
+}
+
+.status {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.status.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status.inactive {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Informações de seleção */
+.selection-info {
+  margin-top: 20px;
+  padding: 15px;
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 4px;
+  color: #155724;
+}
+
+.selection-info h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
+}
+
+.selection-info p {
+  margin: 5px 0;
+  font-size: 0.9rem;
+}
+
+/* Responsividade */
+@media (max-width: 1400px) {
+  .property-grid {
+    grid-template-columns: 70px 150px 120px 150px 200px 100px 100px 80px 100px;
+    min-width: 1000px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .property-grid {
+    grid-template-columns: 60px 120px 100px 120px 150px 80px 80px 70px 80px;
+    min-width: 800px;
+  }
+  
+  .grid-cell {
+    font-size: 0.8rem;
+    padding: 8px 6px;
+  }
+}
+
+@media (max-width: 768px) {
+  .property-grid-container {
+    padding: 10px;
+  }
+  
+  .property-grid-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .property-grid {
+    grid-template-columns: 50px 100px 80px 100px 120px 70px 70px 60px 70px;
+    min-width: 600px;
+  }
+  
+  .grid-cell {
+    font-size: 0.75rem;
+    padding: 6px 4px;
+  }
+}

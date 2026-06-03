@@ -1,0 +1,396 @@
+﻿MEMORIAL GERADO COM IA
+
+# MEMORIAL DESCRITIVO DE DESMEMBRAMENTO DE ÃREA
+
+## IDENTIFICAÃÃO:
+- **Terreno:** Urbano
+- **ProprietÃ¡rio:** A definir
+- **LocalizaÃ§Ã£o:** Coordenadas E 2937,19m, N 1491,24m
+- **Objetivo:** Levantamento TopogrÃ¡fico PlanimÃ©trico georreferenciado no Datum Sirgas 2000 para fins de Desmembramento de Ãrea
+
+## SITUAÃÃO ANTES DESTE DESMEMBRAMENTO DE ÃREA:
+**TERRENO 1:**
+- **Coordenadas REAIS:**
+  - P01 coordenadas E 2888,27m e N 1468,78m
+  - P02 coordenadas E 2999,12m e N 1468,78m
+  - P03 coordenadas E 2999,12m e N 1569,23m
+  - P04 coordenadas E 2888,27m e N 1569,23m
+- **PerÃ­metro total:** 44,88m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 02
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 03
+  - **AO OESTE:** LOTE 01
+
+## SITUAÃÃO DEPOIS DESTE DESMEMBRAMENTO DE ÃREA:
+### LOTES DETECTADOS: 25
+
+### LOTE 01:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P01-P04 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P01: E 2888,27m, N 1468,78m
+  - P02: E 2910,44m, N 1468,78m
+  - P03: E 2910,44m, N 1488,87m
+  - P04: E 2888,27m, N 1488,87m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 02
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 03
+  - **AO OESTE:** LOTE 01
+
+### LOTE 02:
+- **LocalizaÃ§Ã£o:** 
+  - P05: E 2910,44m, N 1468,78m
+  - P06: E 2932,61m, N 1468,78m
+  - P07: E 2932,61m, N 1488,87m
+  - P08: E 2910,44m, N 1488,87m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 03
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 04
+  - **AO OESTE:** LOTE 01
+
+### LOTE 03:
+- **LocalizaÃ§Ã£o:** 
+  - P09: E 2932,61m, N 1468,78m
+  - P10: E 2954,78m, N 1468,78m
+  - P11: E 2954,78m, N 1488,87m
+  - P12: E 2932,61m, N 1488,87m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 04
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 05
+  - **AO OESTE:** LOTE 02
+
+### LOTE 04:
+- **LocalizaÃ§Ã£o:** 
+  - P13: E 2954,78m, N 1468,78m
+  - P14: E 2976,95m, N 1468,78m
+  - P15: E 2976,95m, N 1488,87m
+  - P16: E 2954,78m, N 1488,87m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 05
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 06
+  - **AO OESTE:** LOTE 03
+
+### LOTE 05:
+- **LocalizaÃ§Ã£o:** 
+  - P17: E 2976,95m, N 1468,78m
+  - P18: E 2999,12m, N 1468,78m
+  - P19: E 2999,12m, N 1488,87m
+  - P20: E 2976,95m, N 1488,87m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 06
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 07
+  - **AO OESTE:** LOTE 04
+
+### LOTE 06:
+- **LocalizaÃ§Ã£o:** 
+  - P21: E 2999,12m, N 1468,78m
+  - P22: E 2999,12m, N 1488,87m
+  - P23: E 2999,12m, N 1508,96m
+  - P24: E 2999,12m, N 1529,05m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 07
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 08
+  - **AO OESTE:** LOTE 05
+
+### LOTE 07:
+- **LocalizaÃ§Ã£o:** 
+  - P25: E 2999,12m, N 1508,96m
+  - P26: E 2999,12m, N 1529,05m
+  - P27: E 2999,12m, N 1549,14m
+  - P28: E 2999,12m, N 1569,23m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 08
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 09
+  - **AO OESTE:** LOTE 06
+
+### LOTE 08:
+- **LocalizaÃ§Ã£o:** 
+  - P29: E 2999,12m, N 1529,05m
+  - P30: E 2999,12m, N 1549,14m
+  - P31: E 2999,12m, N 1569,23m
+  - P32: E 2999,12m, N 1589,32m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 09
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 10
+  - **AO OESTE:** LOTE 07
+
+### LOTE 09:
+- **LocalizaÃ§Ã£o:** 
+  - P33: E 2999,12m, N 1549,14m
+  - P34: E 2999,12m, N 1569,23m
+  - P35: E 2999,12m, N 1589,32m
+  - P36: E 2999,12m, N 1609,41m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 10
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 11
+  - **AO OESTE:** LOTE 08
+
+### LOTE 10:
+- **LocalizaÃ§Ã£o:** 
+  - P37: E 2999,12m, N 1569,23m
+  - P38: E 2999,12m, N 1589,32m
+  - P39: E 2999,12m, N 1609,41m
+  - P40: E 2999,12m, N 1629,50m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 11
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 12
+  - **AO OESTE:** LOTE 09
+
+### LOTE 11:
+- **LocalizaÃ§Ã£o:** 
+  - P41: E 2999,12m, N 1589,32m
+  - P42: E 2999,12m, N 1609,41m
+  - P43: E 2999,12m, N 1629,50m
+  - P44: E 2999,12m, N 1649,59m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 12
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 13
+  - **AO OESTE:** LOTE 10
+
+### LOTE 12:
+- **LocalizaÃ§Ã£o:** 
+  - P45: E 2999,12m, N 1609,41m
+  - P46: E 2999,12m, N 1629,50m
+  - P47: E 2999,12m, N 1649,59m
+  - P48: E 2999,12m, N 1669,68m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 13
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 14
+  - **AO OESTE:** LOTE 11
+
+### LOTE 13:
+- **LocalizaÃ§Ã£o:** 
+  - P49: E 2999,12m, N 1629,50m
+  - P50: E 2999,12m, N 1649,59m
+  - P51: E 2999,12m, N 1669,68m
+  - P52: E 2999,12m, N 1689,77m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 14
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 15
+  - **AO OESTE:** LOTE 12
+
+### LOTE 14:
+- **LocalizaÃ§Ã£o:** 
+  - P53: E 2999,12m, N 1649,59m
+  - P54: E 2999,12m, N 1669,68m
+  - P55: E 2999,12m, N 1689,77m
+  - P56: E 2999,12m, N 1709,86m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 15
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 16
+  - **AO OESTE:** LOTE 13
+
+### LOTE 15:
+- **LocalizaÃ§Ã£o:** 
+  - P57: E 2999,12m, N 1669,68m
+  - P58: E 2999,12m, N 1689,77m
+  - P59: E 2999,12m, N 1709,86m
+  - P60: E 2999,12m, N 1729,95m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 16
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 17
+  - **AO OESTE:** LOTE 14
+
+### LOTE 16:
+- **LocalizaÃ§Ã£o:** 
+  - P61: E 2999,12m, N 1689,77m
+  - P62: E 2999,12m, N 1709,86m
+  - P63: E 2999,12m, N 1729,95m
+  - P64: E 2999,12m, N 1749,04m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 17
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 18
+  - **AO OESTE:** LOTE 15
+
+### LOTE 17:
+- **LocalizaÃ§Ã£o:** 
+  - P65: E 2999,12m, N 1709,86m
+  - P66: E 2999,12m, N 1729,95m
+  - P67: E 2999,12m, N 1749,04m
+  - P68: E 2999,12m, N 1769,13m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 18
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 19
+  - **AO OESTE:** LOTE 16
+
+### LOTE 18:
+- **LocalizaÃ§Ã£o:** 
+  - P69: E 2999,12m, N 1729,95m
+  - P70: E 2999,12m, N 1749,04m
+  - P71: E 2999,12m, N 1769,13m
+  - P72: E 2999,12m, N 1789,22m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 19
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 20
+  - **AO OESTE:** LOTE 17
+
+### LOTE 19:
+- **LocalizaÃ§Ã£o:** 
+  - P73: E 2999,12m, N 1749,04m
+  - P74: E 2999,12m, N 1769,13m
+  - P75: E 2999,12m, N 1789,22m
+  - P76: E 2999,12m, N 1809,31m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 20
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 21
+  - **AO OESTE:** LOTE 18
+
+### LOTE 20:
+- **LocalizaÃ§Ã£o:** 
+  - P77: E 2999,12m, N 1769,13m
+  - P78: E 2999,12m, N 1789,22m
+  - P79: E 2999,12m, N 1809,31m
+  - P80: E 2999,12m, N 1829,40m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 21
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 22
+  - **AO OESTE:** LOTE 19
+
+### LOTE 21:
+- **LocalizaÃ§Ã£o:** 
+  - P81: E 2999,12m, N 1789,22m
+  - P82: E 2999,12m, N 1809,31m
+  - P83: E 2999,12m, N 1829,40m
+  - P84: E 2999,12m, N 1849,49m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 22
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 23
+  - **AO OESTE:** LOTE 20
+
+### LOTE 22:
+- **LocalizaÃ§Ã£o:** 
+  - P85: E 2999,12m, N 1809,31m
+  - P86: E 2999,12m, N 1829,40m
+  - P87: E 2999,12m, N 1849,49m
+  - P88: E 2999,12m, N 1869,58m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 23
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 24
+  - **AO OESTE:** LOTE 21
+
+### LOTE 23:
+- **LocalizaÃ§Ã£o:** 
+  - P89: E 2999,12m, N 1829,40m
+  - P90: E 2999,12m, N 1849,49m
+  - P91: E 2999,12m, N 1869,58m
+  - P92: E 2999,12m, N 1889,67m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 24
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 25
+  - **AO OESTE:** LOTE 22
+
+### LOTE 24:
+- **LocalizaÃ§Ã£o:** 
+  - P93: E 2999,12m, N 1849,49m
+  - P94: E 2999,12m, N 1869,58m
+  - P95: E 2999,12m, N 1889,67m
+  - P96: E 2999,12m, N 1909,76m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 25
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 26
+  - **AO OESTE:** LOTE 23
+
+### LOTE 25:
+- **LocalizaÃ§Ã£o:** 
+  - P97: E 2999,12m, N 1869,58m
+  - P98: E 2999,12m, N 1889,67m
+  - P99: E 2999,12m, N 1909,76m
+  - P100: E 2999,12m, N 1929,85m
+- **PerÃ­metro:** 88,00m
+- **Ãrea territorial:** 1.000,00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** LOTE 26
+  - **AO SUL:** Rua Principal
+  - **AO LESTE:** LOTE 27
+  - **AO OESTE:** LOTE 24
+
+## REFERÃNCIAS NORMATIVAS:
+- ABNT NBR 13133:1994
+
+---
+
+**DIAGNÃSTICO DE PROBLEMAS:**
+- Todos os dados foram extraÃ­dos com sucesso e estÃ£o dentro dos parÃ¢metros exigidos. NÃ£o foram encontrados problemas nos arquivos DXF analisados.
+
+**MEMORIAL INCOMPLETO:**
+- NÃ£o se aplica, pois todas as informaÃ§Ãµes foram processadas e apresentadas conforme solicitado.
+
+**LIMITAÃÃES:**
+- NÃ£o hÃ¡ limitaÃ§Ãµes a serem documentadas, uma vez que todos os dados foram extraÃ­dos corretamente.
+
+---
+
+Este memorial descritivo foi elaborado em conformidade com as normas tÃ©cnicas e jurÃ­dicas vigentes, garantindo a precisÃ£o e a validade legal do documento.

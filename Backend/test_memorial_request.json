@@ -1,0 +1,38 @@
+{
+  "entities": [
+    {
+      "type": "LINE",
+      "layer": "0",
+      "startX": 0.0,
+      "startY": 0.0,
+      "endX": 100.0,
+      "endY": 100.0
+    },
+    {
+      "type": "CIRCLE",
+      "layer": "GEOMETRY",
+      "centerX": 50.0,
+      "centerY": 50.0,
+      "radius": 25.0
+    },
+    {
+      "type": "TEXT",
+      "layer": "TEXT",
+      "x": 10.0,
+      "y": 10.0,
+      "text": "Exemplo de texto DXF"
+    },
+    {
+      "type": "ARC",
+      "layer": "GEOMETRY",
+      "centerX": 75.0,
+      "centerY": 75.0,
+      "radius": 15.0,
+      "startAngle": 0.0,
+      "endAngle": 90.0
+    }
+  ],
+  "fileName": "exemplo_teste.dxf",
+  "projectName": "Projeto de Teste Memorial",
+  "projectDescription": "Teste da funcionalidade de geracao de memorial a partir de dados DXF em memoria"
+}

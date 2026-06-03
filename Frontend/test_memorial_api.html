@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Memorial API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .data { background: #f5f5f5; padding: 10px; white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; }
+        textarea { width: 100%; height: 200px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Memorial API - MemorialPro</h1>
+    
+    <div class="section">
+        <h2>📡 Testar API de Geração de Memorial</h2>
+        <button onclick="testMemorialAPI()">🚀 Testar API</button>
+        <button onclick="testWithRealData()">🎯 Testar com Dados Reais</button>
+    </div>
+    
+    <div class="section">
+        <h2>📊 Dados Enviados</h2>
+        <div id="request-data" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📋 Resposta da API</h2>
+        <div id="api-response" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📝 Memorial Gerado</h2>
+        <div id="memorial-result" class="data"></div>
+    </div>
+
+    <script>
+        async function testMemorialAPI() {
+            try {
+                document.getElementById('api-response').innerHTML = 
+                    '<div class="warning">⏳ Testando API de memorial...</div>';
+                
+                // Dados de teste simples
+                const testData = {
+                    entities: [
+                        {
+                            type: 'LWPOLYLINE',
+                            layer: '0',
+                            properties: {
+                                vertices: [
+                                    { x: 2900.0, y: 1500.0 },
+                                    { x: 2950.0, y: 1500.0 },
+                                    { x: 2950.0, y: 1550.0 },
+                                    { x: 2900.0, y: 1550.0 },
+                                    { x: 2900.0, y: 1500.0 }
+                                ],
+                                closed: true
+                            }
+                        },
+                        {
+                            type: 'TEXT',
+                            layer: 'AMARELO',
+                            properties: {
+                                x: 2925.0,
+                                y: 1525.0,
+                                text: 'LOTE 01',
+                                height: 2.5
+                            }
+                        },
+                        {
+                            type: 'POINT',
+                            layer: 'Defpoints',
+                            properties: {
+                                x: 2900.0,
+                                y: 1500.0
+                            }
+                        }
+                    ],
+                    fileName: 'TESTE_API.dxf',
+                    projectName: 'Teste API Memorial',
+                    projectDescription: 'Teste da API de geração de memorial',
+                    standardId: null
+                };
+                
+                document.getElementById('request-data').innerHTML = 
+                    '<div class="success">✅ Dados de teste preparados</div>' +
+                    '<pre>' + JSON.stringify(testData, null, 2) + '</pre>';
+                
+                const response = await fetch('/api/memorial/generate-gpt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                const responseData = await response.text();
+                
+                document.getElementById('api-response').innerHTML = 
+                    `<div class="success">✅ Resposta recebida (Status: ${response.status})</div>` +
+                    `<div>Content-Type: ${response.headers.get('content-type')}</div>` +
+                    `<div>Tamanho: ${responseData.length} caracteres</div>` +
+                    '<pre>' + responseData + '</pre>';
+                
+                // Tentar parsear como JSON
+                try {
+                    const jsonData = JSON.parse(responseData);
+                    if (jsonData.memorialText) {
+                        document.getElementById('memorial-result').innerHTML = 
+                            '<div class="success">✅ Memorial extraído com sucesso</div>' +
+                            '<pre>' + jsonData.memorialText + '</pre>';
+                    } else {
+                        document.getElementById('memorial-result').innerHTML = 
+                            '<div class="warning">⚠️ Campo memorialText não encontrado na resposta</div>' +
+                            '<pre>' + JSON.stringify(jsonData, null, 2) + '</pre>';
+                    }
+                } catch (parseError) {
+                    document.getElementById('memorial-result').innerHTML = 
+                        '<div class="error">❌ Resposta não é JSON válido</div>' +
+                        '<pre>' + responseData + '</pre>';
+                }
+                
+            } catch (error) {
+                document.getElementById('api-response').innerHTML = 
+                    `<div class="error">❌ Erro na requisição: ${error.message}</div>`;
+            }
+        }
+        
+        async function testWithRealData() {
+            try {
+                document.getElementById('api-response').innerHTML = 
+                    '<div class="warning">⏳ Carregando dados reais dos arquivos DXF...</div>';
+                
+                // Primeiro, carregar um arquivo DXF real
+                const response1 = await fetch('/api/dxf/1/download');
+                if (!response1.ok) {
+                    throw new Error(`Erro ao carregar DXF: ${response1.status}`);
+                }
+                
+                const dxfContent = await response1.text();
+                
+                // Simular parsing básico (versão simplificada)
+                const entities = parseBasicDXF(dxfContent);
+                
+                const realData = {
+                    entities: entities.slice(0, 50), // Limitar a 50 entidades para teste
+                    fileName: 'TESTE AGENTE_DBL TERRA NOBRE_1.dxf',
+                    projectName: 'Teste com Dados Reais',
+                    projectDescription: 'Teste usando dados reais dos arquivos DXF',
+                    standardId: null
+                };
+                
+                document.getElementById('request-data').innerHTML = 
+                    '<div class="success">✅ Dados reais preparados</div>' +
+                    `<div>Entidades encontradas: ${entities.length}</div>` +
+                    `<div>Entidades enviadas: ${realData.entities.length}</div>` +
+                    '<pre>' + JSON.stringify(realData, null, 2).substring(0, 2000) + '...</pre>';
+                
+                const response2 = await fetch('/api/memorial/generate-gpt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
+                    },
+                    body: JSON.stringify(realData)
+                });
+                
+                const responseData = await response2.text();
+                
+                document.getElementById('api-response').innerHTML = 
+                    `<div class="success">✅ Resposta recebida (Status: ${response2.status})</div>` +
+                    `<div>Tamanho: ${responseData.length} caracteres</div>` +
+                    '<pre>' + responseData.substring(0, 1000) + (responseData.length > 1000 ? '...' : '') + '</pre>';
+                
+                // Tentar parsear como JSON
+                try {
+                    const jsonData = JSON.parse(responseData);
+                    if (jsonData.memorialText) {
+                        document.getElementById('memorial-result').innerHTML = 
+                            '<div class="success">✅ Memorial com dados reais gerado!</div>' +
+                            '<pre>' + jsonData.memorialText + '</pre>';
+                    } else {
+                        document.getElementById('memorial-result').innerHTML = 
+                            '<div class="warning">⚠️ Campo memorialText não encontrado</div>';
+                    }
+                } catch (parseError) {
+                    document.getElementById('memorial-result').innerHTML = 
+                        '<div class="error">❌ Resposta não é JSON válido</div>';
+                }
+                
+            } catch (error) {
+                document.getElementById('api-response').innerHTML = 
+                    `<div class="error">❌ Erro: ${error.message}</div>`;
+            }
+        }
+        
+        function parseBasicDXF(content) {
+            const lines = content.split('\\n').map(line => line.trim());
+            const entities = [];
+            
+            for (let i = 0; i < lines.length - 1; i++) {
+                if (lines[i] === '0') {
+                    const entityType = lines[i + 1];
+                    
+                    if (['LINE', 'LWPOLYLINE', 'TEXT', 'POINT', 'CIRCLE'].includes(entityType)) {
+                        const entity = {
+                            type: entityType,
+                            layer: '0',
+                            properties: {}
+                        };
+                        
+                        // Extrair propriedades básicas
+                        for (let j = i + 2; j < Math.min(i + 50, lines.length - 1); j += 2) {
+                            const code = lines[j];
+                            const value = lines[j + 1];
+                            
+                            if (code === '0') break;
+                            
+                            switch (code) {
+                                case '8': entity.layer = value; break;
+                                case '10': entity.properties.x = parseFloat(value); break;
+                                case '20': entity.properties.y = parseFloat(value); break;
+                                case '11': entity.properties.x2 = parseFloat(value); break;
+                                case '21': entity.properties.y2 = parseFloat(value); break;
+                                case '40': entity.properties.radius = parseFloat(value); break;
+                                case '1': entity.properties.text = value; break;
+                            }
+                        }
+                        
+                        entities.push(entity);
+                        
+                        if (entities.length >= 100) break; // Limitar para teste
+                    }
+                }
+            }
+            
+            return entities;
+        }
+    </script>
+</body>
+</html>

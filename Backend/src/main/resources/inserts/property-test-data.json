@@ -1,0 +1,226 @@
+{
+  "description": "🏗️ PROPERTY CRUD TEST DATA - JSON para testes no Postman",
+  "baseUrl": "http://localhost:9010/api",
+  "authentication": "Bearer Token required in Authorization header",
+  
+  "testData": {
+    
+    "createProperty": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "name": "Residential Lot 15 - Block B",
+        "internalCode": "LOT-15-B",
+        "ownerName": "John Silva Santos",
+        "ownerDocument": "123.456.789-00",
+        "ownerIdNumber": "12.345.678-9",
+        "ownerPhone": "+55 11 99999-9999",
+        "ownerEmail": "john.santos@email.com",
+        "street": "Flowers Street",
+        "number": "123",
+        "complement": "Corner lot",
+        "neighborhood": "Downtown",
+        "city": "São Paulo",
+        "state": "SP",
+        "zipCode": "01234-567",
+        "coordinateSystem": "SIRGAS 2000 / UTM zone 23S",
+        "datum": "SIRGAS 2000",
+        "utmZone": "23S",
+        "centralMeridian": "-45°",
+        "totalArea": 450.75,
+        "totalPerimeter": 85.30,
+        "mainFrontage": 15.50,
+        "averageDepth": 29.08,
+        "registrationNumber": "12345",
+        "registryOffice": "1st Registry Office of São Paulo",
+        "registrationBook": "Book 2",
+        "registrationPage": "Page 123",
+        "registrationDate": "2023-01-15",
+        "propertyType": "URBAN",
+        "zoning": "R2 - Medium Density Residential",
+        "floorAreaRatio": 2.0,
+        "lotCoverage": 0.6,
+        "northBoundary": "Borders with Flowers Street",
+        "southBoundary": "Borders with property of Maria Silva",
+        "eastBoundary": "Borders with property of José Santos",
+        "westBoundary": "Borders with Oak Avenue",
+        "observations": "Corner lot with excellent location and access to public transportation",
+        "restrictions": "Minimum setback of 5m from street frontage"
+      }
+    },
+
+    "updateProperty": {
+      "method": "PUT",
+      "url": "{{baseUrl}}/properties/{{propertyId}}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "name": "Residential Lot 15 - Block B (Updated)",
+        "internalCode": "LOT-15-B-UPD",
+        "ownerName": "John Silva Santos Jr.",
+        "ownerPhone": "+55 11 88888-8888",
+        "totalArea": 455.80,
+        "observations": "Corner lot with excellent location, recently surveyed and updated"
+      }
+    },
+
+    "createCommercialProperty": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "name": "Commercial Building - Main Avenue",
+        "internalCode": "COMM-001",
+        "ownerName": "ABC Real Estate Ltd.",
+        "ownerDocument": "12.345.678/0001-90",
+        "ownerIdNumber": "123.456.789.123",
+        "ownerPhone": "+55 11 3333-4444",
+        "ownerEmail": "contact@abcrealestate.com",
+        "street": "Main Avenue",
+        "number": "500",
+        "neighborhood": "Business District",
+        "city": "São Paulo",
+        "state": "SP",
+        "zipCode": "01310-100",
+        "coordinateSystem": "SIRGAS 2000 / UTM zone 23S",
+        "datum": "SIRGAS 2000",
+        "utmZone": "23S",
+        "centralMeridian": "-45°",
+        "totalArea": 1200.00,
+        "totalPerimeter": 140.00,
+        "mainFrontage": 30.00,
+        "averageDepth": 40.00,
+        "registrationNumber": "67890",
+        "registryOffice": "2nd Registry Office of São Paulo",
+        "registrationDate": "2022-06-10",
+        "propertyType": "COMMERCIAL",
+        "zoning": "ZC - Commercial Zone",
+        "floorAreaRatio": 4.0,
+        "lotCoverage": 0.8,
+        "observations": "Prime commercial location with high foot traffic",
+        "restrictions": "Commercial use only, no residential activities allowed"
+      }
+    },
+
+    "createRuralProperty": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "name": "Rural Farm - Green Valley",
+        "internalCode": "FARM-001",
+        "ownerName": "Green Valley Farms Inc.",
+        "ownerDocument": "98.765.432/0001-10",
+        "ownerPhone": "+55 11 2222-3333",
+        "ownerEmail": "info@greenvalley.com",
+        "street": "Rural Road BR-116",
+        "number": "Km 45",
+        "neighborhood": "Green Valley District",
+        "city": "Campinas",
+        "state": "SP",
+        "zipCode": "13000-000",
+        "coordinateSystem": "SIRGAS 2000 / UTM zone 23S",
+        "datum": "SIRGAS 2000",
+        "utmZone": "23S",
+        "centralMeridian": "-45°",
+        "totalArea": 50000.00,
+        "totalPerimeter": 900.00,
+        "registrationNumber": "RURAL-123",
+        "registryOffice": "Rural Registry Office of Campinas",
+        "registrationDate": "2020-03-20",
+        "propertyType": "RURAL",
+        "zoning": "Agricultural Zone",
+        "observations": "Fertile land suitable for agriculture and livestock",
+        "restrictions": "Environmental preservation area of 20% required"
+      }
+    }
+  },
+
+  "searchExamples": {
+    "searchByName": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/search?name=Residential",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "searchByOwner": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/search?ownerName=John Silva",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "searchByLocation": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/search?city=São Paulo&state=SP",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    }
+  },
+
+  "otherEndpoints": {
+    "listProperties": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "getProperty": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "getPropertyWithDetails": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/details",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "deleteProperty": {
+      "method": "DELETE",
+      "url": "{{baseUrl}}/properties/{{propertyId}}",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "getRecentProperties": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/recent",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "countProperties": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/count",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "relatorio_geometrico",
+  "name": "Relatório Geométrico",
+  "description": "Template para relatório geométrico de levantamento topográfico",
+  "type": "relatorio_geometrico",
+  "fields": [
+    {
+      "name": "perimetro",
+      "label": "Perímetro (m)",
+      "type": "number",
+      "required": true
+    },
+    {
+      "name": "area",
+      "label": "Área (m²)",
+      "type": "number",
+      "required": true
+    },
+    {
+      "name": "coordenadas",
+      "label": "Coordenadas",
+      "type": "textarea",
+      "required": true
+    }
+  ],
+  "template": "RELATÓRIO GEOMÉTRICO\n\nPerímetro: {{perimetro}} m\nÁrea: {{area}} m²\nCoordenadas:\n{{coordenadas}}"
+}
