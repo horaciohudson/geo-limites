@@ -1,0 +1,13 @@
+.git
+.gitignore
+.idea
+.vscode
+target
+bin
+logs
+uploads
+templates
+.env
+.env.*
+*.log
+*.class

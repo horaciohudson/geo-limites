@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-geo_limites_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env.docker}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - geolimites
+
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./.env.docker
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-geo_limites_db}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DXF_STORAGE_DIR: /app/data/uploads/dxf
+      TEMPLATES_STORAGE_DIR: /app/data/templates
+      APP_FRONTEND_URL: ${APP_FRONTEND_URL:-https://www.geolimites.com.br}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-https://www.geolimites.com.br,https://geolimites.com.br}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://www.geolimites.com.br}
+      JAVA_OPTS: ${JAVA_OPTS:-}
+    expose:
+      - "9010"
+    volumes:
+      - backend_logs:/app/logs
+      - dxf_storage:/app/data/uploads/dxf
+      - templates_storage:/app/data/templates
+    networks:
+      - geolimites
+
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_BIND_IP:-127.0.0.1}:${FRONTEND_PORT:-8080}:80"
+    networks:
+      - geolimites
+
+networks:
+  geolimites:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  backend_logs:
+  dxf_storage:
+  templates_storage:
