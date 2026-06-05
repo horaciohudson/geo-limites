@@ -321,18 +321,16 @@
 }
 
 /* ===== DARK MODE SUPPORT ===== */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-primary: #1e293b;
-    --bg-secondary: #334155;
-    --bg-tertiary: #475569;
-    --border-color: #475569;
-    --financial-secondary: #cbd5e1;
-  }
-  
-  .financial-container {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  }
+:root[data-theme="dark"] {
+  --bg-primary: #1e293b;
+  --bg-secondary: #334155;
+  --bg-tertiary: #475569;
+  --border-color: #475569;
+  --financial-secondary: #cbd5e1;
+}
+
+:root[data-theme="dark"] .financial-container {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
 }
 
 /* ===== PRINT STYLES ===== */
