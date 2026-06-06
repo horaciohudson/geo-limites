@@ -18,7 +18,28 @@ A importacao de exemplo ajuda a validar o ambiente, demonstrar o uso do sistema 
 
 ## Modelos Documentais
 
-Os modelos documentais funcionam como base para a montagem do memorial. Eles devem estar coerentes com o padrao interno da empresa e com a forma como o resultado final precisa ser entregue.
+No GeoLimites, um **modelo documental (template)** e um modelo de texto usado para montar o memorial descritivo sempre no mesmo formato.
+
+Ele define, por exemplo:
+
+- a estrutura do documento (cabecalho, paragrafos e ordem das informacoes)
+- o estilo do texto (ex.: texto corrido, termos padrao, forma de apresentar medidas e confrontacoes)
+- campos que o sistema preenche durante a geracao (ex.: proprietario, logradouro, area, perimetro, vertices)
+
+Um template nao e a norma em si. A norma e a referencia tecnica/administrativa. O template e o formato do documento que sua equipe deseja entregar seguindo esse padrao.
+
+### Quando usar um template diferente
+
+- quando a prefeitura/cartorio exige um formato especifico
+- quando o municipio tem particularidades de texto ou ordem de informacoes
+- quando a empresa quer um padrao interno de apresentacao
+
+### O que normalmente existe em um template no sistema
+
+- nome e descricao do modelo
+- municipio (quando aplicavel)
+- norma de referencia (quando aplicavel)
+- status (ativo/inativo/rascunho), para controlar o que aparece no fluxo operacional
 
 ## Recomendacoes de governanca
 
@@ -26,6 +47,7 @@ Os modelos documentais funcionam como base para a montagem do memorial. Eles dev
 - Evitar modelos duplicados com pequenas variacoes sem controle.
 - Revisar periodicamente as normas ativas.
 - Testar um modelo antes de libera-lo para uso operacional amplo.
+ - Quando criar variacoes, explicitar no nome (ex.: municipio, orgao e versao).
 
 ## Relacao com a geracao do memorial
 
