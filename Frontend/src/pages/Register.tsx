@@ -195,7 +195,7 @@ const Register: React.FC = () => {
             <div className="form-header">
               <h2>Criar sua conta</h2>
               <p>Preencha os dados para comecar a usar a plataforma</p>
-              <p>O codigo da empresa sera gerado automaticamente no primeiro cadastro.</p>
+              <p>O identificador da empresa sera gerado automaticamente no primeiro cadastro.</p>
             </div>
 
             <div className="input-field">
@@ -271,7 +271,7 @@ const Register: React.FC = () => {
                 <span className="alert-icon">✅</span>
                 <div>
                   <div>{successMessage}</div>
-                  {generatedTenantCode && <div>Codigo da empresa: {generatedTenantCode}</div>}
+                  {generatedTenantCode && <div>Identificador da empresa: {generatedTenantCode}</div>}
                 </div>
               </div>
             )}

@@ -73,11 +73,11 @@ const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="modern-login-form" autoComplete="off">
             <div className="form-header">
               <h2>Bem-vindo de volta</h2>
-              <p>Informe empresa, e-mail e senha para acessar sua conta</p>
+              <p>Informe o identificador da empresa, e-mail e senha para acessar sua conta</p>
             </div>
 
             <div className="input-field">
-              <label htmlFor="tenantCode">Codigo da Empresa</label>
+              <label htmlFor="tenantCode">Identificador da Empresa</label>
               <input
                 id="tenantCode"
                 type="text"
@@ -89,7 +89,7 @@ const Login: React.FC = () => {
                 className={loginError && !tenantCode ? 'error' : ''}
               />
               {loginError && !tenantCode && (
-                <span className="field-error">Codigo da empresa e obrigatorio</span>
+                <span className="field-error">Identificador da empresa e obrigatorio</span>
               )}
             </div>
 

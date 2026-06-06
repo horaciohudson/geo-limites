@@ -98,11 +98,11 @@ const ResendVerification: React.FC = () => {
           <form onSubmit={handleSubmit} className="modern-login-form" autoComplete="off">
             <div className="form-header">
               <h2>Reenviar e-mail</h2>
-              <p>Informe o codigo da empresa e o e-mail da conta para receber um novo link de confirmacao.</p>
+              <p>Informe o identificador da empresa e o e-mail da conta para receber um novo link de confirmacao.</p>
             </div>
 
             <div className="input-field">
-              <label htmlFor="tenantCode">Codigo da Empresa</label>
+              <label htmlFor="tenantCode">Identificador da Empresa</label>
               <input
                 id="tenantCode"
                 type="text"

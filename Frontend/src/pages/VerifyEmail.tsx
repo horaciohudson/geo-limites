@@ -113,7 +113,7 @@ const VerifyEmail: React.FC = () => {
               <div className="alert alert-success">
                 <span className="alert-icon">✅</span>
                 {message}
-                {tenantCode && <div>Tenant: {tenantCode}</div>}
+                {tenantCode && <div>Identificador da empresa: {tenantCode}</div>}
                 {email && <div>E-mail: {email}</div>}
               </div>
             )}
