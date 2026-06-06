@@ -1,4 +1,4 @@
-# Ajuda Contextual e F1
+# Ajuda Contextual e Atalho de Teclado
 
 ## Objetivo
 
@@ -9,11 +9,11 @@ Preparar o GeoLimites para abrir o manual do usuario de forma rapida, consistent
 O sistema pode ter dois pontos principais de acesso ao manual:
 
 - um botao `Ajuda` visivel na interface
-- o atalho de teclado `F1`
+- o atalho de teclado `Shift+F1`
 
 ## Comportamento inicial sugerido
 
-Na primeira versao, tanto o botao quanto o `F1` podem abrir a pagina inicial do manual:
+Na primeira versao, tanto o botao quanto o `Shift+F1` podem abrir a pagina inicial do manual:
 
 - `https://ajuda.geolimites.com.br/`
 
@@ -60,14 +60,14 @@ Os pontos mais naturais para essa integracao sao:
 
 - nao bloquear atalhos nativos importantes sem necessidade
 - manter a abertura do manual em nova aba
-- evitar que o `F1` dependa de estado complexo da tela
+- evitar depender de atalhos reservados do navegador
 - usar URLs estaveis e amigaveis no manual
 
 ## Ordem recomendada de entrega
 
 1. publicar o manual em `ajuda.geolimites.com.br`
 2. adicionar um botao `Ajuda` global
-3. adicionar suporte basico ao `F1`
+3. adicionar suporte basico ao `Shift+F1`
 4. evoluir para ajuda contextual por rota
 
 ## Beneficio direto

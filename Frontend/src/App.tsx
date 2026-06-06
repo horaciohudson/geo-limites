@@ -127,7 +127,12 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleHelpShortcut = (event: KeyboardEvent) => {
       const isF1 = event.key === 'F1' || event.code === 'F1' || event.keyCode === 112
-      if (!isF1) {
+      const isHelpShortcut = isF1 && event.shiftKey
+      if (!isHelpShortcut) {
+        return;
+      }
+
+      if (event.repeat) {
         return;
       }
 
@@ -140,11 +145,9 @@ const App: React.FC = () => {
     };
 
     window.addEventListener('keydown', handleHelpShortcut, true);
-    window.addEventListener('keyup', handleHelpShortcut, true);
 
     return () => {
       window.removeEventListener('keydown', handleHelpShortcut, true);
-      window.removeEventListener('keyup', handleHelpShortcut, true);
     };
   }, []);
 

@@ -21,7 +21,7 @@ Na area `Conta`.
 3. Explicar o visualizador com casos reais de uso.
 4. Detalhar a configuracao de modelos documentais.
 5. Criar um guia administrativo com SMTP e usuarios.
-6. Integrar o frontend com botao `Ajuda` e atalho `F1`.
+6. Integrar o frontend com botao `Ajuda` e atalho `Shift+F1`.
 7. Mapear cada rota principal para uma pagina especifica do manual.
 
 ## Publicacao em subdominio proprio
@@ -30,4 +30,4 @@ A recomendacao atual para este projeto e publicar o HTML gerado em `ajuda.geolim
 
 ## Relacao com a ajuda contextual
 
-O detalhamento da integracao com botao `Ajuda` e atalho `F1` foi separado em [Ajuda Contextual e F1](ajuda-contextual-e-f1.md).
+O detalhamento da integracao com botao `Ajuda` e atalho `Shift+F1` foi separado em [Ajuda Contextual e Atalho de Teclado](ajuda-contextual-e-f1.md).

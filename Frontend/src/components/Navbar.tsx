@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '@/auth/AuthContext';
 import { useLocation } from 'react-router-dom';
-import { openHelpPage } from '@/utils/helpLinks';
+import { getHelpUrlForPath } from '@/utils/helpLinks';
 
 const Navbar: React.FC = () => {
   const { user } = useAuth();
@@ -15,14 +15,15 @@ const Navbar: React.FC = () => {
         </div>
         
         <div className="navbar-menu">
-          <button
-            type="button"
+          <a
             className="help-link-btn"
-            onClick={() => openHelpPage(location.pathname)}
+            href={getHelpUrlForPath(location.pathname)}
+            target="_blank"
+            rel="noopener noreferrer"
             title="Abrir manual do sistema"
           >
             Ajuda
-          </button>
+          </a>
           {user && (
             <div className="navbar-user">
               <span className="user-name">

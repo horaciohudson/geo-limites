@@ -28,7 +28,12 @@ export const openHelpPage = (pathname: string): void => {
   const helpUrl = getHelpUrlForPath(pathname)
   const opened = window.open(helpUrl, '_blank', 'noopener,noreferrer')
   if (!opened) {
-    window.location.assign(helpUrl)
+    const shouldOpenHere = window.confirm(
+      'O navegador bloqueou a nova aba. Deseja abrir a ajuda nesta aba?'
+    )
+    if (shouldOpenHere) {
+      window.location.assign(helpUrl)
+    }
   }
 }
 
