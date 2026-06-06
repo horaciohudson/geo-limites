@@ -1,0 +1,65 @@
+site_name: Manual do Usuario - GeoLimites
+site_description: Manual operacional do sistema GeoLimites
+site_author: Equipe GeoLimites
+site_url: https://ajuda.geolimites.com.br/
+
+theme:
+  name: material
+  language: pt-BR
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Mudar para modo escuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Mudar para modo claro
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Inicio: index.md
+  - 01 Introducao:
+      - Visao Geral: 01-introducao/visao-geral.md
+  - 02 Primeiros Passos:
+      - Primeiro Acesso e Login: 02-primeiros-passos/primeiro-acesso-e-login.md
+  - 03 Fluxo Operacional:
+      - Imoveis e Arquivos Tecnicos: 03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md
+  - 04 Memorial:
+      - Visualizador, Normas e Geracao: 04-memorial/visualizador-normas-e-geracao.md
+  - 05 Modelos e Normas:
+      - Modelos Documentais e Normas: 05-modelos-e-normas/modelos-documentais-e-normas.md
+  - 06 Conta:
+      - Conta, Creditos e Seguranca: 06-conta/conta-creditos-e-seguranca.md
+  - 07 Administracao:
+      - Empresa, SMTP e Usuarios: 07-administracao/empresa-smtp-e-usuarios.md
+  - 08 Suporte:
+      - Ajuda Contextual e F1: 08-suporte/ajuda-contextual-e-f1.md
+      - FAQ e Proximos Passos: 08-suporte/faq-e-proximos-passos.md
