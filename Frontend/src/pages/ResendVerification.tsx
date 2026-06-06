@@ -86,11 +86,10 @@ const ResendVerification: React.FC = () => {
   };
 
   return (
-    <div className="new-login-page">
+    <div className="new-login-page login-page">
       <div className="login-left-panel">
         <div className="login-form-container">
           <div className="login-brand">
-            <div className="brand-icon">📨</div>
             <h1>Geo Limites</h1>
             <p>Reenvio de confirmacao</p>
           </div>

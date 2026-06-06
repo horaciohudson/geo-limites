@@ -181,12 +181,11 @@ const Register: React.FC = () => {
   };
 
   return (
-    <div className="new-login-page">
+    <div className="new-login-page login-page">
       {/* Lado Esquerdo - Formulário de Cadastro */}
       <div className="login-left-panel">
         <div className="login-form-container">
           <div className="login-brand">
-            <div className="brand-icon">GL</div>
             <h1>GeoLimites</h1>
             <p>Plataforma operacional para memoriais descritivos</p>
           </div>
