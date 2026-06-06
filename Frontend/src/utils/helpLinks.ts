@@ -26,6 +26,9 @@ export const getHelpUrlForPath = (pathname: string): string => {
 
 export const openHelpPage = (pathname: string): void => {
   const helpUrl = getHelpUrlForPath(pathname)
-  window.open(helpUrl, '_blank', 'noopener,noreferrer')
+  const opened = window.open(helpUrl, '_blank', 'noopener,noreferrer')
+  if (!opened) {
+    window.location.assign(helpUrl)
+  }
 }
 

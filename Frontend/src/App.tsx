@@ -126,18 +126,25 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleHelpShortcut = (event: KeyboardEvent) => {
-      if (event.key !== 'F1') {
+      const isF1 = event.key === 'F1' || event.code === 'F1' || event.keyCode === 112
+      if (!isF1) {
         return;
       }
 
       event.preventDefault();
+      event.stopPropagation();
+      if ('stopImmediatePropagation' in event) {
+        event.stopImmediatePropagation();
+      }
       openHelpPage(window.location.pathname);
     };
 
-    window.addEventListener('keydown', handleHelpShortcut);
+    window.addEventListener('keydown', handleHelpShortcut, true);
+    window.addEventListener('keyup', handleHelpShortcut, true);
 
     return () => {
-      window.removeEventListener('keydown', handleHelpShortcut);
+      window.removeEventListener('keydown', handleHelpShortcut, true);
+      window.removeEventListener('keyup', handleHelpShortcut, true);
     };
   }, []);
 
