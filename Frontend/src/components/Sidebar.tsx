@@ -325,7 +325,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewerActions }) => {
                 }
               >
                 <span className={styles.sidebarIcon}>📁</span>
-                <span className={styles.sidebarLabel}>Modelos Documentais</span>
+                <span className={styles.sidebarLabel}>Templates</span>
               </NavLink>
             </li>
           </ul>

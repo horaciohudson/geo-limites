@@ -10,7 +10,7 @@ O GeoLimites e um sistema voltado para organizacao de dados tecnicos de imoveis 
 O operador trabalha principalmente com cadastro de imoveis, selecao de arquivos tecnicos, visualizacao e geracao do memorial.
 
 ### Preparacao tecnica
-O sistema tambem possui areas para manter normas tecnicas, importar exemplos e configurar modelos documentais.
+O sistema tambem possui areas para manter normas tecnicas, importar exemplos e configurar templates.
 
 ### Conta e acesso
 Cada usuario possui uma area de conta com perfil, creditos, extrato e outras informacoes operacionais.

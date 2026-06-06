@@ -1,4 +1,4 @@
-# Modelos Documentais e Normas
+# Templates e Normas
 
 ## Onde ficam essas configuracoes
 
@@ -6,7 +6,7 @@ Na secao `Preparacao Tecnica`, o sistema apresenta estas entradas:
 
 - Normas Tecnicas
 - Importacao de Exemplo
-- Modelos Documentais
+- Templates
 
 ## Normas Tecnicas
 
@@ -16,9 +16,9 @@ Essa area tende a ser usada por perfis com maior responsabilidade sobre padroniz
 
 A importacao de exemplo ajuda a validar o ambiente, demonstrar o uso do sistema ou fornecer uma referencia interna para treinamento.
 
-## Modelos Documentais
+## Templates
 
-No GeoLimites, um **modelo documental (template)** e um modelo de texto usado para montar o memorial descritivo sempre no mesmo formato.
+No GeoLimites, um **template** e um modelo de texto usado para montar o memorial descritivo sempre no mesmo formato.
 
 Ele define, por exemplo:
 
@@ -51,4 +51,4 @@ Um template nao e a norma em si. A norma e a referencia tecnica/administrativa. 
 
 ## Relacao com a geracao do memorial
 
-Sem um modelo documental selecionado, o sistema pode impedir a geracao. Por isso, a manutencao dessa area influencia diretamente o sucesso do fluxo principal.
+Sem um template selecionado, o sistema pode impedir a geracao. Por isso, a manutencao dessa area influencia diretamente o sucesso do fluxo principal.

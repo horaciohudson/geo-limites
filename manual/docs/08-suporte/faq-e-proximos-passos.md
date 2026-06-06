@@ -19,7 +19,7 @@ Na area `Conta`.
 1. Adicionar capturas de tela reais.
 2. Documentar o cadastro de imoveis com exemplos completos.
 3. Explicar o visualizador com casos reais de uso.
-4. Detalhar a configuracao de modelos documentais.
+4. Detalhar a configuracao de templates.
 5. Criar um guia administrativo com SMTP e usuarios.
 6. Integrar o frontend com botao `Ajuda` e atalho `Shift+F1`.
 7. Mapear cada rota principal para uma pagina especifica do manual.

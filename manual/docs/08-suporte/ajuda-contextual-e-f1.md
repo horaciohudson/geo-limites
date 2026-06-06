@@ -30,7 +30,7 @@ Depois da primeira entrega, o ideal e evoluir para ajuda contextual por rota.
 - `/standards` -> pagina sobre normas aplicadas
 - `/viewer` -> pagina sobre visualizacao tecnica
 - `/memorial` -> pagina sobre geracao e revisao do memorial
-- `/configure-templates` -> pagina sobre modelos documentais
+- `/configure-templates` -> pagina sobre templates
 - `/my-account` -> pagina sobre conta, creditos e seguranca
 - `/admin` -> pagina sobre empresa, SMTP e usuarios
 
