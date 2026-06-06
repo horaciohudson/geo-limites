@@ -69,6 +69,7 @@ const PropertyRegister: React.FC = () => {
   const navigate = useNavigate();
   
   const [currentTab, setCurrentTab] = useState(0);
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
   const [formData, setFormData] = useState<PropertyFormData>({
     basicData: {
       registrationNumber: '',
@@ -160,6 +161,7 @@ const tabs = [
     
     // Salvar no localStorage
     localStorage.setItem(`incomplete_property_${propertyData.id}`, JSON.stringify(propertyData));
+    setLastDraftSavedAt(propertyData.lastModified);
     
     if (!propertyId) {
       setPropertyId(propertyData.id);
@@ -270,6 +272,7 @@ const tabs = [
   };
 
   const progress = calculateProgress();
+  const canSaveToDatabase = progress >= 100;
 
   // Validar aba atual
   const validateCurrentTab = (): boolean => {
@@ -585,13 +588,13 @@ const tabs = [
               <div className="property-guidance-header">
                 <span className="property-guidance-icon">🧭</span>
                 <div className="property-guidance-copy">
-                  <span className="property-guidance-title">Memorial Assistido por IA</span>
+                  <span className="property-guidance-title">Cadastro em etapas</span>
                 </div>
-                <span className="property-guidance-status">Ativo</span>
+                <span className="property-guidance-status">Rascunho automatico</span>
               </div>
               <p className="property-guidance-text">
-                Complete as abas em sequencia para estruturar os dados do imovel, validar informacoes principais
-                e preparar a geracao documental com o padrao operacional da plataforma.
+                Os dados sao salvos automaticamente enquanto voce preenche. Para gravar no banco, complete as abas obrigatorias e use o botao "Salvar Propriedade".
+                {lastDraftSavedAt ? ` Ultimo rascunho: ${new Date(lastDraftSavedAt).toLocaleString()}.` : ''}
               </p>
             </div>
           </div>
@@ -699,23 +702,29 @@ const tabs = [
               </div>
             ))}
           </div>
-          
-          {currentTab < tabs.length - 1 ? (
-            <button 
-              onClick={nextTab}
-              className="nav-button next"
-            >
-              Próximo →
-            </button>
-          ) : (
+
+          <div className="nav-buttons">
+            {currentTab < tabs.length - 1 && (
+              <button 
+                onClick={nextTab}
+                className="nav-button next"
+              >
+                Próximo →
+              </button>
+            )}
             <button 
               onClick={saveProperty}
-              disabled={isSaving || progress < 100}
+              disabled={isSaving || !canSaveToDatabase}
               className="nav-button save"
+              title={
+                canSaveToDatabase
+                  ? 'Salvar propriedade no banco de dados'
+                  : 'Complete as abas obrigatorias para habilitar o salvamento no banco'
+              }
             >
               {isSaving ? 'Salvando...' : '💾 Salvar Propriedade'}
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>
