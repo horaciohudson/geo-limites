@@ -12,6 +12,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { TOKEN_STORAGE_KEY } from '@/auth/session';
 import { FileProvider } from '@/contexts/FileContext'; // ✅ Import do novo contexto
 import { ConfigProvider } from '@/contexts/ConfigContext'; // ✅ Import do contexto de configuração
+import { openHelpPage } from '@/utils/helpLinks';
 import './styles/App.css';
 
 // Context para ações do Sidebar
@@ -120,6 +121,23 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       // NÃO limpar dados no desmonte do componente durante navegação normal
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleHelpShortcut = (event: KeyboardEvent) => {
+      if (event.key !== 'F1') {
+        return;
+      }
+
+      event.preventDefault();
+      openHelpPage(window.location.pathname);
+    };
+
+    window.addEventListener('keydown', handleHelpShortcut);
+
+    return () => {
+      window.removeEventListener('keydown', handleHelpShortcut);
     };
   }, []);
 
