@@ -1,15 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import adminSettingsService, {
-  type AdminUserCreateRequest,
   type AdminUserPasswordResetRequest,
   type AdminUserUpdateRequest,
   type MessageResponse,
   type SmtpOperationResult,
   type SmtpSettings,
-  type TenantSettings,
-  type UpdateTenantSettingsRequest,
   type UpdateSmtpSettingsRequest,
-  type ApiSettings,
   type UpdateApiSettingsRequest,
 } from '@/services/adminSettings';
 import tenantAdminService, {
@@ -30,16 +26,6 @@ const defaultForm: UpdateSmtpSettingsRequest = {
   startTls: true,
   fromAddress: '',
   fromName: 'Geo Limites',
-};
-
-const defaultUserForm: AdminUserCreateRequest = {
-  username: '',
-  email: '',
-  password: '',
-  fullName: '',
-  roleName: 'ROLE_USER',
-  verified: false,
-  sendVerificationEmail: true,
 };
 
 const defaultPasswordResetForm: AdminUserPasswordResetRequest & { confirmPassword: string } = {
@@ -84,7 +70,6 @@ const AdminSettings: React.FC = () => {
   const [currentSettings, setCurrentSettings] = useState<SmtpSettings | null>(null);
   const [operationalTenants, setOperationalTenants] = useState<TenantOperationalAdminDTO[]>([]);
   const [loadingOperationalTenants, setLoadingOperationalTenants] = useState(true);
-  const [apiSettings, setApiSettings] = useState<ApiSettings | null>(null);
   const [apiForm, setApiForm] = useState<UpdateApiSettingsRequest>({ templateApiProvider: 'CLAUDE', memorialApiProvider: 'CLAUDE' });
   const [loadingApi, setLoadingApi] = useState(true);
   const [lastOperation, setLastOperation] = useState<SmtpOperationResult | null>(null);
@@ -92,8 +77,6 @@ const AdminSettings: React.FC = () => {
   const [loadingUsers, setLoadingUsers] = useState(true);
 
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
-  const [userForm, setUserForm] = useState<AdminUserCreateRequest>(defaultUserForm);
-  const [creatingUser, setCreatingUser] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editUserForm, setEditUserForm] = useState<AdminUserUpdateRequest | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
@@ -107,26 +90,6 @@ const AdminSettings: React.FC = () => {
   const isAdmin = useMemo(
     () => user?.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN') ?? false,
     [user]
-  );
-
-  const confirmedUsersCount = useMemo(
-    () => users.filter((item) => item.verified !== false).length,
-    [users]
-  );
-
-  const activeUsersCount = useMemo(
-    () => users.filter((item) => item.active !== false).length,
-    [users]
-  );
-
-  const pendingUsersCount = useMemo(
-    () => users.filter((item) => item.verified === false).length,
-    [users]
-  );
-
-  const adminUsersCount = useMemo(
-    () => users.filter((item) => item.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN')).length,
-    [users]
   );
 
   const tabs: Array<{ id: AdminTab; label: string; eyebrow: string; count: string }> = [
@@ -180,21 +143,6 @@ const AdminSettings: React.FC = () => {
     });
   }, [users, userRoleFilter, userSearch, userStatusFilter]);
 
-  const filteredActiveUsersCount = useMemo(
-    () => filteredUsers.filter((item) => item.active !== false).length,
-    [filteredUsers]
-  );
-
-  const filteredPendingUsersCount = useMemo(
-    () => filteredUsers.filter((item) => item.verified === false).length,
-    [filteredUsers]
-  );
-
-  const filteredAdminUsersCount = useMemo(
-    () => filteredUsers.filter((item) => item.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN')).length,
-    [filteredUsers]
-  );
-
   useEffect(() => {
     if (!isAdmin) {
       setLoading(false);
@@ -235,7 +183,6 @@ const AdminSettings: React.FC = () => {
     try {
       setLoadingApi(true);
       const settings = await adminSettingsService.getApiSettings();
-      setApiSettings(settings);
       setApiForm({
         templateApiProvider: settings.templateApiProvider || 'CLAUDE',
         memorialApiProvider: settings.memorialApiProvider || 'CLAUDE',
@@ -282,10 +229,6 @@ const AdminSettings: React.FC = () => {
     setApiForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const setUserField = <K extends keyof AdminUserCreateRequest>(field: K, value: AdminUserCreateRequest[K]) => {
-    setUserForm((prev) => ({ ...prev, [field]: value }));
-  };
-
   const setEditUserField = <K extends keyof AdminUserUpdateRequest>(field: K, value: AdminUserUpdateRequest[K]) => {
     setEditUserForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
@@ -295,22 +238,6 @@ const AdminSettings: React.FC = () => {
     value: (AdminUserPasswordResetRequest & { confirmPassword: string })[K]
   ) => {
     setPasswordResetForm((prev) => (prev ? { ...prev, [field]: value } : prev));
-  };
-
-  const handleVerifiedChange = (checked: boolean) => {
-    setUserForm((prev) => ({
-      ...prev,
-      verified: checked,
-      sendVerificationEmail: checked ? false : prev.sendVerificationEmail,
-    }));
-  };
-
-  const handleSendVerificationEmailChange = (checked: boolean) => {
-    setUserForm((prev) => ({
-      ...prev,
-      sendVerificationEmail: checked,
-      verified: checked ? false : prev.verified,
-    }));
   };
 
   const handleSave = async () => {
@@ -380,7 +307,6 @@ const AdminSettings: React.FC = () => {
     try {
       setSaving(true);
       const settings = await adminSettingsService.updateApiSettings(apiForm);
-      setApiSettings(settings);
       setApiForm({
         templateApiProvider: settings.templateApiProvider,
         memorialApiProvider: settings.memorialApiProvider,
@@ -443,34 +369,6 @@ const AdminSettings: React.FC = () => {
       showError(error, 'Nao foi possivel reenviar o e-mail de confirmacao.');
     } finally {
       setResendingUserId(null);
-    }
-  };
-
-  const handleCreateUser = async () => {
-    try {
-      setCreatingUser(true);
-      const payload: AdminUserCreateRequest = {
-        ...userForm,
-        username: userForm.username.trim() || userForm.email.trim().toLowerCase(),
-        email: userForm.email.trim().toLowerCase(),
-        fullName: userForm.fullName.trim(),
-        password: userForm.password,
-      };
-
-      const createdUser = await adminSettingsService.createUser(payload);
-      setUserForm(defaultUserForm);
-      showSuccess(
-        payload.verified
-          ? `Usuario ${createdUser.email || createdUser.username} criado e confirmado com sucesso.`
-          : payload.sendVerificationEmail
-            ? `Usuario ${createdUser.email || createdUser.username} criado. O e-mail de confirmacao foi enviado.`
-            : `Usuario ${createdUser.email || createdUser.username} criado com confirmacao pendente.`
-      );
-      await loadUsers();
-    } catch (error: unknown) {
-      showError(error, 'Nao foi possivel criar o usuario.');
-    } finally {
-      setCreatingUser(false);
     }
   };
 

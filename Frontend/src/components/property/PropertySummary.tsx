@@ -6,23 +6,24 @@ interface PropertySummaryProps {
   validation: Record<string, string>;
   onSubmit: () => void;
   isSubmitting: boolean;
+  onSaveDraft?: () => void;
 }
 
 const PropertySummary: React.FC<PropertySummaryProps> = ({ 
   data, 
   validation, 
   onSubmit, 
-  isSubmitting 
+  isSubmitting,
+  onSaveDraft
 }) => {
-  const getTotalOwnershipPercentage = () => {
-    try {
-      if (!data?.owners || !Array.isArray(data.owners)) return 0;
-      return data.owners.reduce((sum, owner) => sum + (owner?.ownershipPercentage || 0), 0);
-    } catch (error) {
-      console.error('Erro ao calcular percentual de propriedade:', error);
-      return 0;
-    }
-  };
+  const primaryOwner = data?.owners?.[0];
+  const isOwnerValid = Boolean(
+    primaryOwner && (
+      primaryOwner.ownerType === 'INDIVIDUAL' 
+        ? (primaryOwner.fullName?.trim() && primaryOwner.cpf?.trim())
+        : (primaryOwner.companyName?.trim() && primaryOwner.cnpj?.trim())
+    )
+  );
 
   const getValidationSummary = () => {
     try {
@@ -36,8 +37,20 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
   };
 
   const isFormValid = () => {
-    return getValidationSummary() === 0 && getTotalOwnershipPercentage() === 100;
+    return getValidationSummary() === 0 && isOwnerValid;
   };
+
+  const hasBasicIdentification = Boolean(
+    data?.basicData?.registrationNumber &&
+    data?.basicData?.address?.street &&
+    data?.basicData?.address?.city &&
+    data?.basicData?.address?.state
+  );
+
+  const hasOwnersReady = isOwnerValid;
+
+  const hasSupportDocuments = Boolean(data?.documents?.length);
+  const hasSupportFiles = Boolean(data?.files?.length);
 
   // Verificação de segurança para evitar página branca
   if (!data || typeof data !== 'object') {
@@ -56,9 +69,9 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
     return (
       <div className="property-summary">
       <div className="section-header">
-        <h2>📋 Resumo do Cadastro</h2>
+        <h2>📋 Prontidao da Preparacao do Imovel</h2>
         <p className="section-description">
-          Revise todas as informações antes de finalizar o cadastro da propriedade.
+          Revise aqui o que ja esta pronto na base do imovel antes de salvar e seguir para a operacao.
         </p>
       </div>
 
@@ -66,35 +79,60 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
       <div className={`validation-status ${isFormValid() ? 'valid' : 'invalid'}`}>
         <div className="status-header">
           <h3>
-            {isFormValid() ? '✅ Formulário Válido' : '⚠️ Atenção Necessária'}
+            {isFormValid() ? '✅ Base pronta para salvar' : '⚠️ Ainda faltam ajustes na preparacao'}
           </h3>
         </div>
         
         {getValidationSummary() > 0 && (
           <div className="validation-errors">
-            <p><strong>Erros encontrados:</strong> {getValidationSummary()}</p>
-            <p>Corrija os erros nas abas anteriores antes de continuar.</p>
+            <p><strong>Pendencias encontradas:</strong> {getValidationSummary()}</p>
+            <p>Revise as abas anteriores para concluir a preparacao antes de salvar.</p>
           </div>
         )}
 
-        {getTotalOwnershipPercentage() !== 100 && (
+        {!isOwnerValid && (
           <div className="ownership-warning">
-            <p><strong>Participação dos proprietários:</strong> {getTotalOwnershipPercentage()}%</p>
-            <p>A soma da participação deve ser exatamente 100%.</p>
+            <p><strong>Proprietário Pendente:</strong> Dados obrigatórios não preenchidos.</p>
+            <p>Preencha os campos obrigatórios na aba "Proprietários" para o imóvel ficar pronto.</p>
           </div>
         )}
       </div>
 
-      {/* Resumo dos Dados Básicos */}
       <div className="summary-section">
-        <h3>📍 Dados Básicos</h3>
+        <h3>✅ Checklist Final de Prontidao</h3>
         <div className="summary-grid">
           <div className="summary-item">
-            <span className="label">Número de Registro:</span>
-            <span className="value">{data.basicData.registrationNumber || 'Não informado'}</span>
+            <span className="label">Identificacao do imovel</span>
+            <span className="value">{hasBasicIdentification ? 'Pronta' : 'Pendente'}</span>
           </div>
           <div className="summary-item">
-            <span className="label">Tipo de Propriedade:</span>
+            <span className="label">Proprietarios</span>
+            <span className="value">{hasOwnersReady ? 'Prontos' : 'Pendentes'}</span>
+          </div>
+          <div className="summary-item">
+            <span className="label">Documentos de apoio</span>
+            <span className="value">{hasSupportDocuments ? 'Disponiveis' : 'Nao informados'}</span>
+          </div>
+          <div className="summary-item">
+            <span className="label">Arquivos de apoio</span>
+            <span className="value">{hasSupportFiles ? 'Disponiveis' : 'Nao informados'}</span>
+          </div>
+        </div>
+        <p className="section-description" style={{ marginTop: '0.75rem' }}>
+          Quando os itens essenciais estiverem prontos, salve o imovel e depois escolha-o em "Imoveis Prontos" para usar na operacao atual.
+        </p>
+      </div>
+
+      {/* Resumo dos Dados Básicos */}
+      <div className="summary-section">
+        <h3>📍 Identificacao Preparada</h3>
+        <div className="summary-grid">
+          <div className="summary-item">
+            <span className="label">Numero de Registro:</span>
+            <span className="value">{data.basicData.registrationNumber || 'Nao informado'}</span>
+          </div>
+          <div className="summary-item">
+            <span className="label">Tipo de Imovel:</span>
             <span className="value">
               {{
                 'URBAN': '🏙️ Urbana',
@@ -131,45 +169,70 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
 
       {/* Resumo dos Proprietários */}
       <div className="summary-section">
-        <h3>👥 Proprietários ({data.owners?.length || 0})</h3>
-        {data.owners && data.owners.length > 0 ? (
+        <h3>👥 Proprietário do Imóvel</h3>
+        <p className="section-description">
+          Confira os dados jurídicos do proprietário antes de salvar.
+        </p>
+        {primaryOwner && isOwnerValid ? (
           <div className="owners-summary">
-            {data.owners.map((owner, index) => (
-              <div key={index} className="owner-summary-item">
-                <div className="owner-info">
-                  <span className="owner-name">
-                    {owner.ownerType === 'INDIVIDUAL' ? '👤' : '🏢'} 
-                    {owner.ownerType === 'INDIVIDUAL' ? owner.fullName : owner.companyName}
-                  </span>
-                  <span className="owner-percentage">{owner.ownershipPercentage}%</span>
-                </div>
-                <div className="owner-document">
-                  {owner.ownerType === 'INDIVIDUAL' ? owner.cpf : owner.cnpj}
-                </div>
+            <div className="owner-summary-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
+              <div className="owner-info" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
+                <span className="owner-name">
+                  {primaryOwner.ownerType === 'INDIVIDUAL' ? '👤' : '🏢'}{' '}
+                  {primaryOwner.ownerType === 'INDIVIDUAL' ? primaryOwner.fullName : primaryOwner.companyName}
+                </span>
+                <span className="owner-type" style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>
+                  {primaryOwner.ownerType === 'INDIVIDUAL' ? 'Pessoa Física' : 'Pessoa Jurídica'}
+                </span>
               </div>
-            ))}
-            <div className="total-percentage">
-              <strong>Total: {getTotalOwnershipPercentage()}%</strong>
+              <div className="owner-document" style={{ color: '#4b5563', fontSize: '0.9rem' }}>
+                <strong>Documento:</strong> {primaryOwner.ownerType === 'INDIVIDUAL' ? primaryOwner.cpf : primaryOwner.cnpj}
+                {(primaryOwner.rg || primaryOwner.stateRegistration) && (
+                  <>
+                    <span style={{ margin: '0 0.5rem', color: '#cbd5e1' }}>|</span>
+                    <strong>{primaryOwner.ownerType === 'INDIVIDUAL' ? 'RG' : 'I.E.'}:</strong>{' '}
+                    {primaryOwner.ownerType === 'INDIVIDUAL' ? primaryOwner.rg : primaryOwner.stateRegistration}
+                  </>
+                )}
+              </div>
+              {(primaryOwner.email || primaryOwner.phone) && (
+                <div className="owner-contact" style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+                  {primaryOwner.email && <span>📧 {primaryOwner.email}</span>}
+                  {primaryOwner.email && primaryOwner.phone && <span style={{ margin: '0 0.5rem', color: '#cbd5e1' }}>|</span>}
+                  {primaryOwner.phone && <span>📞 {primaryOwner.phone}</span>}
+                </div>
+              )}
+              <div className="ownership-details" style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+                <strong>Regime:</strong>{' '}
+                {{
+                  'FULL': 'Propriedade Plena (100%)',
+                  'USUFRUCT': 'Usufruto',
+                  'LEASE': 'Arrendamento / Concessão',
+                  'PARTIAL': 'Posse / Outro'
+                }[primaryOwner.ownershipType] || 'Propriedade Plena'}
+              </div>
             </div>
           </div>
         ) : (
-          <p className="empty-message">Nenhum proprietário cadastrado.</p>
+          <p className="empty-message" style={{ color: '#dc3545', fontWeight: 500 }}>
+            ⚠️ Dados do proprietário incompletos ou não informados.
+          </p>
         )}
       </div>
 
       {/* Nota sobre Dados Técnicos */}
       <div className="summary-section">
-        <h3>📐 Dados Técnicos</h3>
+        <h3>📐 Leitura Tecnica na Operacao</h3>
         <div className="technical-note">
-          <p>📋 Os dados técnicos (área, perímetro, coordenadas, confrontações) serão extraídos automaticamente dos arquivos DXF/DWG durante a geração do memorial.</p>
-          <p>🎯 Esta funcionalidade utiliza o ViewerDXF integrado para análise precisa dos desenhos técnicos.</p>
+          <p>📋 Area, perimetro, coordenadas e confrontacoes serao extraidos dos arquivos DXF/DWG durante a operacao do memorial.</p>
+          <p>🎯 Esta etapa acontece depois, no visualizador e na geracao do memorial, usando a base preparada aqui.</p>
         </div>
       </div>
 
       {/* Resumo dos Documentos */}
       {data.documents && data.documents.length > 0 && (
         <div className="summary-section">
-          <h3>📄 Documentos ({data.documents.length})</h3>
+          <h3>📄 Documentos de Apoio ({data.documents.length})</h3>
           <div className="documents-summary">
             {data.documents.map((doc, index) => (
               <div key={index} className="document-summary-item">
@@ -192,7 +255,7 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
       {/* Resumo dos Arquivos */}
       {data.files && data.files.length > 0 && (
         <div className="summary-section">
-          <h3>🗂️ Arquivos ({data.files.length})</h3>
+          <h3>🗂️ Arquivos de Apoio ({data.files.length})</h3>
           <div className="files-summary">
             {data.files.map((file, index) => (
               <div key={index} className="file-summary-item">
@@ -216,20 +279,43 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
           {isSubmitting ? (
             <>
               <span className="loading-spinner">⏳</span>
-              Cadastrando Propriedade...
+              Salvando Imovel...
             </>
           ) : (
             <>
               <span>✅</span>
-              Finalizar Cadastro
+              Salvar Imovel na Base
             </>
           )}
         </button>
 
         {!isFormValid() && (
-          <p className="submit-warning">
-            Corrija os erros acima antes de finalizar o cadastro.
-          </p>
+          <div style={{ marginTop: '1rem' }}>
+            <p className="submit-warning" style={{ marginBottom: '1rem' }}>
+              Corrija as pendencias acima antes de salvar a preparacao do imovel.
+            </p>
+            {onSaveDraft && data.basicData.registrationNumber && (
+              <button
+                type="button"
+                onClick={onSaveDraft}
+                className="btn-secondary"
+                style={{
+                  background: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                📝 Salvar Rascunho Local
+              </button>
+            )}
+          </div>
         )}
         </div>
       </div>
