@@ -41,8 +41,7 @@ const Login: React.FC = () => {
 
   // Redirecionar se já estiver autenticado
   if (isAuthenticated) {
-    const from = locationState?.from?.pathname || '/properties';
-    return <Navigate to={from} replace />;
+    return <Navigate to="/properties" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

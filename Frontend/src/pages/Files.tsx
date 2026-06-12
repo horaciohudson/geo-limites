@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { saveAs } from 'file-saver';
 import { Button, Loading } from '@/components';
 import { clearStoredSession } from '@/auth/session';
+import { useTenantOperationalAccess } from '@/hooks/useTenantOperationalAccess';
 import api from '@/services/api';
 import { useFileContext } from '@/contexts/FileContext';
 import type { FileMetadata } from '@/types/files';
@@ -44,6 +45,7 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 const Files: React.FC = () => {
   const { selectedFiles, toggleFileSelection, isFileSelected, removeFromSelection } = useFileContext();
+  const { isRestricted, restrictionMessage, isLoading: isLoadingTenantAccess } = useTenantOperationalAccess();
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -79,8 +81,8 @@ const Files: React.FC = () => {
       
       // Tratamento específico por tipo de erro
       if (apiError?.response?.status === 403 || apiError?.response?.status === 404) {
-        setFiles([]); // Lista vazia em caso de não autorizado ou não encontrado
-        setError('');
+        setFiles([]);
+        setError(apiError.response.status === 403 ? getErrorMessage(err, restrictionMessage) : '');
       } else {
         setError('Erro ao carregar arquivos. Verifique sua conexão e tente novamente.');
       }
@@ -203,7 +205,7 @@ const Files: React.FC = () => {
         window.location.href = '/login';
         return;
       } else if (apiError?.response?.status === 403) {
-        errorMessage = 'Erro 403: Sem permissão para enviar arquivos';
+        errorMessage = getErrorMessage(err, restrictionMessage);
       } else if (apiError?.response?.status === 413) {
         errorMessage = 'Erro 413: Arquivo muito grande para o servidor';
       } else if (apiError?.response?.status === 415) {
@@ -324,6 +326,26 @@ const Files: React.FC = () => {
   };
 
   // === Render ===
+  if (isLoadingTenantAccess) {
+    return (
+      <div className="page-container">
+        <Loading size="large" text="Verificando liberacao operacional..." />
+      </div>
+    );
+  }
+
+  if (isRestricted) {
+    return (
+      <div className="page-container">
+        <div className="state-container prompt-state">
+          <span>🔒</span>
+          <h3>Preparacao bloqueada</h3>
+          <p>{restrictionMessage}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="page-container">
@@ -335,8 +357,28 @@ const Files: React.FC = () => {
   return (
     <div className="page-container">
       <div className="page-header">
-        <h1>Meus Arquivos DXF/DWG</h1>
-        <p>Gerencie seus arquivos de desenho técnico</p>
+        <h1>Arquivos Tecnicos</h1>
+        <p>Prepare aqui os DXF e DWG que serao usados depois na operacao</p>
+      </div>
+
+      <div
+        style={{
+          backgroundColor: '#f8fbff',
+          border: '1px solid #d7e8fb',
+          borderRadius: '12px',
+          padding: '1rem 1.25rem',
+          marginBottom: '1.5rem'
+        }}
+      >
+        <h2 style={{ margin: '0 0 0.6rem 0', color: '#2c3e50', fontSize: '1.05rem' }}>
+          Preparacao antes de operar
+        </h2>
+        <p style={{ margin: '0 0 0.4rem 0', color: '#5f6b7a' }}>
+          Envie aqui os arquivos tecnicos do trabalho e deixe selecionados os que vao entrar no memorial atual.
+        </p>
+        <p style={{ margin: 0, color: '#5f6b7a' }}>
+          Depois disso, siga para <strong>Operacao {'>'} Normas do Memorial</strong> e <strong>Visualizador</strong>.
+        </p>
       </div>
 
       {/* Upload */}
@@ -361,14 +403,14 @@ const Files: React.FC = () => {
           {isUploading ? (
             <>
               <Loading size="large" />
-              <p>Enviando arquivo(s)...</p>
+              <p>Enviando arquivo(s) para a preparacao...</p>
             </>
           ) : (
             <>
-              <h3>Arraste aqui ou clique para selecionar</h3>
-              <p>Arquivos .dxf ou .dwg (máx 50MB cada)</p>
+              <h3>Arraste aqui ou clique para preparar os arquivos</h3>
+              <p>Arquivos .dxf ou .dwg (max 50MB cada)</p>
               <Button variant="primary" onClick={handleUploadClick}>
-                Selecionar Arquivos
+                Selecionar Arquivos Tecnicos
               </Button>
             </>
           )}
@@ -419,10 +461,10 @@ const Files: React.FC = () => {
       {/* Lista de arquivos */}
       <div className="files-section">
         <div className="files-header">
-          <h2>Arquivos Enviados ({files.length})</h2>
+          <h2>Arquivos Disponiveis na Preparacao ({files.length})</h2>
           {selectedFiles.length > 0 && (
             <p style={{ margin: '0.5rem 0 0 0', color: '#666', fontSize: '0.9rem' }}>
-              {selectedFiles.length} arquivo{selectedFiles.length > 1 ? 's' : ''} selecionado{selectedFiles.length > 1 ? 's' : ''}
+              {selectedFiles.length} arquivo{selectedFiles.length > 1 ? 's' : ''} pronto{selectedFiles.length > 1 ? 's' : ''} para a operacao atual
             </p>
           )}
           {/* Botão para carregar manualmente se necessário */}
@@ -439,8 +481,8 @@ const Files: React.FC = () => {
 
         {files.length === 0 ? (
           <div className="empty-state">
-            <h3>Nenhum arquivo encontrado</h3>
-            <p>Envie arquivos para começar</p>
+            <h3>Nenhum arquivo tecnico preparado</h3>
+            <p>Envie os arquivos que farao parte do trabalho antes de seguir para a operacao</p>
           </div>
         ) : (
           <div className="files-grid">

@@ -43,6 +43,13 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public List<UserDTO> findAllGlobal() {
+        requireAdmin();
+        // Permite ao System Admin ver todos os usuários de todos os tenants
+        return repository.findAll().stream().map(mapper::toDTO).toList();
+    }
+
+    @Transactional(readOnly = true)
     public UserDTO findById(UUID id) {
         User currentUser = AuthUtils.getRequiredCurrentUser();
         if (!AuthUtils.isCurrentUserAdmin() && !currentUser.getId().equals(id)) {
@@ -174,8 +181,13 @@ public class UserService {
         }
 
         EmailVerificationToken verificationToken = createVerificationToken(user);
-        accountEmailService.sendVerificationEmail(user, verificationToken.getToken());
-        return new MessageResponseDTO("Novo e-mail de confirmacao enviado com sucesso para " + user.getEmail() + ".");
+        AccountEmailService.DispatchResult dispatchResult =
+                accountEmailService.sendVerificationEmail(user, verificationToken.getToken());
+        String message = dispatchResult.isEmailSent()
+                ? "Novo e-mail de confirmacao enviado com sucesso para " + user.getEmail() + "."
+                : "Novo link de confirmacao gerado para " + user.getEmail()
+                + ". O envio de e-mail esta desabilitado neste ambiente; use o link exibido abaixo.";
+        return new MessageResponseDTO(message, dispatchResult.isEmailSent(), dispatchResult.getVerificationUrl());
     }
 
     private void requireAdmin() {

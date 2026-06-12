@@ -5,8 +5,7 @@ import { CreditProvider } from './contexts/CreditContext';
 import PrivateRoute from '@/routes/PrivateRoute';
 import { Navbar, Sidebar } from '@/components';
 import CreditNotification from './components/CreditNotification';
-import { Login, Register, VerifyEmail, ResendVerification, Files, Viewer, Report, MemorialStandards, Memorial, ManageStandards, ConfigureTemplates, PropertyRegister, MyAccount, AdminSettings } from '@/pages';
-import UploadExample from '@/pages/UploadExample';
+import { Login, Register, VerifyEmail, ResendVerification, Files, Viewer, Report, MemorialStandards, Memorial, ManageStandards, ConfigureTemplates, PropertyRegister, PropertiesPresentation, MyAccount, AdminSettings } from '@/pages';
 import TestViewer from '@/pages/TestViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { TOKEN_STORAGE_KEY } from '@/auth/session';
@@ -14,6 +13,7 @@ import { FileProvider } from '@/contexts/FileContext'; // ✅ Import do novo con
 import { ConfigProvider } from '@/contexts/ConfigContext'; // ✅ Import do contexto de configuração
 import { openHelpPage } from '@/utils/helpLinks';
 import './styles/App.css';
+
 
 // Context para ações do Sidebar
 interface SidebarContextType {
@@ -167,6 +167,14 @@ const App: React.FC = () => {
               path="/properties"
               element={
                 <PrivateRoute>
+                  <PropertiesPresentation />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/properties/cadastro"
+              element={
+                <PrivateRoute>
                   <PropertyRegister />
                 </PrivateRoute>
               }
@@ -232,14 +240,6 @@ const App: React.FC = () => {
               element={
                 <PrivateRoute>
                   <ConfigureTemplates />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/upload-example"
-              element={
-                <PrivateRoute>
-                  <UploadExample />
                 </PrivateRoute>
               }
             />

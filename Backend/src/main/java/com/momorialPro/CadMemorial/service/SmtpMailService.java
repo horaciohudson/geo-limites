@@ -117,6 +117,10 @@ public class SmtpMailService {
         }
     }
 
+    public boolean isDeliveryEnabled() {
+        return resolveActiveConfiguration().isEnabled();
+    }
+
     private ResolvedSmtpConfiguration resolveActiveConfiguration() {
         SmtpSettings settings = smtpSettingsService.getCurrentSettings();
         boolean hasDatabaseHost = StringUtils.hasText(settings.getHost());

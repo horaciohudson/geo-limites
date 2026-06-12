@@ -4,6 +4,7 @@ import com.momorialPro.CadMemorial.dto.PropertyDTO;
 import com.momorialPro.CadMemorial.dto.PropertySummaryDTO;
 import com.momorialPro.CadMemorial.security.AuthUtils;
 import com.momorialPro.CadMemorial.service.PropertyService;
+import com.momorialPro.CadMemorial.service.TenantOperationalAccessService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,7 @@ import java.util.UUID;
 public class PropertyController {
     
     private final PropertyService propertyService;
+    private final TenantOperationalAccessService tenantOperationalAccessService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
@@ -53,6 +55,7 @@ public class PropertyController {
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
     public ResponseEntity<PropertyDTO> createProperty(@RequestBody PropertyDTO propertyDTO) {
+        tenantOperationalAccessService.assertPropertyRegistrationAccessAllowed();
         UUID userId = AuthUtils.getCurrentUserId();
         PropertyDTO newProperty = propertyService.create(propertyDTO, userId);
 
@@ -64,6 +67,7 @@ public class PropertyController {
     public ResponseEntity<PropertyDTO> updateProperty(
             @PathVariable UUID id, 
             @RequestBody PropertyDTO propertyDTO) {
+        tenantOperationalAccessService.assertPropertyRegistrationAccessAllowed();
         UUID userId = AuthUtils.getCurrentUserId();
         PropertyDTO updatedProperty = propertyService.update(id, propertyDTO, userId);
 
@@ -73,6 +77,7 @@ public class PropertyController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
     public ResponseEntity<Void> deleteProperty(@PathVariable UUID id) {
+        tenantOperationalAccessService.assertPropertyRegistrationAccessAllowed();
         UUID userId = AuthUtils.getCurrentUserId();
         propertyService.delete(id, userId);
 

@@ -4,6 +4,7 @@ import com.momorialPro.CadMemorial.dto.FileMetadataDTO;
 import com.momorialPro.CadMemorial.mapper.FileMetadataMapper;
 import com.momorialPro.CadMemorial.model.FileMetadata;
 import com.momorialPro.CadMemorial.service.FileMetadataService;
+import com.momorialPro.CadMemorial.service.TenantOperationalAccessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.*;
@@ -24,10 +25,12 @@ public class FileMetadataController {
 
     private final FileMetadataService fileService;
     private final FileMetadataMapper mapper;
+    private final TenantOperationalAccessService tenantOperationalAccessService;
 
     /** Upload de arquivo DXF, associando automaticamente ao usuário autenticado */
     @PostMapping("/upload")
     public ResponseEntity<List<FileMetadataDTO>> upload(@RequestParam("file") MultipartFile file) {
+        tenantOperationalAccessService.assertPreparationAccessAllowed();
         try {
             FileMetadata saved = fileService.store(file);
             return ResponseEntity.status(HttpStatus.CREATED)
@@ -42,6 +45,7 @@ public class FileMetadataController {
     /** Lista apenas os arquivos do usuário autenticado */
     @GetMapping("/my-files")
     public ResponseEntity<List<FileMetadataDTO>> listMyFiles() {
+        tenantOperationalAccessService.assertPreparationAccessAllowed();
         List<FileMetadata> files = fileService.list();
         return ResponseEntity.ok(files.stream().map(mapper::toDTO).toList());
     }
@@ -49,6 +53,7 @@ public class FileMetadataController {
     /** Download do arquivo físico */
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable UUID id) {
+        tenantOperationalAccessService.assertPreparationAccessAllowed();
         FileMetadata meta = fileService.get(id);
         if (meta == null)
             return ResponseEntity.notFound().build();
@@ -68,6 +73,7 @@ public class FileMetadataController {
     /** Exclui arquivo (somente dono ou ADMIN) */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        tenantOperationalAccessService.assertPreparationAccessAllowed();
         try {
             fileService.delete(id);
             return ResponseEntity.noContent().build();
@@ -81,6 +87,7 @@ public class FileMetadataController {
     /** Obtém os metadados de um arquivo específico */
     @GetMapping("/{id}")
     public ResponseEntity<FileMetadataDTO> get(@PathVariable UUID id) {
+        tenantOperationalAccessService.assertPreparationAccessAllowed();
         FileMetadata meta = fileService.get(id);
         return meta == null
                 ? ResponseEntity.notFound().build()
@@ -90,6 +97,7 @@ public class FileMetadataController {
     /** Compara dois arquivos DXF */
     @PostMapping("/compare")
     public ResponseEntity<?> compare(@RequestBody CompareRequestDTO request) {
+        tenantOperationalAccessService.assertPreparationAccessAllowed();
         try {
             // Por enquanto, retorna uma resposta simples indicando que a funcionalidade está em desenvolvimento
             return ResponseEntity.ok(Map.of(

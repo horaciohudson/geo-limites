@@ -21,6 +21,8 @@ interface RegisterFormValidation {
 interface RegisterResponse {
   message?: string;
   tenantCode?: string;
+  emailSent?: boolean | null;
+  verificationUrl?: string | null;
 }
 
 interface ApiErrorLike {
@@ -73,6 +75,7 @@ const Register: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [generatedTenantCode, setGeneratedTenantCode] = useState('');
+  const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
 
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -142,6 +145,7 @@ const Register: React.FC = () => {
     setValidation({});
     setSuccessMessage(null);
     setGeneratedTenantCode('');
+    setVerificationUrl(null);
 
     try {
       const response = await api.post<RegisterResponse>('/auth/register', {
@@ -157,6 +161,7 @@ const Register: React.FC = () => {
       }
       const successText = response.data?.message || 'Conta criada com sucesso!';
       setSuccessMessage(successText);
+      setVerificationUrl(response.data?.verificationUrl || null);
       
       // Redirecionar para login após 2 segundos
       setTimeout(() => {
@@ -271,6 +276,13 @@ const Register: React.FC = () => {
                 <div>
                   <div>{successMessage}</div>
                   {generatedTenantCode && <div>Identificador da empresa: {generatedTenantCode}</div>}
+                  {verificationUrl && (
+                    <div style={{ marginTop: '0.75rem' }}>
+                      <a href={verificationUrl} target="_blank" rel="noreferrer" className="auth-link">
+                        Abrir link de confirmacao
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

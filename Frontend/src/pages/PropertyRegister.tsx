@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
+import { useTenantOperationalAccess } from '@/hooks/useTenantOperationalAccess';
 
-import PropertyGrid from '../components/property/PropertyGrid';
 import PropertyBasicData from '../components/property/PropertyBasicData';
 import PropertyOwners from '../components/property/PropertyOwners';
 import PropertyDocuments from '../components/property/PropertyDocuments';
@@ -65,11 +65,98 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+// Função de mapeamento para carregar dados do backend (PropertyDTO) para o formulário (PropertyFormData)
+const mapBackendToFormData = (backendData: any): PropertyFormData => {
+  const owners = [];
+  if (backendData.ownerName) {
+    const cleanDoc = (backendData.ownerDocument || '').replace(/\D/g, '');
+    const isCompany = cleanDoc.length > 11;
+    
+    owners.push({
+      ownerType: (isCompany ? 'COMPANY' : 'INDIVIDUAL') as 'COMPANY' | 'INDIVIDUAL',
+      ownershipPercentage: 100,
+      ownershipType: 'FULL' as const,
+      active: true,
+      fullName: isCompany ? '' : backendData.ownerName,
+      cpf: isCompany ? '' : backendData.ownerDocument || '',
+      companyName: isCompany ? backendData.ownerName : '',
+      cnpj: isCompany ? backendData.ownerDocument || '' : '',
+      email: backendData.ownerEmail || '',
+      phone: backendData.ownerPhone || '',
+      rg: !isCompany ? backendData.ownerIdNumber || '' : '',
+      stateRegistration: isCompany ? backendData.ownerIdNumber || '' : ''
+    });
+  } else {
+    owners.push({
+      ownerType: 'INDIVIDUAL' as const,
+      ownershipPercentage: 100,
+      ownershipType: 'FULL' as const,
+      active: true,
+      fullName: '',
+      cpf: '',
+      companyName: '',
+      cnpj: '',
+      email: '',
+      phone: '',
+      rg: '',
+      stateRegistration: ''
+    });
+  }
+
+  return {
+    basicData: {
+      registrationNumber: backendData.registrationNumber || backendData.name || '',
+      propertyType: backendData.propertyType || 'URBAN',
+      landUse: backendData.landUse || 'RESIDENTIAL',
+      address: {
+        street: backendData.street || '',
+        number: backendData.number || '',
+        complement: backendData.complement || '',
+        neighborhood: backendData.neighborhood || '',
+        city: backendData.city || '',
+        state: backendData.state || '',
+        zipCode: backendData.zipCode || '',
+        coordinates: (backendData.latitude && backendData.longitude) ? {
+          latitude: backendData.latitude,
+          longitude: backendData.longitude
+        } : undefined,
+        sirgas: (backendData.sirgas_e && backendData.sirgas_n) ? {
+          e: backendData.sirgas_e,
+          n: backendData.sirgas_n,
+          source: backendData.sirgas_source || '',
+          zone: backendData.utmZone || '24S',
+          datum: backendData.datum || 'SIRGAS 2000'
+        } : undefined
+      }
+    },
+    owners: owners,
+    documents: backendData.documents || [],
+    files: [
+      ...(backendData.dxfFiles || []).map((f: any) => ({
+        id: f.id || Math.random().toString(36).substr(2, 9),
+        name: f.fileName,
+        size: f.fileSize,
+        type: 'dxf'
+      })),
+      ...(backendData.otherFiles || []).map((f: any) => ({
+        id: f.id || Math.random().toString(36).substr(2, 9),
+        name: f.fileName,
+        size: f.fileSize,
+        type: f.fileType
+      }))
+    ]
+  };
+};
+
 const PropertyRegister: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+  const { isRestricted, restrictionMessage, isLoading: isLoadingTenantAccess } = useTenantOperationalAccess();
   
   const [currentTab, setCurrentTab] = useState(0);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
   const [formData, setFormData] = useState<PropertyFormData>({
     basicData: {
       registrationNumber: '',
@@ -85,9 +172,21 @@ const PropertyRegister: React.FC = () => {
         zipCode: ''
       }
     },
-    owners: [],
+    owners: [{
+      ownerType: 'INDIVIDUAL',
+      ownershipPercentage: 100,
+      ownershipType: 'FULL',
+      active: true,
+      fullName: '',
+      cpf: '',
+      companyName: '',
+      cnpj: '',
+      email: '',
+      phone: '',
+      rg: '',
+      stateRegistration: ''
+    }],
     documents: [],
-
     files: []
   });
 
@@ -95,7 +194,6 @@ const PropertyRegister: React.FC = () => {
     basicData: {},
     owners: {},
     documents: {},
-
     files: {},
     general: []
   });
@@ -105,73 +203,92 @@ const PropertyRegister: React.FC = () => {
   const [selectedIncompleteId, setSelectedIncompleteId] = useState<string>('');
   const [refreshCombobox, setRefreshCombobox] = useState<number>(0);
   
-  // Hook para gerenciar lista de propriedades incompletas
   const [incompletePropertiesList, setIncompletePropertiesList] = useState<IncompletePropertyListItem[]>([]);
   
-  // Atualizar lista quando necessário
   useEffect(() => {
-    const updateList = () => {
+    if (!editId) {
       const list = getIncompleteProperties();
       setIncompletePropertiesList(list);
-    };
-    
-    updateList();
-  }, [refreshCombobox, formData.basicData.registrationNumber]);
+    }
+  }, [refreshCombobox, formData.basicData.registrationNumber, editId]);
 
-const tabs = [
-    { id: 0, name: 'Pesquisar', icon: '🔍', required: false },
-    { id: 1, name: 'Dados Básicos', icon: '🏠', required: true },
-    { id: 2, name: 'Proprietários', icon: '👥', required: true },
-    { id: 3, name: 'Documentos', icon: '📄', required: false },
-    { id: 4, name: 'Arquivos', icon: '🗂️', required: false },
-    { id: 5, name: 'Resumo', icon: '📋', required: false }
+  useEffect(() => {
+    const loadPropertyFromDb = async () => {
+      if (!editId) return;
+      try {
+        setLoadingEdit(true);
+        const response = await api.get(`/properties/${editId}/details`);
+        const mapped = mapBackendToFormData(response.data);
+        setFormData(mapped);
+        setPropertyId(editId);
+      } catch (error) {
+        console.error('Erro ao carregar imóvel para edição:', error);
+        alert('Não foi possível carregar os dados do imóvel selecionado do banco de dados.');
+        navigate('/properties');
+      } finally {
+        setLoadingEdit(false);
+      }
+    };
+    loadPropertyFromDb();
+  }, [editId, navigate]);
+
+  const tabs = [
+    { id: 0, name: 'Dados Básicos', icon: '🏠', required: true },
+    { id: 1, name: 'Proprietários', icon: '👥', required: true },
+    { id: 2, name: 'Documentos', icon: '📄', required: false },
+    { id: 3, name: 'Arquivos', icon: '🗂️', required: false },
+    { id: 4, name: 'Resumo', icon: '📋', required: false }
   ];
 
-  // ===== SISTEMA SIMPLES DE CADASTROS INCOMPLETOS =====
-  
-
-  
-  // Gerar ID único para propriedade
   const generatePropertyId = () => {
-    return `prop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    try {
+      return window.crypto.randomUUID();
+    } catch (e) {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
   };
 
-  // Verificar se propriedade está completa
   const isPropertyComplete = (data: PropertyFormData): boolean => {
+    const owner = data.owners[0];
+    const isOwnerValid = owner && (
+      owner.ownerType === 'INDIVIDUAL' 
+        ? (owner.fullName && owner.cpf)
+        : (owner.companyName && owner.cnpj)
+    );
     return !!(
       data.basicData.registrationNumber &&
       data.basicData.address.street &&
-      data.owners.length > 0 &&
-      data.owners.reduce((sum, owner) => sum + owner.ownershipPercentage, 0) === 100
+      isOwnerValid
     );
   };
 
-  // Salvar cadastro incompleto
   const saveIncompleteProperty = useCallback(() => {
-    if (!formData.basicData.registrationNumber) {
+    if (!formData.basicData.registrationNumber || editId) {
       return;
     }
     
+    const currentId = propertyId || generatePropertyId();
     const propertyData: CachedIncompleteProperty = {
-      id: propertyId || generatePropertyId(),
+      id: currentId,
       ...formData,
       lastModified: new Date().toISOString(),
       isComplete: isPropertyComplete(formData)
     };
     
-    // Salvar no localStorage
-    localStorage.setItem(`incomplete_property_${propertyData.id}`, JSON.stringify(propertyData));
+    localStorage.setItem(`incomplete_property_${currentId}`, JSON.stringify(propertyData));
     setLastDraftSavedAt(propertyData.lastModified);
     
     if (!propertyId) {
-      setPropertyId(propertyData.id);
+      setPropertyId(currentId);
     }
     
-    // Forçar atualização do combobox
     setRefreshCombobox(prev => prev + 1);
-  }, [formData, propertyId]);
+  }, [formData, propertyId, editId]);
 
-  // Carregar cadastros incompletos
   const getIncompleteProperties = (): IncompletePropertyListItem[] => {
     const incompleteProperties: IncompletePropertyListItem[] = [];
     
@@ -181,8 +298,6 @@ const tabs = [
         try {
           const data = JSON.parse(localStorage.getItem(key) || '{}') as Partial<CachedIncompleteProperty>;
           
-          // Mostrar todas as propriedades que têm número de registro (completas ou incompletas)
-          // A única exceção são as que foram finalizadas (enviadas para o banco)
           if (data.basicData?.registrationNumber && !data.finalizedInDatabase) {
             const prop: IncompletePropertyListItem = {
               id: data.id || key.replace('incomplete_property_', ''),
@@ -205,7 +320,6 @@ const tabs = [
     );
   };
 
-  // Carregar propriedade selecionada
   const loadSelectedProperty = (selectedId: string) => {
     if (!selectedId) return;
     
@@ -216,36 +330,32 @@ const tabs = [
         
         setFormData(propertyData);
         setPropertyId(selectedId);
-        setSelectedIncompleteId(selectedId); // ✅ Manter seleção no combobox
+        setSelectedIncompleteId(selectedId);
       }
     } catch (error) {
       console.error('Erro ao carregar propriedade:', error);
     }
   };
 
-  // Auto-save a cada mudança
   useEffect(() => {
-    if (formData.basicData.registrationNumber) {
+    if (formData.basicData.registrationNumber && !editId) {
       const timeoutId = setTimeout(() => {
         saveIncompleteProperty();
-      }, 1000); // Salva após 1 segundo de inatividade
+      }, 1000);
       
       return () => clearTimeout(timeoutId);
     }
-  }, [formData, saveIncompleteProperty]);
+  }, [formData, saveIncompleteProperty, editId]);
 
-  // Inicialização
   useEffect(() => {
-    if (!propertyId) {
+    if (!propertyId && !editId) {
       const newId = generatePropertyId();
       setPropertyId(newId);
     }
-  }, [propertyId]);
+  }, [propertyId, editId]);
 
-  // Sincronizar selectedIncompleteId com propertyId atual
   useEffect(() => {
-    if (propertyId) {
-      // Verificar se o propertyId atual existe na lista de incompletos
+    if (propertyId && !editId) {
       const incompleteProps = getIncompleteProperties();
       const currentProp = incompleteProps.find((p) => p.id === propertyId);
       
@@ -255,16 +365,12 @@ const tabs = [
         setSelectedIncompleteId('');
       }
     }
-  }, [propertyId, formData.basicData.registrationNumber]); // Re-executar quando registrationNumber muda
+  }, [propertyId, formData.basicData.registrationNumber, editId]);
 
-  // ===== FIM DO SISTEMA SIMPLES =====
-
-  // Calcular progresso de completude
   const calculateProgress = (): number => {
     let completed = 0;
     const total = tabs.filter(tab => tab.required).length;
 
-    // Verificar cada aba obrigatória (ignorar aba de pesquisa)
     if (formData.basicData.registrationNumber && formData.basicData.address.street) completed++;
     if (formData.owners.length > 0) completed++;
 
@@ -274,14 +380,11 @@ const tabs = [
   const progress = calculateProgress();
   const canSaveToDatabase = progress >= 100;
 
-  // Validar aba atual
   const validateCurrentTab = (): boolean => {
     const newValidation = { ...validation };
     
     switch (currentTab) {
-      case 0: // Pesquisar - não precisa validação
-        break;
-      case 1: // Dados Básicos
+      case 0:
         newValidation.basicData = {};
         if (!formData.basicData.registrationNumber) {
           newValidation.basicData.registrationNumber = 'Número de registro é obrigatório';
@@ -294,84 +397,61 @@ const tabs = [
         }
         break;
         
-      case 2: // Proprietários
+      case 1:
         newValidation.owners = {};
-        if (formData.owners.length === 0) {
-          newValidation.owners.general = 'Pelo menos um proprietário é obrigatório';
+        const primaryOwner = formData.owners[0];
+        if (!primaryOwner) {
+          newValidation.owners.general = 'Dados do proprietário são obrigatórios';
         } else {
-          // Validar dados de cada proprietário
-          let hasInvalidOwner = false;
-          formData.owners.forEach((owner, index) => {
-            if (owner.ownerType === 'INDIVIDUAL') {
-              if (!owner.fullName || owner.fullName.trim() === '' || !owner.cpf || owner.cpf.trim() === '') {
-                newValidation.owners[`owner_${index}`] = 'Nome completo e CPF são obrigatórios para pessoa física';
-                hasInvalidOwner = true;
-              }
-            } else {
-              if (!owner.companyName || owner.companyName.trim() === '' || !owner.cnpj || owner.cnpj.trim() === '') {
-                newValidation.owners[`owner_${index}`] = 'Razão social e CNPJ são obrigatórios para pessoa jurídica';
-                hasInvalidOwner = true;
-              }
+          if (primaryOwner.ownerType === 'INDIVIDUAL') {
+            if (!primaryOwner.fullName || primaryOwner.fullName.trim() === '') {
+              newValidation.owners.fullName = 'Nome completo é obrigatório';
             }
-            
-            if (owner.ownershipPercentage <= 0 || owner.ownershipPercentage > 100) {
-              newValidation.owners[`owner_${index}_percentage`] = 'Percentual deve ser entre 1% e 100%';
-              hasInvalidOwner = true;
+            if (!primaryOwner.cpf || primaryOwner.cpf.trim() === '') {
+              newValidation.owners.cpf = 'CPF é obrigatório';
             }
-          });
-          
-          if (hasInvalidOwner) {
-            newValidation.owners.general = 'Corrija os dados dos proprietários antes de continuar';
+          } else {
+            if (!primaryOwner.companyName || primaryOwner.companyName.trim() === '') {
+              newValidation.owners.companyName = 'Razão social é obrigatória';
+            }
+            if (!primaryOwner.cnpj || primaryOwner.cnpj.trim() === '') {
+              newValidation.owners.cnpj = 'CNPJ é obrigatório';
+            }
           }
-        }
-        
-        // Verificar se soma das participações = 100%
-        const totalPercentage = formData.owners.reduce((sum, owner) => sum + owner.ownershipPercentage, 0);
-        if (totalPercentage !== 100) {
-          newValidation.owners.percentage = `Total de participação deve ser 100% (atual: ${totalPercentage}%)`;
         }
         break;
     }
     
     setValidation(newValidation);
     
-    // Verificar se há erros na aba atual
     const currentTabErrors = Object.values(newValidation[getCurrentTabValidationKey()]).filter(error => error);
     return currentTabErrors.length === 0;
   };
 
   const getCurrentTabValidationKey = (): keyof PropertyFormValidation => {
-    const keys: (keyof PropertyFormValidation)[] = ['general', 'basicData', 'owners', 'documents', 'files', 'general'];
+    const keys: (keyof PropertyFormValidation)[] = ['basicData', 'owners', 'documents', 'files', 'general'];
     return keys[currentTab] || 'general';
   };
 
-  // Navegar entre abas
   const goToTab = (tabIndex: number) => {
     if (tabIndex === currentTab) return;
     
-    // Validar aba atual antes de sair (apenas para abas obrigatórias)
     const currentTabData = tabs[currentTab];
     if (currentTabData.required && !validateCurrentTab()) {
-      // Mensagem específica para cada aba
       let message = `Por favor, corrija os erros na aba "${currentTabData.name}" antes de continuar.`;
       
-      if (currentTab === 1) { // Proprietários
-        const invalidOwners = formData.owners.filter(owner => {
-          if (owner.ownerType === 'INDIVIDUAL') {
-            return !owner.fullName || owner.fullName.trim() === '' || !owner.cpf || owner.cpf.trim() === '' || owner.ownershipPercentage <= 0;
-          } else {
-            return !owner.companyName || owner.companyName.trim() === '' || !owner.cnpj || owner.cnpj.trim() === '' || owner.ownershipPercentage <= 0;
+      if (currentTab === 1) {
+        const primaryOwner = formData.owners[0];
+        if (!primaryOwner) {
+          message = 'Por favor, informe os dados do proprietário.';
+        } else if (primaryOwner.ownerType === 'INDIVIDUAL') {
+          if (!primaryOwner.fullName || !primaryOwner.cpf) {
+            message = 'Nome completo e CPF são obrigatórios para pessoa física.';
           }
-        });
-        
-        const totalPercentage = formData.owners.reduce((sum, owner) => sum + owner.ownershipPercentage, 0);
-        
-        if (formData.owners.length === 0) {
-          message = 'Adicione pelo menos um proprietário antes de continuar.';
-        } else if (invalidOwners.length > 0) {
-          message = `Complete os dados de ${invalidOwners.length} proprietário(s) (nome/razão social e CPF/CNPJ são obrigatórios).`;
-        } else if (totalPercentage !== 100) {
-          message = `A soma das participações deve ser 100% (atual: ${totalPercentage}%).`;
+        } else {
+          if (!primaryOwner.companyName || !primaryOwner.cnpj) {
+            message = 'Razão social e CNPJ são obrigatórios para pessoa jurídica.';
+          }
         }
       }
       
@@ -394,12 +474,10 @@ const tabs = [
     }
   };
 
-  // Salvar propriedade
   const saveProperty = async () => {
     try {
       setIsSaving(true);
       
-      // Validar todas as abas obrigatórias
       let hasErrors = false;
       for (let i = 0; i < tabs.length; i++) {
         if (tabs[i].required) {
@@ -416,16 +494,14 @@ const tabs = [
         return;
       }
 
-      // Preparar dados para envio - transformar para o formato esperado pelo backend
       const propertyPayload = {
-        id: propertyId,
-        // Dados básicos
-        name: formData.basicData.registrationNumber, // O backend espera 'name' mas enviamos registrationNumber
+        id: editId ? propertyId : undefined,
+        propertyId: editId ? propertyId : undefined,
+        name: formData.basicData.registrationNumber,
         registrationNumber: formData.basicData.registrationNumber,
         propertyType: formData.basicData.propertyType,
         landUse: formData.basicData.landUse,
         
-        // Endereço
         street: formData.basicData.address.street,
         number: formData.basicData.address.number || '',
         complement: formData.basicData.address.complement || '',
@@ -434,16 +510,13 @@ const tabs = [
         state: formData.basicData.address.state,
         zipCode: formData.basicData.address.zipCode || '',
         
-        // Coordenadas (se existirem)
         latitude: formData.basicData.address.coordinates?.latitude,
         longitude: formData.basicData.address.coordinates?.longitude,
         
-        // SIRGAS 2000 Coordinates (for memorial generation)
         sirgas_e: formData.basicData.address.sirgas?.e,
         sirgas_n: formData.basicData.address.sirgas?.n,
         sirgas_source: formData.basicData.address.sirgas?.source,
         
-        // Proprietários (primeiro proprietário como principal)
         ownerName: formData.owners.length > 0 ? 
           (formData.owners[0].ownerType === 'INDIVIDUAL' ? 
             formData.owners[0].fullName : 
@@ -454,23 +527,22 @@ const tabs = [
             formData.owners[0].cnpj) : '',
         ownerEmail: formData.owners.length > 0 ? formData.owners[0].email || '' : '',
         ownerPhone: formData.owners.length > 0 ? formData.owners[0].phone || '' : '',
+        ownerIdNumber: formData.owners.length > 0 ? 
+          (formData.owners[0].ownerType === 'INDIVIDUAL' ? 
+            formData.owners[0].rg || '' : 
+            formData.owners[0].stateRegistration || '') : '',
         
-        // Dados técnicos padrão (serão preenchidos pelo DXF)
         totalArea: 0,
         totalPerimeter: 0,
         datum: 'SIRGAS 2000',
         coordinateSystem: 'SIRGAS 2000 / UTM zone 23S',
-        utmZone: '23S',
-        centralMeridian: '-45°',
+        utmZone: formData.basicData.address.sirgas?.zone || '23S',
+        centralMeridian: formData.basicData.address.sirgas?.zone === '24S' ? '-39°' : '-45°',
         
-        // Status
         active: true,
         
-        // Arrays relacionados
-        owners: formData.owners,
         documents: formData.documents,
         
-        // Processar arquivos - salvar apenas nomes e caminhos dos DXF/DWG
         dxfFiles: formData.files
           .filter(file => {
             const fileName = file.name.toLowerCase();
@@ -480,11 +552,9 @@ const tabs = [
             fileName: file.name,
             fileSize: file.size,
             fileType: file.name.toLowerCase().endsWith('.dxf') ? 'DXF' : 'DWG',
-            // O backend pode gerar um caminho baseado no ID da propriedade
             filePath: `properties/${propertyId}/technical/${file.name}`
           })),
         
-        // Outros arquivos (documentos, imagens, etc.)
         otherFiles: formData.files
           .filter(file => {
             const fileName = file.name.toLowerCase();
@@ -497,116 +567,181 @@ const tabs = [
           }))
       };
       
-      // Salvar no banco de dados
-      await api.post('/properties', propertyPayload);
+      if (editId) {
+        await api.put(`/properties/${editId}`, propertyPayload);
+      } else {
+        await api.post('/properties', propertyPayload);
+      }
       
-      // Remover do cache local após salvar com sucesso
-      if (propertyId) {
+      if (propertyId && !editId) {
         localStorage.removeItem(`incomplete_property_${propertyId}`);
       }
       
-      alert('✅ Propriedade cadastrada com sucesso no banco de dados!');
-      navigate('/files');
+      alert(editId ? '✅ Cadastro do imóvel atualizado com sucesso!' : '✅ Propriedade cadastrada com sucesso no banco de dados!');
+      navigate('/properties');
       
     } catch (error: unknown) {
       console.error('❌ Erro ao salvar propriedade:', error);
-      
-      // Manter no cache local se falhar ao salvar
-      alert(`Erro ao salvar propriedade: ${getErrorMessage(error, 'Erro desconhecido')}\n\nOs dados foram mantidos no cache local. Tente novamente quando o servidor estiver disponível.`);
+      const fallbackMsg = editId ? 'Erro desconhecido ao atualizar dados.' : 'Erro desconhecido';
+      alert(`Erro ao salvar propriedade: ${getErrorMessage(error, fallbackMsg)}\n\n${!editId ? 'Os dados foram mantidos no cache local como rascunho.' : ''}`);
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleSaveDraftManual = () => {
+    if (editId) return;
+    if (!formData.basicData.registrationNumber) {
+      alert('⚠️ Por favor, preencha o Número de Registro (ou Matrícula) na aba "Dados Básicos" para poder salvar o rascunho.');
+      return;
+    }
+    
+    saveIncompleteProperty();
+    alert('📝 Rascunho do imóvel salvo localmente com sucesso!');
+  };
+
+  if (isLoadingTenantAccess) {
+    return (
+      <div className="property-register state-container" style={{ padding: '4rem 2rem', background: 'white' }}>
+        <div className="loading-spinner"></div>
+        <p style={{ marginTop: '1rem', color: '#64748b' }}>Verificando liberacao operacional...</p>
+      </div>
+    );
+  }
+
+  if (isRestricted) {
+    return (
+      <div className="property-register state-container" style={{ padding: '4rem 2rem', background: 'white' }}>
+        <span style={{ fontSize: '2rem' }}>🔒</span>
+        <h2 style={{ marginTop: '1rem' }}>Cadastro de Imovel bloqueado</h2>
+        <p style={{ marginTop: '0.75rem', color: '#64748b', maxWidth: '680px', textAlign: 'center' }}>
+          {restrictionMessage}
+        </p>
+        <button
+          type="button"
+          className="nav-button prev"
+          onClick={() => navigate('/properties')}
+          style={{ marginTop: '1.5rem' }}
+        >
+          Voltar para Imoveis
+        </button>
+      </div>
+    );
+  }
+
+  if (loadingEdit) {
+    return (
+      <div className="property-register state-container" style={{ padding: '4rem 2rem', background: 'white' }}>
+        <div className="loading-spinner"></div>
+        <p style={{ marginTop: '1rem', color: '#64748b' }}>Carregando dados do imóvel para edição...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="property-register">
+      {/* Cabeçalho Simples (Blue Header) */}
       <div className="property-header">
-        <div className="header-content">
-          <div className="header-top">
-            <h1>🏠 Cadastro de Propriedade</h1>
+        <div className="header-content-simple">
+          <div className="header-top-simple">
+            <h1>{editId ? '✏️ Editar Cadastro de Imovel' : '🏠 Cadastrar Imovel'}</h1>
             
-            {/* Combobox para cadastros incompletos */}
-            <div className="incomplete-properties-selector">
-              <label htmlFor="incompleteSelect">Continuar cadastro:</label>
-              <div className="selector-row">
-                <select
-                  id="incompleteSelect"
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      loadSelectedProperty(e.target.value);
-                    } else {
-                      // Se selecionou a opção vazia, limpar seleção
+            {/* Seletor de Rascunhos ou Voltar no canto direito do cabeçalho */}
+            {editId ? (
+              <button 
+                type="button"
+                className="btn-back-header"
+                onClick={() => navigate('/properties')}
+                title="Voltar para a página de imóveis"
+              >
+                ⬅️ Voltar
+              </button>
+            ) : (
+              <div className="incomplete-properties-selector-simple">
+                <label htmlFor="incompleteSelect">Continuar rascunho:</label>
+                <div className="selector-row-simple">
+                  <select
+                    id="incompleteSelect"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        loadSelectedProperty(e.target.value);
+                      } else {
+                        setSelectedIncompleteId('');
+                      }
+                    }}
+                    value={selectedIncompleteId}
+                    className="draft-dropdown"
+                  >
+                    <option value="">Rascunhos locais...</option>
+                    {incompletePropertiesList.map((prop) => (
+                      <option key={prop.id} value={prop.id}>
+                        {prop.registrationNumber}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-new-simple"
+                    onClick={() => {
+                      setFormData({
+                        basicData: {
+                          registrationNumber: '',
+                          propertyType: 'URBAN',
+                          landUse: 'RESIDENTIAL',
+                          address: {
+                            street: '',
+                            number: '',
+                            complement: '',
+                            neighborhood: '',
+                            city: '',
+                            state: '',
+                            zipCode: ''
+                          }
+                        },
+                        owners: [{
+                          ownerType: 'INDIVIDUAL',
+                          ownershipPercentage: 100,
+                          ownershipType: 'FULL',
+                          active: true,
+                          fullName: '',
+                          cpf: '',
+                          companyName: '',
+                          cnpj: '',
+                          email: '',
+                          phone: '',
+                          rg: '',
+                          stateRegistration: ''
+                        }],
+                        documents: [],
+                        files: []
+                      });
+                      setPropertyId(null);
                       setSelectedIncompleteId('');
-                    }
-                  }}
-                  value={selectedIncompleteId}
-                >
-                  <option value="">Selecione um cadastro incompleto...</option>
-                  {incompletePropertiesList.map((prop) => (
-                    <option key={prop.id} value={prop.id}>
-                      {prop.registrationNumber} - {prop.address} 
-                      ({new Date(prop.lastModified).toLocaleDateString()})
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="btn-new"
-                  onClick={() => {
-                    // Criar novo cadastro
-                    setFormData({
-                      basicData: {
-                        registrationNumber: '',
-                        propertyType: 'URBAN',
-                        landUse: 'RESIDENTIAL',
-                        address: {
-                          street: '',
-                          number: '',
-                          complement: '',
-                          neighborhood: '',
-                          city: '',
-                          state: '',
-                          zipCode: ''
-                        }
-                      },
-                      owners: [],
-                      documents: [],
-                      files: []
-                    });
-                    setPropertyId(null);
-                    setSelectedIncompleteId('');
-                    setCurrentTab(0);
-                  }}
-                  title="Criar novo cadastro"
-                >
-                  ➕
-                </button>
-              </div>
-            </div>
-
-            <div className="property-guidance-banner">
-              <div className="property-guidance-header">
-                <span className="property-guidance-icon">🧭</span>
-                <div className="property-guidance-copy">
-                  <span className="property-guidance-title">Cadastro em etapas</span>
+                      setCurrentTab(0);
+                    }}
+                    title="Novo Rascunho"
+                  >
+                    ➕
+                  </button>
                 </div>
-                <span className="property-guidance-status">Rascunho automatico</span>
+                {lastDraftSavedAt && (
+                  <small style={{ color: 'rgba(255, 255, 255, 0.75)', fontSize: '0.72rem', marginTop: '0.25rem', display: 'block' }}>
+                    Salvo em: {new Date(lastDraftSavedAt).toLocaleTimeString('pt-BR')}
+                  </small>
+                )}
               </div>
-              <p className="property-guidance-text">
-                Os dados sao salvos automaticamente enquanto voce preenche. Para gravar no banco, complete as abas obrigatorias e use o botao "Salvar Propriedade".
-                {lastDraftSavedAt ? ` Ultimo rascunho: ${new Date(lastDraftSavedAt).toLocaleString()}.` : ''}
-              </p>
-            </div>
+            )}
           </div>
           
-          <div className="progress-info">
-            <div className="progress-bar">
+          {/* Barra de Progresso no cabeçalho */}
+          <div className="progress-info-simple">
+            <div className="progress-bar-simple">
               <div 
-                className="progress-fill" 
+                className="progress-fill-simple" 
                 style={{ width: `${progress}%` }}
               ></div>
             </div>
-            <span className="progress-text">{progress}% completo</span>
+            <span className="progress-text-simple">{progress}% preenchido</span>
           </div>
         </div>
       </div>
@@ -630,14 +765,6 @@ const tabs = [
         {/* Conteúdo das Abas */}
         <div className="tab-content">
           {currentTab === 0 && (
-            <PropertyGrid
-              onPropertySelect={() => {
-                // Propriedade salva automaticamente no localStorage pelo componente
-              }}
-            />
-          )}
-          
-          {currentTab === 1 && (
             <PropertyBasicData
               data={formData.basicData}
               validation={validation.basicData}
@@ -645,7 +772,7 @@ const tabs = [
             />
           )}
           
-          {currentTab === 2 && (
+          {currentTab === 1 && (
             <PropertyOwners
               owners={formData.owners}
               validation={validation.owners}
@@ -655,7 +782,7 @@ const tabs = [
             />
           )}
           
-          {currentTab === 3 && (
+          {currentTab === 2 && (
             <PropertyDocuments
               documents={formData.documents}
               validation={validation.documents}
@@ -663,7 +790,7 @@ const tabs = [
             />
           )}
           
-          {currentTab === 4 && (
+          {currentTab === 3 && (
             <PropertyFiles
               files={formData.files}
               validation={validation.files}
@@ -671,12 +798,13 @@ const tabs = [
             />
           )}
           
-          {currentTab === 5 && (
+          {currentTab === 4 && (
             <PropertySummary
               data={formData}
               validation={{}}
               onSubmit={saveProperty}
               isSubmitting={isSaving}
+              onSaveDraft={handleSaveDraftManual}
             />
           )}
         </div>
@@ -703,27 +831,54 @@ const tabs = [
             ))}
           </div>
 
-          <div className="nav-buttons">
+          <div className="nav-buttons" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {lastDraftSavedAt && (
+              <div className="draft-saved-badge" style={{ fontSize: '0.82rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <span>🟢</span>
+                <span>Rascunho salvo {new Date(lastDraftSavedAt).toLocaleTimeString('pt-BR')}</span>
+              </div>
+            )}
+            
             {currentTab < tabs.length - 1 && (
               <button 
                 onClick={nextTab}
                 className="nav-button next"
+                style={{ background: '#4f46e5', color: 'white' }}
               >
-                Próximo →
+                Salvar & Avançar →
               </button>
             )}
-            <button 
-              onClick={saveProperty}
-              disabled={isSaving || !canSaveToDatabase}
-              className="nav-button save"
-              title={
-                canSaveToDatabase
-                  ? 'Salvar propriedade no banco de dados'
-                  : 'Complete as abas obrigatorias para habilitar o salvamento no banco'
-              }
-            >
-              {isSaving ? 'Salvando...' : '💾 Salvar Propriedade'}
-            </button>
+            
+            {!editId && (
+              <button 
+                onClick={handleSaveDraftManual}
+                disabled={!formData.basicData.registrationNumber}
+                className="nav-button save-draft"
+                title={
+                  formData.basicData.registrationNumber
+                    ? 'Salvar rascunho local do imóvel'
+                    : 'Preencha o Número de Registro na aba Dados Básicos para salvar o rascunho'
+                }
+              >
+                📝 Salvar Rascunho
+              </button>
+            )}
+            
+            {currentTab === 4 && (
+              <button 
+                onClick={saveProperty}
+                disabled={isSaving || !canSaveToDatabase}
+                className="nav-button save"
+                style={{ background: '#10b981', color: 'white' }}
+                title={
+                  canSaveToDatabase
+                    ? 'Salvar imóvel na base'
+                    : 'Complete as abas obrigatórias para habilitar o salvamento'
+                }
+              >
+                {isSaving ? 'Salvando...' : '💾 Salvar Imóvel na Base'}
+              </button>
+            )}
           </div>
         </div>
       </div>

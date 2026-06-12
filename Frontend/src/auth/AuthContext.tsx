@@ -100,6 +100,18 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+const TRANSIENT_OPERATION_KEYS = [
+  'selectedFiles',
+  'selectedMemorialNorms',
+  'selectedTemplate',
+  'selectedPropertyForMemorial',
+  'properties',
+] as const;
+
+const clearTransientOperationalState = (): void => {
+  TRANSIENT_OPERATION_KEYS.forEach((key) => localStorage.removeItem(key));
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -126,6 +138,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setToken(storedToken);
         const currentUser = await fetchCurrentUser(storedToken);
         setUser(currentUser);
+        clearTransientOperationalState();
 
         if (currentUser?.tenantCode) {
           localStorage.setItem('tenantCode', currentUser.tenantCode.toUpperCase());
@@ -182,6 +195,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         ? String(currentUser.tenantCode).toUpperCase()
         : normalizedTenantCode;
       localStorage.setItem('tenantCode', resolvedTenantCode);
+      clearTransientOperationalState();
       setLoginMessage('Login realizado com sucesso!');
     } catch (error: unknown) {
       console.error('❌ Erro detalhado no login:', error);
@@ -196,6 +210,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = (message?: string) => {
+    clearTransientOperationalState();
     clearStoredSession();
     setToken(null);
     setUser(null);

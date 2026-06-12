@@ -16,6 +16,8 @@ interface ResendVerificationLocationState {
 
 interface ResendVerificationResponse {
   message?: string;
+  emailSent?: boolean | null;
+  verificationUrl?: string | null;
 }
 
 interface ApiErrorLike {
@@ -46,6 +48,7 @@ const ResendVerification: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -64,6 +67,7 @@ const ResendVerification: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessMessage(null);
+    setVerificationUrl(null);
     setErrorMessage(null);
     setIsLoading(true);
 
@@ -73,6 +77,7 @@ const ResendVerification: React.FC = () => {
         email: form.email.trim().toLowerCase(),
       });
       setSuccessMessage(response.data?.message || 'Novo e-mail de confirmacao enviado com sucesso.');
+      setVerificationUrl(response.data?.verificationUrl || null);
     } catch (error: unknown) {
       setErrorMessage(
         getErrorMessage(
@@ -127,7 +132,16 @@ const ResendVerification: React.FC = () => {
             {successMessage && (
               <div className="alert alert-success">
                 <span className="alert-icon">✅</span>
-                {successMessage}
+                <div>
+                  <div>{successMessage}</div>
+                  {verificationUrl && (
+                    <div style={{ marginTop: '0.75rem' }}>
+                      <a href={verificationUrl} target="_blank" rel="noreferrer" className="auth-link">
+                        Abrir link de confirmacao
+                      </a>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

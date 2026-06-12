@@ -33,6 +33,127 @@
   margin-bottom: 0.05rem;
 }
 
+.sidebarSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 1.2rem 0.35rem;
+  margin-bottom: 0.05rem;
+}
+
+.sidebarSectionHeaderTitle {
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: #9fb1c1;
+  letter-spacing: 0.05em;
+}
+
+.quickHelpToggleBtn {
+  background: none;
+  border: none;
+  color: #3498db;
+  font-size: 0.69rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.quickHelpToggleBtn:hover {
+  color: #5dade2;
+}
+
+.operationChecklist {
+  margin: 0.15rem 0.9rem 0.45rem;
+  padding: 0.75rem;
+  border: 1px solid #41586d;
+  border-radius: 12px;
+  background: rgba(12, 21, 31, 0.26);
+}
+
+.operationChecklistHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #dce7f0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.operationChecklistCount {
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(52, 152, 219, 0.2);
+  color: #d7efff;
+}
+
+.operationChecklistMessage {
+  margin: 0.55rem 0 0.65rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #b7c5d3;
+}
+
+.operationChecklistList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.operationChecklistItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.operationChecklistStatus {
+  min-width: 2.1rem;
+  padding: 0.12rem 0.3rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.operationChecklistStatusReady {
+  background: rgba(46, 204, 113, 0.18);
+  color: #9bf0bf;
+}
+
+.operationChecklistStatusPending {
+  background: rgba(241, 196, 15, 0.18);
+  color: #ffe08a;
+}
+
+.operationChecklistContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.operationChecklistContent strong {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #eef5fb;
+}
+
+.operationChecklistContent span {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: #aebfce;
+}
+
 .sidebarActionBtn {
   width: 100%;
   background: none;
@@ -46,7 +167,7 @@
   align-items: center;
   gap: 0.62rem;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
   border-radius: 0 12px 12px 0;
 }
 
@@ -88,14 +209,15 @@
 }
 
 .sidebarIcon {
-  font-size: 1rem;
-  width: 18px;
+  font-size: 1.15rem;
+  width: 20px;
   text-align: center;
   flex-shrink: 0;
 }
 
 .sidebarLabel {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   line-height: 1.2;
   display: flex;
   align-items: center;

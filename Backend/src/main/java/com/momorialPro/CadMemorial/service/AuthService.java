@@ -62,8 +62,8 @@ public class AuthService {
         String normalizedFullName = normalizeFullName(dto.fullName());
         Tenant tenant = tenantProvisioningService.createTenantForSignup(normalizedFullName, normalizedEmail);
 
-        Role adminRole = roleRepository.findByName(RoleName.ROLE_ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("Role ADMIN nao encontrado"));
+        Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
+                .orElseThrow(() -> new IllegalArgumentException("Role USER nao encontrado"));
 
         boolean autoVerify = authFlowProperties.isAutoVerifyUsers();
 
@@ -78,19 +78,27 @@ public class AuthService {
                 .build();
 
         user = repo.save(user);
-        user.getRoles().add(adminRole);
+        user.getRoles().add(userRole);
         user = repo.save(user);
 
+        AccountEmailService.DispatchResult dispatchResult = null;
         if (!autoVerify) {
             EmailVerificationToken verificationToken = createVerificationToken(user);
-            accountEmailService.sendVerificationEmail(user, verificationToken.getToken());
+            dispatchResult = accountEmailService.sendVerificationEmail(user, verificationToken.getToken());
         }
 
         String message = autoVerify
                 ? "Conta criada e verificada com sucesso. Faça login para continuar."
-                : "Conta criada com sucesso. Verifique seu e-mail para ativar o acesso.";
+                : buildVerificationDispatchMessage(true, dispatchResult != null && dispatchResult.isEmailSent());
 
-        return new RegisterResponseDTO(message, tenant.getCode(), normalizedEmail, !autoVerify);
+        return new RegisterResponseDTO(
+                message,
+                tenant.getCode(),
+                normalizedEmail,
+                !autoVerify,
+                dispatchResult != null ? dispatchResult.isEmailSent() : null,
+                dispatchResult != null ? dispatchResult.getVerificationUrl() : null
+        );
     }
 
     @Transactional
@@ -113,8 +121,6 @@ public class AuthService {
         if (!encoder.matches(dto.password(), user.getPassword())) {
             throw new IllegalArgumentException("Credenciais inválidas");
         }
-
-        user = reconcileLegacyTenantAdminAccess(user);
 
         // 🔹 Gera token e refresh token
         String token = jwt.generateToken(user);
@@ -144,14 +150,24 @@ public class AuthService {
 
     @Transactional
     public VerificationResponseDTO verifyEmail(String token) {
-        EmailVerificationToken verificationToken = emailVerificationTokenRepository.findByTokenAndUsedAtIsNull(token)
+        EmailVerificationToken verificationToken = emailVerificationTokenRepository.findByToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("Token de verificação inválido"));
+
+        User user = verificationToken.getUser();
+
+        // Se já foi usado, apenas retorne sucesso (evita erros em cliques duplos ou pre-fetch de e-mail clients)
+        if (verificationToken.getUsedAt() != null) {
+            return new VerificationResponseDTO(
+                    "Conta já verificada com sucesso. Agora você já pode fazer login.",
+                    user.getTenant() != null ? user.getTenant().getCode() : null,
+                    user.getEmail()
+            );
+        }
 
         if (verificationToken.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Token de verificação expirado");
         }
 
-        User user = verificationToken.getUser();
         user.setVerified(true);
         verificationToken.setUsedAt(LocalDateTime.now());
 
@@ -167,9 +183,8 @@ public class AuthService {
 
     @Transactional
     public MessageResponseDTO resendVerificationEmail(ResendVerificationRequestDTO dto) {
-        Tenant tenant = resolveTenant(dto.tenantCode());
         String normalizedEmail = normalizeEmail(dto.email());
-
+        Tenant tenant = resolveTenant(dto.tenantCode());
         User user = repo.findByEmailIgnoreCaseAndTenantId(normalizedEmail, tenant.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Se a conta existir e ainda nao estiver confirmada, um novo e-mail sera enviado."));
 
@@ -178,9 +193,14 @@ public class AuthService {
         }
 
         EmailVerificationToken verificationToken = createVerificationToken(user);
-        accountEmailService.sendVerificationEmail(user, verificationToken.getToken());
+        AccountEmailService.DispatchResult dispatchResult =
+                accountEmailService.sendVerificationEmail(user, verificationToken.getToken());
 
-        return new MessageResponseDTO("Novo e-mail de confirmacao enviado com sucesso. Verifique sua caixa de entrada.");
+        return new MessageResponseDTO(
+                buildVerificationDispatchMessage(false, dispatchResult.isEmailSent()),
+                dispatchResult.isEmailSent(),
+                dispatchResult.getVerificationUrl()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -228,28 +248,7 @@ public class AuthService {
         return mapper.toDTO(repo.save(currentUser));
     }
 
-    private User reconcileLegacyTenantAdminAccess(User user) {
-        if (user.getTenant() == null) {
-            return user;
-        }
 
-        boolean alreadyAdmin = user.getRoles().stream()
-                .anyMatch(role -> role.getName() == RoleName.ROLE_ADMIN);
-        if (alreadyAdmin) {
-            return user;
-        }
-
-        long tenantUserCount = repo.countByTenantId(user.getTenant().getId());
-        if (tenantUserCount != 1) {
-            return user;
-        }
-
-        Role adminRole = roleRepository.findByName(RoleName.ROLE_ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("Role ADMIN nao encontrado"));
-
-        user.getRoles().add(adminRole);
-        return repo.save(user);
-    }
 
     private Tenant resolveTenant(String tenantCode) {
         String normalizedTenantCode = tenantCode != null ? tenantCode.trim().toUpperCase(Locale.ROOT) : "";
@@ -265,6 +264,7 @@ public class AuthService {
 
     private EmailVerificationToken createVerificationToken(User user) {
         emailVerificationTokenRepository.deleteByUser(user);
+        
         EmailVerificationToken verificationToken = EmailVerificationToken.builder()
                 .token(UUID.randomUUID().toString())
                 .user(user)
@@ -314,5 +314,17 @@ public class AuthService {
     private String normalizeOptionalState(String state) {
         String normalized = normalizeOptionalText(state, 2);
         return normalized != null ? normalized.toUpperCase(Locale.ROOT) : null;
+    }
+
+    private String buildVerificationDispatchMessage(boolean newlyCreated, boolean emailSent) {
+        if (!emailSent) {
+            return newlyCreated
+                    ? "Conta criada com sucesso. O envio de e-mail esta desabilitado neste ambiente; use o link de confirmacao exibido abaixo."
+                    : "Novo link de confirmacao gerado. O envio de e-mail esta desabilitado neste ambiente; use o link exibido abaixo.";
+        }
+
+        return newlyCreated
+                ? "Conta criada com sucesso. Verifique seu e-mail para ativar o acesso."
+                : "Novo e-mail de confirmacao enviado com sucesso. Verifique sua caixa de entrada.";
     }
 }

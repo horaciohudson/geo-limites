@@ -55,8 +55,20 @@ export interface UpdateTenantSettingsRequest {
   status?: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
 }
 
+export interface ApiSettings {
+  templateApiProvider: string;
+  memorialApiProvider: string;
+}
+
+export interface UpdateApiSettingsRequest {
+  templateApiProvider: string;
+  memorialApiProvider: string;
+}
+
 export interface MessageResponse {
   message: string;
+  emailSent?: boolean | null;
+  verificationUrl?: string | null;
 }
 
 export interface AdminUserCreateRequest {
@@ -89,6 +101,16 @@ const adminSettingsService = {
 
   async updateTenantSettings(payload: UpdateTenantSettingsRequest): Promise<TenantSettings> {
     const response = await api.patch('/admin/settings/tenant', payload);
+    return response.data;
+  },
+
+  async getApiSettings(): Promise<ApiSettings> {
+    const response = await api.get('/admin/settings/api');
+    return response.data;
+  },
+
+  async updateApiSettings(payload: UpdateApiSettingsRequest): Promise<ApiSettings> {
+    const response = await api.patch('/admin/settings/api', payload);
     return response.data;
   },
 

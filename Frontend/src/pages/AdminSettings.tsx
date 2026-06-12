@@ -9,7 +9,12 @@ import adminSettingsService, {
   type TenantSettings,
   type UpdateTenantSettingsRequest,
   type UpdateSmtpSettingsRequest,
+  type ApiSettings,
+  type UpdateApiSettingsRequest,
 } from '@/services/adminSettings';
+import tenantAdminService, {
+  type TenantOperationalAdminDTO,
+} from '@/services/tenantAdminService';
 import { useAuth } from '@/auth/AuthContext';
 import type { User } from '@/types';
 import '@/styles/AdminSettings.css';
@@ -27,12 +32,6 @@ const defaultForm: UpdateSmtpSettingsRequest = {
   fromName: 'Geo Limites',
 };
 
-const defaultTenantForm: UpdateTenantSettingsRequest = {
-  name: '',
-  planCode: '',
-  status: 'ACTIVE',
-};
-
 const defaultUserForm: AdminUserCreateRequest = {
   username: '',
   email: '',
@@ -48,7 +47,7 @@ const defaultPasswordResetForm: AdminUserPasswordResetRequest & { confirmPasswor
   confirmPassword: '',
 };
 
-type AdminTab = 'empresa' | 'smtp' | 'usuarios';
+type AdminTab = 'empresas' | 'smtp' | 'api' | 'usuarios';
 type UserRoleFilter = 'all' | 'admin' | 'user';
 type UserStatusFilter = 'all' | 'active' | 'inactive' | 'pending';
 
@@ -83,12 +82,15 @@ const AdminSettings: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'success' | 'error'>('success');
   const [currentSettings, setCurrentSettings] = useState<SmtpSettings | null>(null);
-  const [tenantSettings, setTenantSettings] = useState<TenantSettings | null>(null);
-  const [tenantForm, setTenantForm] = useState<UpdateTenantSettingsRequest>(defaultTenantForm);
+  const [operationalTenants, setOperationalTenants] = useState<TenantOperationalAdminDTO[]>([]);
+  const [loadingOperationalTenants, setLoadingOperationalTenants] = useState(true);
+  const [apiSettings, setApiSettings] = useState<ApiSettings | null>(null);
+  const [apiForm, setApiForm] = useState<UpdateApiSettingsRequest>({ templateApiProvider: 'CLAUDE', memorialApiProvider: 'CLAUDE' });
+  const [loadingApi, setLoadingApi] = useState(true);
   const [lastOperation, setLastOperation] = useState<SmtpOperationResult | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
-  const [loadingTenant, setLoadingTenant] = useState(true);
+
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
   const [userForm, setUserForm] = useState<AdminUserCreateRequest>(defaultUserForm);
   const [creatingUser, setCreatingUser] = useState(false);
@@ -97,7 +99,7 @@ const AdminSettings: React.FC = () => {
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [resettingPasswordUserId, setResettingPasswordUserId] = useState<string | null>(null);
   const [passwordResetForm, setPasswordResetForm] = useState<(AdminUserPasswordResetRequest & { confirmPassword: string }) | null>(null);
-  const [activeTab, setActiveTab] = useState<AdminTab>('empresa');
+  const [activeTab, setActiveTab] = useState<AdminTab>('empresas');
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('all');
   const [userStatusFilter, setUserStatusFilter] = useState<UserStatusFilter>('all');
@@ -129,16 +131,22 @@ const AdminSettings: React.FC = () => {
 
   const tabs: Array<{ id: AdminTab; label: string; eyebrow: string; count: string }> = [
     {
-      id: 'empresa',
-      label: 'Empresa',
+      id: 'empresas',
+      label: 'Empresas (Tenants)',
       eyebrow: 'Dados institucionais',
-      count: tenantSettings?.status || 'Sem status',
+      count: `${operationalTenants.length}`,
     },
     {
       id: 'smtp',
       label: 'SMTP',
       eyebrow: 'Comunicacao',
       count: currentSettings?.enabled ? 'Ativo' : 'Inativo',
+    },
+    {
+      id: 'api',
+      label: 'API',
+      eyebrow: 'Inteligência Artificial',
+      count: 'Configurações',
     },
     {
       id: 'usuarios',
@@ -190,23 +198,22 @@ const AdminSettings: React.FC = () => {
   useEffect(() => {
     if (!isAdmin) {
       setLoading(false);
-      setLoadingTenant(false);
+      setLoadingOperationalTenants(false);
       setLoadingUsers(false);
       return;
     }
-    void Promise.all([loadTenantSettings(), loadSettings(), loadUsers()]);
+    void Promise.all([loadOperationalTenants(), loadSettings(), loadApiSettings(), loadUsers()]);
   }, [isAdmin]);
 
-  const loadTenantSettings = async () => {
+  const loadOperationalTenants = async () => {
     try {
-      setLoadingTenant(true);
-      const settings = await adminSettingsService.getTenantSettings();
-      syncTenantForm(settings);
-      setTenantSettings(settings);
+      setLoadingOperationalTenants(true);
+      const response = await tenantAdminService.getOperationalTenants();
+      setOperationalTenants(response);
     } catch (error: unknown) {
-      showError(error, 'Nao foi possivel carregar os dados da empresa.');
+      showError(error, 'Nao foi possivel carregar as empresas.');
     } finally {
-      setLoadingTenant(false);
+      setLoadingOperationalTenants(false);
     }
   };
 
@@ -221,6 +228,22 @@ const AdminSettings: React.FC = () => {
       showError(error, 'Nao foi possivel carregar as configuracoes SMTP.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadApiSettings = async () => {
+    try {
+      setLoadingApi(true);
+      const settings = await adminSettingsService.getApiSettings();
+      setApiSettings(settings);
+      setApiForm({
+        templateApiProvider: settings.templateApiProvider || 'CLAUDE',
+        memorialApiProvider: settings.memorialApiProvider || 'CLAUDE',
+      });
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel carregar as configuracoes de API.');
+    } finally {
+      setLoadingApi(false);
     }
   };
 
@@ -239,21 +262,13 @@ const AdminSettings: React.FC = () => {
     });
   };
 
-  const syncTenantForm = (settings: TenantSettings) => {
-    setTenantForm({
-      name: settings.name || '',
-      planCode: settings.planCode || '',
-      status: settings.status === 'INACTIVE' || settings.status === 'BLOCKED' ? settings.status : 'ACTIVE',
-    });
-  };
-
   const loadUsers = async () => {
     try {
       setLoadingUsers(true);
-      const response = await adminSettingsService.getUsers();
+      const response = await tenantAdminService.getGlobalUsers();
       setUsers(response);
     } catch (error: unknown) {
-      showError(error, 'Nao foi possivel carregar os usuarios do tenant.');
+      showError(error, 'Nao foi possivel carregar os usuarios do sistema.');
     } finally {
       setLoadingUsers(false);
     }
@@ -263,8 +278,8 @@ const AdminSettings: React.FC = () => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const setTenantField = <K extends keyof UpdateTenantSettingsRequest>(field: K, value: UpdateTenantSettingsRequest[K]) => {
-    setTenantForm((prev) => ({ ...prev, [field]: value }));
+  const setApiField = <K extends keyof UpdateApiSettingsRequest>(field: K, value: UpdateApiSettingsRequest[K]) => {
+    setApiForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const setUserField = <K extends keyof AdminUserCreateRequest>(field: K, value: AdminUserCreateRequest[K]) => {
@@ -322,21 +337,57 @@ const AdminSettings: React.FC = () => {
     }
   };
 
-  const handleSaveTenant = async () => {
+  const handleApproveTenant = async (tenantId: string) => {
     try {
       setSaving(true);
-      const payload: UpdateTenantSettingsRequest = {
-        name: tenantForm.name.trim(),
-        planCode: tenantForm.planCode?.trim() || undefined,
-        status: tenantForm.status || 'ACTIVE',
-      };
+      await tenantAdminService.setAdminApproved(tenantId, { value: true });
+      showSuccess('Tenant aprovado com sucesso.');
+      await loadOperationalTenants();
+    } catch (error) {
+      showError(error, 'Erro ao aprovar tenant.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-      const settings = await adminSettingsService.updateTenantSettings(payload);
-      setTenantSettings(settings);
-      syncTenantForm(settings);
-      showSuccess('Dados da empresa atualizados com sucesso.');
+  const handleConfirmPayment = async (tenantId: string) => {
+    try {
+      setSaving(true);
+      await tenantAdminService.setFirstPaymentConfirmed(tenantId, { value: true });
+      showSuccess('Pagamento confirmado.');
+      await loadOperationalTenants();
+    } catch (error) {
+      showError(error, 'Erro ao confirmar pagamento.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReleaseAccess = async (tenantId: string) => {
+    try {
+      setSaving(true);
+      await tenantAdminService.setOperationalAccessReleased(tenantId, { value: true });
+      showSuccess('Acesso operacional liberado.');
+      await loadOperationalTenants();
+    } catch (error) {
+      showError(error, 'Erro ao liberar acesso.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveApiSettings = async () => {
+    try {
+      setSaving(true);
+      const settings = await adminSettingsService.updateApiSettings(apiForm);
+      setApiSettings(settings);
+      setApiForm({
+        templateApiProvider: settings.templateApiProvider,
+        memorialApiProvider: settings.memorialApiProvider,
+      });
+      showSuccess('Configuracoes de API atualizadas com sucesso.');
     } catch (error: unknown) {
-      showError(error, 'Nao foi possivel salvar os dados da empresa.');
+      showError(error, 'Nao foi possivel salvar as configuracoes de API.');
     } finally {
       setSaving(false);
     }
@@ -557,35 +608,7 @@ const AdminSettings: React.FC = () => {
         </div>
       )}
 
-      <div className="admin-settings-overview">
-        <div className="admin-overview-card">
-          <span className="admin-overview-label">Empresa</span>
-          <strong>{tenantSettings?.name || 'Carregando...'}</strong>
-          <span>{tenantSettings?.status || 'Sem status'}</span>
-          <div className="admin-overview-meta">
-            <span>{tenantSettings?.planCode || 'Sem plano definido'}</span>
-            <span>{tenantSettings?.code || 'Sem codigo'}</span>
-          </div>
-        </div>
-        <div className="admin-overview-card">
-          <span className="admin-overview-label">SMTP</span>
-          <strong>{currentSettings?.enabled ? 'Habilitado' : 'Desabilitado'}</strong>
-          <span>{currentSettings?.fromAddress || 'Sem remetente definido'}</span>
-          <div className="admin-overview-meta">
-            <span>{currentSettings?.host || 'Sem host'}</span>
-            <span>{currentSettings?.port ? `Porta ${currentSettings.port}` : 'Sem porta'}</span>
-          </div>
-        </div>
-        <div className="admin-overview-card">
-          <span className="admin-overview-label">Usuarios</span>
-          <strong>{users.length}</strong>
-          <span>{activeUsersCount} ativos, {confirmedUsersCount} confirmados</span>
-          <div className="admin-overview-meta">
-            <span>{pendingUsersCount} pendentes</span>
-            <span>{adminUsersCount} admins</span>
-          </div>
-        </div>
-      </div>
+
 
       <div className="admin-settings-tabs">
         {tabs.map((tab) => (
@@ -602,133 +625,134 @@ const AdminSettings: React.FC = () => {
         ))}
       </div>
 
-      {activeTab === 'empresa' && (
+      {activeTab === 'empresas' && (
         <section className="admin-settings-card admin-settings-panel">
           <div className="admin-settings-panel-header">
             <div>
-              <h2>Dados da Empresa</h2>
-              <p>Controle o nome operacional, o plano e o status da sua conta.</p>
+              <h2>Controle de Clientes SAAS</h2>
+              <p>Controle a liberacao e as assinaturas de todos os tenants cadastrados.</p>
             </div>
             <div className="admin-settings-panel-stats">
-              <span className="admin-settings-stat">Status: {tenantSettings?.status || 'Sem status'}</span>
-              <span className="admin-settings-stat">Plano: {tenantSettings?.planCode || 'Nao definido'}</span>
+              <span className="admin-settings-stat">Total: {operationalTenants.length}</span>
             </div>
           </div>
-          {loadingTenant ? (
-            <p>Carregando dados da empresa...</p>
+          {loadingOperationalTenants ? (
+            <p>Carregando empresas...</p>
+          ) : (
+            <div className="admin-users-list">
+              <table className="admin-users-table">
+                <thead>
+                  <tr>
+                    <th>Empresa</th>
+                    <th>Status Onboarding</th>
+                    <th>Status Financeiro</th>
+                    <th style={{ textAlign: 'right' }}>Acoes Administrativas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {operationalTenants.map((t) => (
+                    <tr key={t.tenantId}>
+                      <td>
+                        <strong>{t.tenantName}</strong>
+                        <div className="admin-user-email">#{t.tenantCode}</div>
+                      </td>
+                      <td>
+                        <span className={`admin-user-role ${t.onboardingStatus === 'ACTIVE' ? 'ROLE_ADMIN' : 'ROLE_USER'}`}>
+                          {t.onboardingStatus}
+                        </span>
+                        <div className="admin-user-email">Aprovado: {t.adminApproved ? 'Sim' : 'Nao'}</div>
+                      </td>
+                      <td>
+                        <span className={`admin-user-status ${t.billingStatus === 'PAID' ? 'active' : 'inactive'}`}>
+                          {t.billingStatus}
+                        </span>
+                        <div className="admin-user-email">Pagamento: {t.firstPaymentConfirmed ? 'Confirmado' : 'Pendente'}</div>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="admin-user-actions" style={{ justifyContent: 'flex-end' }}>
+                          <button 
+                            className="admin-settings-button secondary" 
+                            disabled={t.adminApproved || saving}
+                            onClick={() => handleApproveTenant(t.tenantId)}
+                          >
+                            Aprovar
+                          </button>
+                          <button 
+                            className="admin-settings-button secondary" 
+                            disabled={t.firstPaymentConfirmed || saving}
+                            onClick={() => handleConfirmPayment(t.tenantId)}
+                          >
+                            Pgto
+                          </button>
+                          <button 
+                            className="admin-settings-button primary" 
+                            disabled={t.operationalAccessReleased || saving}
+                            onClick={() => handleReleaseAccess(t.tenantId)}
+                          >
+                            Liberar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {operationalTenants.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '2rem' }}>
+                        Nenhuma empresa cadastrada.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'api' && (
+        <section className="admin-settings-card admin-settings-panel">
+          <div className="admin-settings-panel-header">
+            <div>
+              <h2>Configurar API</h2>
+              <p>Escolha qual provedor de Inteligência Artificial deve ser utilizado pelo sistema.</p>
+            </div>
+          </div>
+          {loadingApi ? (
+            <p>Carregando configuracoes...</p>
           ) : (
             <>
-              <div className="admin-panel-highlights">
-                <div className="admin-panel-highlight-card">
-                  <span className="admin-panel-highlight-label">Status</span>
-                  <strong>{tenantSettings?.status || 'Sem status'}</strong>
-                  <span>governanca operacional</span>
-                </div>
-                <div className="admin-panel-highlight-card">
-                  <span className="admin-panel-highlight-label">Plano</span>
-                  <strong>{tenantSettings?.planCode || 'Nao definido'}</strong>
-                  <span>enquadramento comercial</span>
-                </div>
-                <div className="admin-panel-highlight-card">
-                  <span className="admin-panel-highlight-label">Codigo</span>
-                  <strong>{tenantSettings?.code || 'Sem codigo'}</strong>
-                  <span>identificador do tenant</span>
-                </div>
-                <div className="admin-panel-highlight-card">
-                  <span className="admin-panel-highlight-label">Tenant Padrao</span>
-                  <strong>{tenantSettings?.isDefault ? 'Sim' : 'Nao'}</strong>
-                  <span>vinculo institucional</span>
-                </div>
-              </div>
-
               <div className="admin-settings-subsections">
                 <section className="admin-settings-subsection">
                   <div className="admin-settings-subsection-header">
                     <div>
-                      <h3>Identidade Institucional</h3>
-                      <p>Defina como a empresa aparece para os operadores e nos fluxos principais.</p>
+                      <h3>Provedores de Inteligência Artificial</h3>
+                      <p>Selecione a API (Claude ou GPT) para as rotinas automatizadas.</p>
                     </div>
                   </div>
                   <div className="admin-settings-form">
                     <div className="admin-settings-row">
                       <div className="admin-settings-field">
-                        <label htmlFor="tenant-name">Nome da Empresa</label>
-                        <input
-                          id="tenant-name"
-                          value={tenantForm.name}
-                          onChange={(e) => setTenantField('name', e.target.value)}
-                          placeholder="Nome exibido para a conta"
-                        />
-                      </div>
-                      <div className="admin-settings-field">
-                        <label htmlFor="tenant-plan">Plano</label>
-                        <input
-                          id="tenant-plan"
-                          value={tenantForm.planCode || ''}
-                          onChange={(e) => setTenantField('planCode', e.target.value)}
-                          placeholder="foundation"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="admin-settings-row">
-                      <div className="admin-settings-field">
-                        <label htmlFor="tenant-code">Codigo</label>
-                        <input
-                          id="tenant-code"
-                          value={tenantSettings?.code || ''}
-                          readOnly
-                          className="admin-settings-readonly"
-                        />
-                      </div>
-                      <div className="admin-settings-field">
-                        <label htmlFor="tenant-slug">Identificador</label>
-                        <input
-                          id="tenant-slug"
-                          value={tenantSettings?.slug || ''}
-                          readOnly
-                          className="admin-settings-readonly"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="admin-settings-subsection">
-                  <div className="admin-settings-subsection-header">
-                    <div>
-                      <h3>Governanca Operacional</h3>
-                      <p>Controle o status da conta e visualize impactos operacionais do tenant.</p>
-                    </div>
-                  </div>
-                  <div className="admin-settings-form">
-                    <div className="admin-settings-row">
-                      <div className="admin-settings-field">
-                        <label htmlFor="tenant-status">Status Operacional</label>
+                        <label htmlFor="template-api-provider">Criar Templates</label>
                         <select
-                          id="tenant-status"
-                          value={tenantForm.status || 'ACTIVE'}
-                          onChange={(e) => setTenantField('status', e.target.value as UpdateTenantSettingsRequest['status'])}
+                          id="template-api-provider"
+                          value={apiForm.templateApiProvider}
+                          onChange={(e) => setApiField('templateApiProvider', e.target.value)}
                         >
-                          <option value="ACTIVE">Ativo</option>
-                          <option value="INACTIVE">Inativo</option>
-                          <option value="BLOCKED">Bloqueado</option>
+                          <option value="CLAUDE">Claude (Anthropic)</option>
+                          <option value="GPT">GPT (OpenAI)</option>
                         </select>
                       </div>
                       <div className="admin-settings-field">
-                        <label htmlFor="tenant-current-status">Status Atual</label>
-                        <input
-                          id="tenant-current-status"
-                          value={tenantSettings?.status || 'Nao informado'}
-                          readOnly
-                          className="admin-settings-readonly"
-                        />
+                        <label htmlFor="memorial-api-provider">Gerar Memoriais</label>
+                        <select
+                          id="memorial-api-provider"
+                          value={apiForm.memorialApiProvider}
+                          onChange={(e) => setApiField('memorialApiProvider', e.target.value)}
+                        >
+                          <option value="CLAUDE">Claude (Anthropic)</option>
+                          <option value="GPT">GPT (OpenAI)</option>
+                        </select>
                       </div>
-                    </div>
-
-                    <div className="admin-settings-meta">
-                      <div>Tenant padrao: {tenantSettings?.isDefault ? 'Sim' : 'Nao'}</div>
-                      <div>Impacto operacional: apenas tenants com status ACTIVE conseguem autenticar novos logins.</div>
                     </div>
                   </div>
                 </section>
@@ -737,10 +761,10 @@ const AdminSettings: React.FC = () => {
               <div className="admin-settings-actions">
                 <button
                   className="admin-settings-button primary"
-                  onClick={handleSaveTenant}
-                  disabled={saving || !tenantForm.name.trim()}
+                  onClick={handleSaveApiSettings}
+                  disabled={saving}
                 >
-                  {saving ? 'Salvando...' : 'Salvar Dados da Empresa'}
+                  {saving ? 'Salvando...' : 'Salvar Configuracoes da API'}
                 </button>
               </div>
             </>
@@ -829,6 +853,11 @@ const AdminSettings: React.FC = () => {
                             onChange={(e) => setField('password', e.target.value)}
                             placeholder={currentSettings?.hasPassword ? currentSettings.passwordMasked || 'Senha cadastrada' : 'Informe a senha'}
                           />
+                          {currentSettings?.hasPassword && currentSettings.passwordMasked && (
+                            <small style={{ color: '#64748b', marginTop: '0.35rem', display: 'block' }}>
+                              Senha atual cadastrada: termina com `{currentSettings.passwordMasked.slice(-4)}`.
+                            </small>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -904,7 +933,9 @@ const AdminSettings: React.FC = () => {
           <aside className="admin-settings-placeholder admin-settings-panel">
             <h3>Resumo do Ambiente</h3>
             <div className="admin-settings-meta">
-              <div>Senha cadastrada: {currentSettings?.hasPassword ? 'Sim' : 'Nao'}</div>
+              <div>
+                Senha cadastrada: {currentSettings?.hasPassword ? `Sim (${currentSettings.passwordMasked || 'mascarada'})` : 'Nao'}
+              </div>
               <div>SMTP habilitado: {currentSettings?.enabled ? 'Sim' : 'Nao'}</div>
               <div>Remetente atual: {currentSettings?.fromAddress || 'Nao informado'}</div>
               <div>Nome exibido: {currentSettings?.fromName || 'Geo Limites'}</div>
@@ -925,117 +956,10 @@ const AdminSettings: React.FC = () => {
           <div className="admin-settings-panel-header">
             <div>
               <h2>Gestao de Usuarios</h2>
-              <p>Crie usuarios, ajuste perfis e controle confirmacao, senha e atividade.</p>
-            </div>
-            <div className="admin-settings-panel-stats">
-              <span className="admin-settings-stat">Ativos: {activeUsersCount}</span>
-              <span className="admin-settings-stat">Pendentes: {pendingUsersCount}</span>
-              <span className="admin-settings-stat">Admins: {adminUsersCount}</span>
+              <p>Busque, filtre e administre acessos, confirme e-mails, redefina senhas ou desative contas.</p>
             </div>
           </div>
           <div className="admin-user-sections">
-            <section className="admin-user-section admin-user-section-create">
-              <div className="admin-user-section-header">
-                <div>
-                  <h3>Novo Usuario</h3>
-                  <p>Cadastre novos acessos com perfil, senha inicial e regra de confirmacao.</p>
-                </div>
-              </div>
-
-              <div className="admin-user-create">
-                <div className="admin-user-create-grid">
-                  <div className="admin-settings-field">
-                    <label htmlFor="create-user-full-name">Nome Completo</label>
-                    <input
-                      id="create-user-full-name"
-                      value={userForm.fullName}
-                      onChange={(e) => setUserField('fullName', e.target.value)}
-                      placeholder="Nome do usuario"
-                    />
-                  </div>
-                  <div className="admin-settings-field">
-                    <label htmlFor="create-user-email">E-mail</label>
-                    <input
-                      id="create-user-email"
-                      type="email"
-                      value={userForm.email}
-                      onChange={(e) => setUserField('email', e.target.value)}
-                      placeholder="usuario@dominio.com"
-                    />
-                  </div>
-                  <div className="admin-settings-field">
-                    <label htmlFor="create-user-username">Login</label>
-                    <input
-                      id="create-user-username"
-                      value={userForm.username}
-                      onChange={(e) => setUserField('username', e.target.value)}
-                      placeholder="Opcional. Se vazio, usa o e-mail"
-                    />
-                  </div>
-                  <div className="admin-settings-field">
-                    <label htmlFor="create-user-password">Senha Inicial</label>
-                    <input
-                      id="create-user-password"
-                      type="password"
-                      value={userForm.password}
-                      onChange={(e) => setUserField('password', e.target.value)}
-                      placeholder="Minimo de 6 caracteres"
-                    />
-                  </div>
-                  <div className="admin-settings-field">
-                    <label htmlFor="create-user-role">Perfil</label>
-                    <select
-                      id="create-user-role"
-                      value={userForm.roleName}
-                      onChange={(e) => setUserField('roleName', e.target.value as AdminUserCreateRequest['roleName'])}
-                    >
-                      <option value="ROLE_USER">Usuario</option>
-                      <option value="ROLE_ADMIN">Administrador</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="admin-settings-checks">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={userForm.verified}
-                      onChange={(e) => handleVerifiedChange(e.target.checked)}
-                    />
-                    Criar conta ja confirmada e liberar login sem e-mail
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={userForm.sendVerificationEmail}
-                      onChange={(e) => handleSendVerificationEmailChange(e.target.checked)}
-                    />
-                    Enviar e-mail de confirmacao e deixar conta pendente
-                  </label>
-                </div>
-
-                <div className="admin-settings-meta">
-                  {userForm.verified && <div>Modo atual: a conta sera criada pronta para login e nenhum e-mail de confirmacao sera enviado.</div>}
-                  {!userForm.verified && userForm.sendVerificationEmail && <div>Modo atual: a conta sera criada pendente e o sistema enviara um e-mail de confirmacao.</div>}
-                  {!userForm.verified && !userForm.sendVerificationEmail && <div>Modo atual: a conta sera criada pendente sem envio automatico de e-mail.</div>}
-                </div>
-
-                <div className="admin-settings-actions">
-                  <button
-                    className="admin-settings-button primary"
-                    onClick={handleCreateUser}
-                    disabled={
-                      creatingUser ||
-                      !userForm.fullName.trim() ||
-                      !userForm.email.trim() ||
-                      !userForm.password.trim()
-                    }
-                  >
-                    {creatingUser ? 'Criando...' : 'Criar Usuario'}
-                  </button>
-                </div>
-              </div>
-            </section>
 
             <section className="admin-user-section">
               <div className="admin-user-section-header">
@@ -1086,28 +1010,7 @@ const AdminSettings: React.FC = () => {
                 </div>
               </div>
 
-              <div className="admin-users-highlights">
-                <div className="admin-users-highlight-card">
-                  <span className="admin-users-highlight-label">Exibidos</span>
-                  <strong>{filteredUsers.length}</strong>
-                  <span>usuarios no recorte atual</span>
-                </div>
-                <div className="admin-users-highlight-card">
-                  <span className="admin-users-highlight-label">Ativos</span>
-                  <strong>{filteredActiveUsersCount}</strong>
-                  <span>aptos para acesso</span>
-                </div>
-                <div className="admin-users-highlight-card">
-                  <span className="admin-users-highlight-label">Pendentes</span>
-                  <strong>{filteredPendingUsersCount}</strong>
-                  <span>aguardando confirmacao</span>
-                </div>
-                <div className="admin-users-highlight-card">
-                  <span className="admin-users-highlight-label">Admins</span>
-                  <strong>{filteredAdminUsersCount}</strong>
-                  <span>com controle administrativo</span>
-                </div>
-              </div>
+
             </section>
           </div>
 
@@ -1152,6 +1055,9 @@ const AdminSettings: React.FC = () => {
                         <div className="admin-user-identity">
                           <span>{item.email || item.username}</span>
                           <span>Login: {item.username}</span>
+                          {item.tenantCode && (
+                            <span className="admin-user-tenant">Empresa: #{item.tenantCode}</span>
+                          )}
                         </div>
                       </div>
 
