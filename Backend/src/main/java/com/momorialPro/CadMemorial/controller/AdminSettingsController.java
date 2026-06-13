@@ -6,6 +6,9 @@ import com.momorialPro.CadMemorial.dto.SmtpTestEmailRequest;
 import com.momorialPro.CadMemorial.dto.TenantSettingsDTO;
 import com.momorialPro.CadMemorial.dto.UpdateSmtpSettingsRequest;
 import com.momorialPro.CadMemorial.dto.UpdateTenantSettingsRequest;
+import com.momorialPro.CadMemorial.dto.ApiSettingsDTO;
+import com.momorialPro.CadMemorial.dto.UpdateApiSettingsRequest;
+import com.momorialPro.CadMemorial.service.ApiSettingsService;
 import com.momorialPro.CadMemorial.service.SmtpMailService;
 import com.momorialPro.CadMemorial.service.SmtpSettingsService;
 import com.momorialPro.CadMemorial.service.TenantSettingsService;
@@ -32,6 +35,17 @@ public class AdminSettingsController {
     private final SmtpSettingsService smtpSettingsService;
     private final SmtpMailService smtpMailService;
     private final TenantSettingsService tenantSettingsService;
+    private final ApiSettingsService apiSettingsService;
+
+    @GetMapping("/api")
+    public ResponseEntity<ApiSettingsDTO> getApiSettings() {
+        return ResponseEntity.ok(apiSettingsService.getSettings());
+    }
+
+    @PatchMapping("/api")
+    public ResponseEntity<ApiSettingsDTO> updateApiSettings(@Valid @RequestBody UpdateApiSettingsRequest request) {
+        return ResponseEntity.ok(apiSettingsService.updateSettings(request));
+    }
 
     @GetMapping("/tenant")
     public ResponseEntity<TenantSettingsDTO> getTenantSettings() {
