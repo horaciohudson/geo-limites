@@ -89,13 +89,6 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
             <p>Revise as abas anteriores para concluir a preparacao antes de salvar.</p>
           </div>
         )}
-
-        {!isOwnerValid && (
-          <div className="ownership-warning">
-            <p><strong>Proprietário Pendente:</strong> Dados obrigatórios não preenchidos.</p>
-            <p>Preencha os campos obrigatórios na aba "Proprietários" para o imóvel ficar pronto.</p>
-          </div>
-        )}
       </div>
 
       <div className="summary-section">
@@ -107,7 +100,7 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
           </div>
           <div className="summary-item">
             <span className="label">Proprietarios</span>
-            <span className="value">{hasOwnersReady ? 'Prontos' : 'Pendentes'}</span>
+            <span className="value">{hasOwnersReady ? 'Prontos' : 'Em preparacao'}</span>
           </div>
           <div className="summary-item">
             <span className="label">Documentos de apoio</span>
@@ -214,8 +207,8 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
             </div>
           </div>
         ) : (
-          <p className="empty-message" style={{ color: '#dc3545', fontWeight: 500 }}>
-            ⚠️ Dados do proprietário incompletos ou não informados.
+          <p className="empty-message" style={{ color: '#64748b', fontWeight: 500 }}>
+            Os dados do proprietario podem ser concluídos na aba "Proprietários" antes do salvamento final.
           </p>
         )}
       </div>
@@ -292,7 +285,7 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
         {!isFormValid() && (
           <div style={{ marginTop: '1rem' }}>
             <p className="submit-warning" style={{ marginBottom: '1rem' }}>
-              Corrija as pendencias acima antes de salvar a preparacao do imovel.
+              Conclua os dados obrigatorios antes de salvar a preparacao do imovel.
             </p>
             {onSaveDraft && data.basicData.registrationNumber && (
               <button

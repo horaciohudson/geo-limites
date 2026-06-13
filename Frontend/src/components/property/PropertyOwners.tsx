@@ -37,9 +37,31 @@ const PropertyOwners: React.FC<PropertyOwnersProps> = ({ owners, validation, onC
     });
   };
 
+  const isOwnerPlaceholder = (owner: PropertyOwnerDraft) => {
+    const textFields = [
+      owner.fullName,
+      owner.cpf,
+      owner.companyName,
+      owner.cnpj,
+      owner.email,
+      owner.phone,
+      owner.rg,
+      owner.stateRegistration
+    ];
+
+    return textFields.every((value) => !value || value.trim() === '');
+  };
+
+  const visibleOwners = owners
+    .map((owner, index) => ({ owner, index }))
+    .filter(({ owner }) => !isOwnerPlaceholder(owner));
+
   const addOwner = (ownerToAdd: typeof newOwner) => {
     if (validateOwner(ownerToAdd)) {
-      const newOwners = [...owners, ownerToAdd];
+      const newOwners =
+        owners.length === 1 && isOwnerPlaceholder(owners[0])
+          ? [ownerToAdd]
+          : [...owners, ownerToAdd];
       onChange(newOwners);
       resetNewOwner();
       setShowAddForm(false);
@@ -82,7 +104,7 @@ const PropertyOwners: React.FC<PropertyOwnersProps> = ({ owners, validation, onC
   };
 
   const getTotalPercentage = () => {
-    return owners.reduce((sum, owner) => sum + owner.ownershipPercentage, 0);
+    return visibleOwners.reduce((sum, { owner }) => sum + owner.ownershipPercentage, 0);
   };
 
   const formatCPF = (value: string) => {
@@ -294,7 +316,20 @@ const PropertyOwners: React.FC<PropertyOwnersProps> = ({ owners, validation, onC
 
       {/* Lista de Proprietários */}
       <div className="owners-list">
-        {owners.map((owner, index) => {
+        {visibleOwners.length === 0 && (
+          <div className="owner-card" style={{ borderStyle: 'dashed', background: '#f8fafc' }}>
+            <div className="owner-info">
+              <div className="owner-header">
+                <h4>👥 Nenhum proprietário informado ainda</h4>
+              </div>
+              <div className="owner-details">
+                <p>Use o botão "Adicionar Proprietário" para preencher essa etapa quando chegar o momento.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {visibleOwners.map(({ owner, index }) => {
           // Verificar se o proprietário tem dados válidos
           const isValidOwner = owner.ownerType === 'INDIVIDUAL' 
             ? (owner.fullName && owner.cpf && owner.ownershipPercentage > 0)
@@ -302,11 +337,6 @@ const PropertyOwners: React.FC<PropertyOwnersProps> = ({ owners, validation, onC
           
           return (
             <div key={index} className={`owner-card ${!isValidOwner ? 'invalid' : ''}`}>
-              {!isValidOwner && (
-                <div className="validation-warning">
-                  ⚠️ Dados incompletos - {owner.ownerType === 'INDIVIDUAL' ? 'Nome e CPF obrigatórios' : 'Razão social e CNPJ obrigatórios'}
-                </div>
-              )}
               {editingIndex === index ? (
               <OwnerForm
                 owner={owner}
@@ -386,13 +416,13 @@ const PropertyOwners: React.FC<PropertyOwnersProps> = ({ owners, validation, onC
         </button>
       )}
 
-      {owners.length > 0 && (
+      {visibleOwners.length > 0 && (
         <div className="owners-summary">
           <h4>📊 Resumo da Propriedade</h4>
           <div className="summary-grid">
             <div className="summary-item">
               <span className="label">Total de Proprietários:</span>
-              <span className="value">{owners.length}</span>
+              <span className="value">{visibleOwners.length}</span>
             </div>
             <div className="summary-item">
               <span className="label">Participação Total:</span>
@@ -403,13 +433,13 @@ const PropertyOwners: React.FC<PropertyOwnersProps> = ({ owners, validation, onC
             <div className="summary-item">
               <span className="label">Pessoas Físicas:</span>
               <span className="value">
-                {owners.filter(o => o.ownerType === 'INDIVIDUAL').length}
+                {visibleOwners.filter(({ owner }) => owner.ownerType === 'INDIVIDUAL').length}
               </span>
             </div>
             <div className="summary-item">
               <span className="label">Pessoas Jurídicas:</span>
               <span className="value">
-                {owners.filter(o => o.ownerType === 'COMPANY').length}
+                {visibleOwners.filter(({ owner }) => owner.ownerType === 'COMPANY').length}
               </span>
             </div>
           </div>
