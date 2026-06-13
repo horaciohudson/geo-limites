@@ -251,7 +251,7 @@ public class AuthService {
 
     @Transactional
     public MessageResponseDTO changeCurrentUserPassword(ChangePasswordRequestDTO dto) {
-        User currentUser = repo.findByIdAndTenantId(AuthUtils.getRequiredCurrentUser().getId(), AuthUtils.getRequiredCurrentTenantId())
+        User currentUser = repo.findById(AuthUtils.getRequiredCurrentUser().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado"));
 
         String currentPassword = dto.currentPassword() != null ? dto.currentPassword().trim() : "";
