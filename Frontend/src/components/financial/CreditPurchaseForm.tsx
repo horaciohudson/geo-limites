@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import creditService from '../../services/creditService';
 import type { 
+  CreditPackage,
+  CreditPricingSettings,
   CreditPurchaseFormData, 
   CreditPurchaseFormValidation,
   CreditPurchaseResponse 
 } from '../../types/credit';
-import { CREDIT_PACKAGES, PAYMENT_PROVIDERS } from '../../types/credit';
+import { PAYMENT_PROVIDERS } from '../../types/credit';
 
 interface CreditPurchaseFormProps {
   currentBalance: number;
@@ -28,6 +30,8 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
   currentBalance, 
   onPurchaseComplete 
 }) => {
+  const [pricingSettings, setPricingSettings] = useState<CreditPricingSettings | null>(null);
+  const [loadingPricing, setLoadingPricing] = useState(true);
   const [formData, setFormData] = useState<CreditPurchaseFormData>({
     credits: 10,
     amountReais: 25.00,
@@ -36,8 +40,41 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
 
   const [validation, setValidation] = useState<CreditPurchaseFormValidation>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedPackage, setSelectedPackage] = useState<number | null>(null);
+  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [purchaseResult, setPurchaseResult] = useState<CreditPurchaseResponse | null>(null);
+
+  useEffect(() => {
+    const loadPricing = async () => {
+      try {
+        setLoadingPricing(true);
+        const settings = await creditService.getPricingSettings();
+        setPricingSettings(settings);
+
+        const defaultPackage = settings.packages.find((pkg) => pkg.popular) || settings.packages[0];
+        if (defaultPackage) {
+          setSelectedPackage(defaultPackage.id);
+          setFormData((prev) => ({
+            ...prev,
+            credits: defaultPackage.totalCredits,
+            amountReais: defaultPackage.price,
+          }));
+        }
+      } catch (error: unknown) {
+        setValidation({ general: [getErrorMessage(error, 'Nao foi possivel carregar a tabela de creditos.')] });
+      } finally {
+        setLoadingPricing(false);
+      }
+    };
+
+    void loadPricing();
+  }, []);
+
+  const packages = pricingSettings?.packages || [];
+  const customPricePerCredit = pricingSettings?.customPricePerCredit || 0;
+  const usageReference = useMemo(() => ({
+    single: pricingSettings?.singleLotCreditCost || 1,
+    small: pricingSettings?.smallProjectCreditCost || 3,
+  }), [pricingSettings]);
 
   // Validar formulário
   const validateForm = (): boolean => {
@@ -51,8 +88,6 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
 
     if (!formData.amountReais || formData.amountReais < 0.01) {
       newValidation.amountReais = 'Valor mínimo é R$ 0,01';
-    } else if (formData.amountReais > 10000) {
-      newValidation.amountReais = 'Valor máximo é R$ 10.000,00';
     }
 
     if (!formData.paymentProvider) {
@@ -64,14 +99,11 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
   };
 
   // Selecionar pacote pré-definido
-  const selectPackage = (packageIndex: number) => {
-    const pkg = CREDIT_PACKAGES[packageIndex];
-    const totalCredits = pkg.credits + pkg.bonus;
-    
-    setSelectedPackage(packageIndex);
+  const selectPackage = (pkg: CreditPackage) => {
+    setSelectedPackage(pkg.id);
     setFormData(prev => ({
       ...prev,
-      credits: totalCredits,
+      credits: pkg.totalCredits,
       amountReais: pkg.price
     }));
     setPurchaseResult(null);
@@ -94,8 +126,9 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
     setIsSubmitting(true);
     try {
       const result = await creditService.startPurchase({
-        credits: formData.credits,
-        amountReais: formData.amountReais,
+        packageId: selectedPackage || undefined,
+        credits: selectedPackage ? undefined : formData.credits,
+        amountReais: selectedPackage ? undefined : formData.amountReais,
         paymentProvider: formData.paymentProvider
       });
 
@@ -127,39 +160,55 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
   // Resetar formulário
   const resetForm = () => {
     setFormData({
-      credits: 10,
-      amountReais: 25.00,
+      credits: packages[0]?.totalCredits || 10,
+      amountReais: packages[0]?.price || (customPricePerCredit * 10),
       paymentProvider: 'default'
     });
-    setSelectedPackage(null);
+    setSelectedPackage(packages[0]?.id || null);
     setPurchaseResult(null);
     setValidation({});
+  };
+
+  const updateCustomCredits = (credits: number) => {
+    setSelectedPackage(null);
+    setFormData(prev => ({
+      ...prev,
+      credits,
+      amountReais: Number((credits * customPricePerCredit).toFixed(2)),
+    }));
   };
 
   return (
     <div className="credit-purchase-container">
       <div className="purchase-header">
         <h2>🛒 Comprar Créditos para Minha Conta</h2>
-        <p>Escolha um pacote ou personalize sua compra pessoal</p>
+        <p>Escolha um pacote pronto ou use a recarga personalizada com a tabela oficial do sistema.</p>
       </div>
+
+      {loadingPricing ? (
+        <div className="purchase-summary">
+          <h4>Carregando tabela de creditos...</h4>
+        </div>
+      ) : (
+        <>
 
       {/* Pacotes Pré-definidos */}
       <div className="packages-section">
         <h3>📦 Pacotes Recomendados</h3>
         <div className="packages-grid">
-          {CREDIT_PACKAGES.map((pkg, index) => (
+          {packages.map((pkg) => (
             <div 
-              key={index}
-              className={`package-card ${selectedPackage === index ? 'selected' : ''} ${pkg.popular ? 'popular' : ''}`}
-              onClick={() => selectPackage(index)}
+              key={pkg.id}
+              className={`package-card ${selectedPackage === pkg.id ? 'selected' : ''} ${pkg.popular ? 'popular' : ''}`}
+              onClick={() => selectPackage(pkg)}
             >
               {pkg.popular && <div className="popular-badge">🌟 Mais Popular</div>}
               
               <div className="package-header">
                 <div className="package-credits">
-                  <span className="base-credits">{pkg.credits}</span>
-                  {pkg.bonus > 0 && (
-                    <span className="bonus-credits">+{pkg.bonus} bônus</span>
+                  <span className="base-credits">{pkg.baseCredits}</span>
+                  {pkg.bonusCredits > 0 && (
+                    <span className="bonus-credits">+{pkg.bonusCredits} bônus</span>
                   )}
                   <span className="credits-label">créditos</span>
                 </div>
@@ -170,11 +219,11 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
 
               <div className="package-details">
                 <div className="price-per-credit">
-                  {creditService.formatCurrency(pkg.price / (pkg.credits + pkg.bonus))} por crédito
+                  {creditService.formatCurrency(pkg.pricePerCredit)} por crédito
                 </div>
-                {pkg.bonus > 0 && (
+                {pkg.bonusCredits > 0 && (
                   <div className="bonus-info">
-                    🎁 {pkg.bonus} créditos de bônus!
+                    🎁 {pkg.bonusCredits} créditos de bônus!
                   </div>
                 )}
               </div>
@@ -182,11 +231,11 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
               <div className="package-usage">
                 <div className="usage-item">
                   <span>🏠 Lotes individuais:</span>
-                  <span>{pkg.credits + pkg.bonus} memoriais</span>
+                  <span>{Math.floor(pkg.totalCredits / usageReference.single)} memoriais</span>
                 </div>
                 <div className="usage-item">
                   <span>🏘️ Projetos pequenos:</span>
-                  <span>{Math.floor((pkg.credits + pkg.bonus) / 3)} memoriais</span>
+                  <span>{Math.floor(pkg.totalCredits / usageReference.small)} memoriais</span>
                 </div>
               </div>
             </div>
@@ -197,6 +246,9 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
       {/* Formulário Personalizado */}
       <div className="custom-purchase-section">
         <h3>⚙️ Compra Personalizada</h3>
+        <p style={{ marginBottom: '1rem', color: '#64748b' }}>
+          Valor unitario atual: {creditService.formatCurrency(customPricePerCredit)} por credito.
+        </p>
         
         <form onSubmit={handleSubmit} className="purchase-form">
           <div className="form-grid">
@@ -214,8 +266,7 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
                 value={formData.credits}
                 onChange={(e) => {
                   const credits = parseInt(e.target.value) || 0;
-                  setFormData(prev => ({ ...prev, credits }));
-                  setSelectedPackage(null);
+                  updateCustomCredits(credits);
                 }}
                 className={validation.credits ? 'error' : ''}
                 disabled={isSubmitting}
@@ -238,13 +289,9 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
                 max="10000"
                 step="0.01"
                 value={formData.amountReais}
-                onChange={(e) => {
-                  const amountReais = parseFloat(e.target.value) || 0;
-                  setFormData(prev => ({ ...prev, amountReais }));
-                  setSelectedPackage(null);
-                }}
                 className={validation.amountReais ? 'error' : ''}
-                disabled={isSubmitting}
+                disabled
+                readOnly
               />
               {validation.amountReais && (
                 <span className="error-message">{validation.amountReais}</span>
@@ -347,6 +394,8 @@ const CreditPurchaseForm: React.FC<CreditPurchaseFormProps> = ({
           </div>
         </form>
       </div>
+        </>
+      )}
 
       {/* Resultado da Compra */}
       {purchaseResult && (

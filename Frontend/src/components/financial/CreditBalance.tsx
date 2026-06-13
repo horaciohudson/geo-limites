@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import creditService from '../../services/creditService';
-import type { CreditBalance as CreditBalanceType } from '../../types/credit';
+import type {
+  CreditBalance as CreditBalanceType,
+  CreditPricingSettings,
+} from '../../types/credit';
 
 interface CreditBalanceProps {
   balance: CreditBalanceType | null;
+  pricingSettings?: CreditPricingSettings | null;
   onRefresh: () => void;
   loading: boolean;
 }
 
-const CreditBalance: React.FC<CreditBalanceProps> = ({ balance, onRefresh, loading }) => {
+const CreditBalance: React.FC<CreditBalanceProps> = ({ balance, pricingSettings, onRefresh, loading }) => {
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -54,6 +58,12 @@ const CreditBalance: React.FC<CreditBalanceProps> = ({ balance, onRefresh, loadi
   };
 
   const balanceStatus = getBalanceStatus();
+  const usageRules = {
+    singleLotCreditCost: pricingSettings?.singleLotCreditCost ?? 1,
+    smallProjectMaxLots: pricingSettings?.smallProjectMaxLots ?? 5,
+    smallProjectCreditCost: pricingSettings?.smallProjectCreditCost ?? 3,
+    largeProjectCreditCost: pricingSettings?.largeProjectCreditCost ?? 10,
+  };
 
   if (loading && !balance) {
     return (
@@ -120,15 +130,15 @@ const CreditBalance: React.FC<CreditBalanceProps> = ({ balance, onRefresh, loadi
             <div className="usage-rules">
               <div className="usage-rule">
                 <span className="rule-icon">🏠</span>
-                <span className="rule-text">1 lote = 1 crédito</span>
+                <span className="rule-text">1 lote = {usageRules.singleLotCreditCost} créditos</span>
               </div>
               <div className="usage-rule">
                 <span className="rule-icon">🏘️</span>
-                <span className="rule-text">2-5 lotes = 3 créditos</span>
+                <span className="rule-text">2-{usageRules.smallProjectMaxLots} lotes = {usageRules.smallProjectCreditCost} créditos</span>
               </div>
               <div className="usage-rule">
                 <span className="rule-icon">🏙️</span>
-                <span className="rule-text">6+ lotes = 10 créditos</span>
+                <span className="rule-text">{usageRules.smallProjectMaxLots + 1}+ lotes = {usageRules.largeProjectCreditCost} créditos</span>
               </div>
             </div>
             <div className="usage-note">
@@ -148,15 +158,25 @@ const CreditBalance: React.FC<CreditBalanceProps> = ({ balance, onRefresh, loadi
                 <>
                   <div className="estimate-item">
                     <span className="estimate-label">Lotes individuais:</span>
-                    <span className="estimate-value">{balance.totalCredits} memoriais</span>
+                    <span className="estimate-value">
+                      {Math.floor(balance.totalCredits / Math.max(usageRules.singleLotCreditCost, 1))} memoriais
+                    </span>
                   </div>
                   <div className="estimate-item">
-                    <span className="estimate-label">Projetos pequenos (3 créditos):</span>
-                    <span className="estimate-value">{Math.floor(balance.totalCredits / 3)} memoriais</span>
+                    <span className="estimate-label">
+                      Projetos pequenos ({usageRules.smallProjectCreditCost} créditos):
+                    </span>
+                    <span className="estimate-value">
+                      {Math.floor(balance.totalCredits / Math.max(usageRules.smallProjectCreditCost, 1))} memoriais
+                    </span>
                   </div>
                   <div className="estimate-item">
-                    <span className="estimate-label">Projetos grandes (10 créditos):</span>
-                    <span className="estimate-value">{Math.floor(balance.totalCredits / 10)} memoriais</span>
+                    <span className="estimate-label">
+                      Projetos grandes ({usageRules.largeProjectCreditCost} créditos):
+                    </span>
+                    <span className="estimate-value">
+                      {Math.floor(balance.totalCredits / Math.max(usageRules.largeProjectCreditCost, 1))} memoriais
+                    </span>
                   </div>
                 </>
               )}

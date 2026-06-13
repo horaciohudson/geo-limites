@@ -60,9 +60,49 @@ export interface ApiSettings {
   memorialApiProvider: string;
 }
 
+export interface CreditPackageSettings {
+  id: string;
+  name: string;
+  baseCredits: number;
+  bonusCredits: number;
+  totalCredits: number;
+  price: number;
+  pricePerCredit: number;
+  popular: boolean;
+}
+
+export interface CreditPricingSettings {
+  welcomeCredits: number;
+  singleLotCreditCost: number;
+  smallProjectMaxLots: number;
+  smallProjectCreditCost: number;
+  largeProjectCreditCost: number;
+  customPricePerCredit: number;
+  packages: CreditPackageSettings[];
+}
+
 export interface UpdateApiSettingsRequest {
   templateApiProvider: string;
   memorialApiProvider: string;
+}
+
+export interface UpdateCreditPackageRequest {
+  id: string;
+  name: string;
+  baseCredits: number;
+  bonusCredits: number;
+  price: number;
+  popular: boolean;
+}
+
+export interface UpdateCreditPricingSettingsRequest {
+  welcomeCredits: number;
+  singleLotCreditCost: number;
+  smallProjectMaxLots: number;
+  smallProjectCreditCost: number;
+  largeProjectCreditCost: number;
+  customPricePerCredit: number;
+  packages: UpdateCreditPackageRequest[];
 }
 
 export interface MessageResponse {
@@ -111,6 +151,16 @@ const adminSettingsService = {
 
   async updateApiSettings(payload: UpdateApiSettingsRequest): Promise<ApiSettings> {
     const response = await api.patch('/admin/settings/api', payload);
+    return response.data;
+  },
+
+  async getCreditPricingSettings(): Promise<CreditPricingSettings> {
+    const response = await api.get('/admin/settings/credits');
+    return response.data;
+  },
+
+  async updateCreditPricingSettings(payload: UpdateCreditPricingSettingsRequest): Promise<CreditPricingSettings> {
+    const response = await api.patch('/admin/settings/credits', payload);
     return response.data;
   },
 

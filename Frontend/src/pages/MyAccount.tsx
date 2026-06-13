@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import creditService from '../services/creditService';
 import type { 
   CreditBalance, 
+  CreditPricingSettings,
   CreditTransaction, 
   CreditPurchaseResponse,
   CreditStatistics 
@@ -42,6 +43,7 @@ const MyAccount: React.FC = () => {
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [purchases, setPurchases] = useState<CreditPurchaseResponse[]>([]);
   const [statistics, setStatistics] = useState<CreditStatistics | null>(null);
+  const [pricingSettings, setPricingSettings] = useState<CreditPricingSettings | null>(null);
 
   // Estados de controle
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -80,7 +82,7 @@ const MyAccount: React.FC = () => {
 
       // Carregar dados em paralelo
       // NOVO: Usar initializeCredits em vez de getBalance para garantir criação automática
-      const [balanceData, transactionsData, purchasesData, statisticsData] = await Promise.all([
+      const [balanceData, transactionsData, purchasesData, statisticsData, pricingData] = await Promise.all([
         creditService.initializeCredits().catch(err => {
           console.error('❌ Erro ao inicializar/carregar saldo:', err);
           return null;
@@ -96,13 +98,18 @@ const MyAccount: React.FC = () => {
         creditService.getStatistics().catch(err => {
           console.error('❌ Erro ao carregar estatísticas:', err);
           return null;
-        })
+        }),
+        creditService.getPricingSettings().catch(err => {
+          console.error('❌ Erro ao carregar tabela de créditos:', err);
+          return null;
+        }),
       ]);
 
       setBalance(balanceData);
       setTransactions(transactionsData);
       setPurchases(purchasesData);
       setStatistics(statisticsData);
+      setPricingSettings(pricingData);
 
     } catch (error: unknown) {
       console.error('❌ Erro ao carregar dados da conta:', error);
@@ -148,6 +155,7 @@ const MyAccount: React.FC = () => {
         return (
           <CreditBalanceComponent
             balance={balance}
+            pricingSettings={pricingSettings}
             onRefresh={handleDataUpdate}
             loading={loading}
           />
@@ -320,7 +328,9 @@ const MyAccount: React.FC = () => {
           <div className="info-item">
             <span className="info-icon">📋</span>
             <span className="info-text">
-              1 lote = 1 crédito | 2-5 lotes = 3 créditos | 6+ lotes = 10 créditos
+              {pricingSettings
+                ? `1 lote = ${pricingSettings.singleLotCreditCost} crédito(s) | 2-${pricingSettings.smallProjectMaxLots} lotes = ${pricingSettings.smallProjectCreditCost} crédito(s) | ${pricingSettings.smallProjectMaxLots + 1}+ lotes = ${pricingSettings.largeProjectCreditCost} crédito(s)`
+                : '1 lote = 1 crédito | 2-5 lotes = 3 créditos | 6+ lotes = 10 créditos'}
             </span>
           </div>
         </div>

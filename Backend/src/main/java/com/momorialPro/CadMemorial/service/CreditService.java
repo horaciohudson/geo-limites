@@ -3,6 +3,8 @@ package com.momorialPro.CadMemorial.service;
 import com.momorialPro.CadMemorial.model.CreditPurchase;
 import com.momorialPro.CadMemorial.model.CreditTransaction;
 import com.momorialPro.CadMemorial.model.UserCredits;
+import com.momorialPro.CadMemorial.dto.CreditPackageDTO;
+import com.momorialPro.CadMemorial.model.CreditPricingSettings;
 import com.momorialPro.CadMemorial.enums.CreditPurchaseStatus;
 import com.momorialPro.CadMemorial.enums.CreditTransactionType;
 import com.momorialPro.CadMemorial.exception.InvalidPurchaseStateException;
@@ -32,6 +34,7 @@ public class CreditService {
     private final UserCreditsRepository userCreditsRepository;
     private final CreditTransactionRepository transactionRepository;
     private final CreditPurchaseRepository purchaseRepository;
+    private final CreditPricingSettingsService creditPricingSettingsService;
 
     /**
      * 1. Verifica se o usuário possui créditos suficientes
@@ -106,21 +109,14 @@ public class CreditService {
      * 6. Inicia uma compra de créditos
      */
     @Transactional
-    public CreditPurchase startPurchase(UUID userId, int credits, BigDecimal amountReais) {
-        // Validações básicas
-        if (credits <= 0) {
-            throw new IllegalArgumentException("Quantidade de créditos deve ser maior que zero");
-        }
-        if (amountReais.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Valor deve ser maior que zero");
-        }
-        
-        // Cria nova compra
+    public CreditPurchase startPurchase(UUID userId, String packageId, Integer credits, BigDecimal amountReais, String paymentProvider) {
+        CreditPurchaseDraft purchaseDraft = resolvePurchaseDraft(packageId, credits, amountReais);
+
         CreditPurchase purchase = new CreditPurchase(
             userId, 
-            amountReais, 
-            credits, 
-            "default"
+            purchaseDraft.amountReais(),
+            purchaseDraft.credits(),
+            paymentProvider != null && !paymentProvider.isBlank() ? paymentProvider : "default"
         );
 
         CreditPurchase savedPurchase = purchaseRepository.save(purchase);
@@ -186,17 +182,18 @@ public class CreditService {
      * NOVO: Cria com saldo inicial de 50 créditos para novos usuários
      */
     private UserCredits findOrCreateUserCredits(UUID userId) {
+        CreditPricingSettings pricingSettings = creditPricingSettingsService.getOrCreateEntity();
+        int welcomeCredits = pricingSettings.getWelcomeCredits();
+
         return userCreditsRepository.findByUserId(userId)
             .orElseGet(() -> {
-                // Criar com saldo inicial de 25 créditos
-                UserCredits newUserCredits = new UserCredits(userId, 25);
+                UserCredits newUserCredits = new UserCredits(userId, welcomeCredits);
                 UserCredits savedCredits = userCreditsRepository.save(newUserCredits);
                 
-                // Registrar transação de boas-vindas
                 CreditTransaction welcomeTransaction = new CreditTransaction(
                     userId, 
                     CreditTransactionType.PURCHASE, 
-                    25, 
+                    welcomeCredits,
                     "Créditos de boas-vindas - Novo usuário"
                 );
                 transactionRepository.save(welcomeTransaction);
@@ -217,9 +214,10 @@ public class CreditService {
             
             // Fallback: tentar criar manualmente
             try {
+                int welcomeCredits = creditPricingSettingsService.getOrCreateEntity().getWelcomeCredits();
                 UserCredits fallbackCredits = new UserCredits();
                 fallbackCredits.setUserId(userId);
-                fallbackCredits.setTotalCredits(25);
+                fallbackCredits.setTotalCredits(welcomeCredits);
                 
                 UserCredits saved = userCreditsRepository.save(fallbackCredits);
                 return saved;
@@ -235,14 +233,42 @@ public class CreditService {
      * Método auxiliar: Calcula créditos necessários baseado no número de lotes
      */
     public int calculateRequiredCredits(int lotCount) {
+        CreditPricingSettings settings = creditPricingSettingsService.getOrCreateEntity();
+
         if (lotCount == 1) {
-            return 1;           // 1 lote → 1 crédito
-        } else if (lotCount <= 5) {
-            return 3;           // até 5 lotes → 3 créditos  
+            return settings.getSingleLotCreditCost();
+        } else if (lotCount <= settings.getSmallProjectMaxLots()) {
+            return settings.getSmallProjectCreditCost();
         } else {
-            return 10;          // desmembramento completo → 10 créditos
+            return settings.getLargeProjectCreditCost();
         }
     }
+
+    private CreditPurchaseDraft resolvePurchaseDraft(String packageId, Integer credits, BigDecimal amountReais) {
+        if (packageId != null && !packageId.isBlank()) {
+            CreditPackageDTO selectedPackage = creditPricingSettingsService.findPackageById(packageId);
+            return new CreditPurchaseDraft(selectedPackage.getTotalCredits(), selectedPackage.getPrice());
+        }
+
+        if (credits == null || credits <= 0) {
+            throw new IllegalArgumentException("Quantidade de créditos deve ser maior que zero");
+        }
+        if (amountReais == null || amountReais.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Valor deve ser maior que zero");
+        }
+
+        BigDecimal expectedAmount = creditPricingSettingsService.getOrCreateEntity()
+                .getCustomPricePerCredit()
+                .multiply(BigDecimal.valueOf(credits));
+
+        if (expectedAmount.compareTo(amountReais) != 0) {
+            throw new IllegalArgumentException("O valor informado nao confere com a tabela oficial de creditos.");
+        }
+
+        return new CreditPurchaseDraft(credits, amountReais);
+    }
+
+    private record CreditPurchaseDraft(int credits, BigDecimal amountReais) {}
 
     /**
      * Método auxiliar: Obtém apenas o saldo (otimizado)
