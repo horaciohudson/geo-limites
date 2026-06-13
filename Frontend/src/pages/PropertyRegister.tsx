@@ -380,12 +380,16 @@ const PropertyRegister: React.FC = () => {
   const progress = calculateProgress();
   const canSaveToDatabase = progress >= 100;
 
-  const validateCurrentTab = (): boolean => {
+  const validateTab = (tabIndex: number): boolean => {
     const newValidation = { ...validation };
-    
-    switch (currentTab) {
+    const validationKey = getTabValidationKey(tabIndex);
+
+    if (validationKey !== 'general') {
+      newValidation[validationKey] = {};
+    }
+
+    switch (tabIndex) {
       case 0:
-        newValidation.basicData = {};
         if (!formData.basicData.registrationNumber) {
           newValidation.basicData.registrationNumber = 'Número de registro é obrigatório';
         }
@@ -398,7 +402,6 @@ const PropertyRegister: React.FC = () => {
         break;
         
       case 1:
-        newValidation.owners = {};
         const primaryOwner = formData.owners[0];
         if (!primaryOwner) {
           newValidation.owners.general = 'Dados do proprietário são obrigatórios';
@@ -424,41 +427,21 @@ const PropertyRegister: React.FC = () => {
     
     setValidation(newValidation);
     
-    const currentTabErrors = Object.values(newValidation[getCurrentTabValidationKey()]).filter(error => error);
-    return currentTabErrors.length === 0;
+    const tabErrors = validationKey === 'general'
+      ? newValidation.general
+      : Object.values(newValidation[validationKey]).filter(error => error);
+
+    return tabErrors.length === 0;
   };
 
-  const getCurrentTabValidationKey = (): keyof PropertyFormValidation => {
+  const getTabValidationKey = (tabIndex: number): keyof PropertyFormValidation => {
     const keys: (keyof PropertyFormValidation)[] = ['basicData', 'owners', 'documents', 'files', 'general'];
-    return keys[currentTab] || 'general';
+    return keys[tabIndex] || 'general';
   };
 
   const goToTab = (tabIndex: number) => {
     if (tabIndex === currentTab) return;
-    
-    const currentTabData = tabs[currentTab];
-    if (currentTabData.required && !validateCurrentTab()) {
-      let message = `Por favor, corrija os erros na aba "${currentTabData.name}" antes de continuar.`;
-      
-      if (currentTab === 1) {
-        const primaryOwner = formData.owners[0];
-        if (!primaryOwner) {
-          message = 'Por favor, informe os dados do proprietário.';
-        } else if (primaryOwner.ownerType === 'INDIVIDUAL') {
-          if (!primaryOwner.fullName || !primaryOwner.cpf) {
-            message = 'Nome completo e CPF são obrigatórios para pessoa física.';
-          }
-        } else {
-          if (!primaryOwner.companyName || !primaryOwner.cnpj) {
-            message = 'Razão social e CNPJ são obrigatórios para pessoa jurídica.';
-          }
-        }
-      }
-      
-      alert(message);
-      return;
-    }
-    
+
     setCurrentTab(tabIndex);
   };
 
@@ -481,9 +464,9 @@ const PropertyRegister: React.FC = () => {
       let hasErrors = false;
       for (let i = 0; i < tabs.length; i++) {
         if (tabs[i].required) {
-          setCurrentTab(i);
-          if (!validateCurrentTab()) {
+          if (!validateTab(i)) {
             hasErrors = true;
+            setCurrentTab(i);
             break;
           }
         }
@@ -845,7 +828,7 @@ const PropertyRegister: React.FC = () => {
                 className="nav-button next"
                 style={{ background: '#4f46e5', color: 'white' }}
               >
-                Salvar & Avançar →
+                Avancar →
               </button>
             )}
             
