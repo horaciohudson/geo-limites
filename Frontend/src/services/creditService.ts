@@ -1,6 +1,7 @@
 import api from './api';
 import type {
   CreditBalance,
+  CreditPricingSettings,
   CreditTransaction,
   CreditPurchaseRequest,
   CreditPurchaseResponse,
@@ -46,6 +47,37 @@ const isUninitializedCreditsError = (error: unknown): boolean => {
  * Serviço para gerenciar créditos via API
  */
 class CreditService {
+  private pricingSettingsCache: CreditPricingSettings | null = null;
+
+  async getPricingSettings(): Promise<CreditPricingSettings> {
+    try {
+      const response = await api.get<CreditPricingSettings>('/credits/settings');
+      this.pricingSettingsCache = response.data;
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao carregar configuracao de creditos:', error);
+
+      if (isMockableCreditError(error)) {
+        this.pricingSettingsCache = {
+          welcomeCredits: 25,
+          singleLotCreditCost: 1,
+          smallProjectMaxLots: 5,
+          smallProjectCreditCost: 3,
+          largeProjectCreditCost: 10,
+          customPricePerCredit: 2.5,
+          packages: [
+            { id: 'starter', name: 'Starter', baseCredits: 10, bonusCredits: 0, totalCredits: 10, price: 25, pricePerCredit: 2.5, popular: false },
+            { id: 'basic', name: 'Profissional', baseCredits: 50, bonusCredits: 5, totalCredits: 55, price: 100, pricePerCredit: 1.82, popular: true },
+            { id: 'professional', name: 'Empresarial', baseCredits: 100, bonusCredits: 20, totalCredits: 120, price: 180, pricePerCredit: 1.5, popular: false },
+            { id: 'enterprise', name: 'Corporativo', baseCredits: 250, bonusCredits: 75, totalCredits: 325, price: 400, pricePerCredit: 1.23, popular: false }
+          ]
+        };
+        return this.pricingSettingsCache;
+      }
+
+      throw new Error('Erro ao carregar configuracao de creditos');
+    }
+  }
   
   /**
    * NOVO: Inicializa créditos para o usuário (chamado no login/primeiro acesso)
@@ -314,9 +346,17 @@ class CreditService {
    * Calcula créditos necessários baseado no número de lotes
    */
   calculateRequiredCredits(lotCount: number): number {
-    if (lotCount <= 1) return 1;      // 1 lote = 1 crédito
-    if (lotCount <= 5) return 3;      // 2-5 lotes = 3 créditos
-    return 10;                        // 6+ lotes = 10 créditos
+    const pricingSettings = this.pricingSettingsCache;
+
+    if (!pricingSettings) {
+      if (lotCount <= 1) return 1;
+      if (lotCount <= 5) return 3;
+      return 10;
+    }
+
+    if (lotCount <= 1) return pricingSettings.singleLotCreditCost;
+    if (lotCount <= pricingSettings.smallProjectMaxLots) return pricingSettings.smallProjectCreditCost;
+    return pricingSettings.largeProjectCreditCost;
   }
 
   /**

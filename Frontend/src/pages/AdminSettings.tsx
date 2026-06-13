@@ -2,9 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import adminSettingsService, {
   type AdminUserPasswordResetRequest,
   type AdminUserUpdateRequest,
+  type CreditPricingSettings,
   type MessageResponse,
   type SmtpOperationResult,
   type SmtpSettings,
+<<<<<<< HEAD
+=======
+  type UpdateCreditPricingSettingsRequest,
+>>>>>>> 52f4c4e (feat: add persistent admin credit pricing settings)
   type UpdateSmtpSettingsRequest,
   type UpdateApiSettingsRequest,
 } from '@/services/adminSettings';
@@ -33,7 +38,22 @@ const defaultPasswordResetForm: AdminUserPasswordResetRequest & { confirmPasswor
   confirmPassword: '',
 };
 
-type AdminTab = 'empresas' | 'smtp' | 'api' | 'usuarios';
+const defaultCreditPricingForm: UpdateCreditPricingSettingsRequest = {
+  welcomeCredits: 25,
+  singleLotCreditCost: 1,
+  smallProjectMaxLots: 5,
+  smallProjectCreditCost: 3,
+  largeProjectCreditCost: 10,
+  customPricePerCredit: 2.5,
+  packages: [
+    { id: 'starter', name: 'Starter', baseCredits: 10, bonusCredits: 0, price: 25, popular: false },
+    { id: 'basic', name: 'Profissional', baseCredits: 50, bonusCredits: 5, price: 100, popular: true },
+    { id: 'professional', name: 'Empresarial', baseCredits: 100, bonusCredits: 20, price: 180, popular: false },
+    { id: 'enterprise', name: 'Corporativo', baseCredits: 250, bonusCredits: 75, price: 400, popular: false },
+  ],
+};
+
+type AdminTab = 'empresas' | 'smtp' | 'api' | 'creditos' | 'usuarios';
 type UserRoleFilter = 'all' | 'admin' | 'user';
 type UserStatusFilter = 'all' | 'active' | 'inactive' | 'pending';
 
@@ -72,6 +92,9 @@ const AdminSettings: React.FC = () => {
   const [loadingOperationalTenants, setLoadingOperationalTenants] = useState(true);
   const [apiForm, setApiForm] = useState<UpdateApiSettingsRequest>({ templateApiProvider: 'CLAUDE', memorialApiProvider: 'CLAUDE' });
   const [loadingApi, setLoadingApi] = useState(true);
+  const [creditPricingForm, setCreditPricingForm] = useState<UpdateCreditPricingSettingsRequest>(defaultCreditPricingForm);
+  const [currentCreditPricing, setCurrentCreditPricing] = useState<CreditPricingSettings | null>(null);
+  const [loadingCreditPricing, setLoadingCreditPricing] = useState(true);
   const [lastOperation, setLastOperation] = useState<SmtpOperationResult | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -112,6 +135,12 @@ const AdminSettings: React.FC = () => {
       count: 'Configurações',
     },
     {
+      id: 'creditos',
+      label: 'Creditos',
+      eyebrow: 'Precificacao',
+      count: currentCreditPricing ? `${currentCreditPricing.packages.length} pacotes` : 'Carregando',
+    },
+    {
       id: 'usuarios',
       label: 'Usuarios',
       eyebrow: 'Acessos',
@@ -150,7 +179,7 @@ const AdminSettings: React.FC = () => {
       setLoadingUsers(false);
       return;
     }
-    void Promise.all([loadOperationalTenants(), loadSettings(), loadApiSettings(), loadUsers()]);
+    void Promise.all([loadOperationalTenants(), loadSettings(), loadApiSettings(), loadCreditPricingSettings(), loadUsers()]);
   }, [isAdmin]);
 
   const loadOperationalTenants = async () => {
@@ -194,6 +223,34 @@ const AdminSettings: React.FC = () => {
     }
   };
 
+  const loadCreditPricingSettings = async () => {
+    try {
+      setLoadingCreditPricing(true);
+      const settings = await adminSettingsService.getCreditPricingSettings();
+      setCurrentCreditPricing(settings);
+      setCreditPricingForm({
+        welcomeCredits: settings.welcomeCredits,
+        singleLotCreditCost: settings.singleLotCreditCost,
+        smallProjectMaxLots: settings.smallProjectMaxLots,
+        smallProjectCreditCost: settings.smallProjectCreditCost,
+        largeProjectCreditCost: settings.largeProjectCreditCost,
+        customPricePerCredit: settings.customPricePerCredit,
+        packages: settings.packages.map((item) => ({
+          id: item.id,
+          name: item.name,
+          baseCredits: item.baseCredits,
+          bonusCredits: item.bonusCredits,
+          price: item.price,
+          popular: item.popular,
+        })),
+      });
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel carregar a configuracao de creditos.');
+    } finally {
+      setLoadingCreditPricing(false);
+    }
+  };
+
   const syncForm = (settings: SmtpSettings) => {
     setForm({
       enabled: settings.enabled,
@@ -229,6 +286,31 @@ const AdminSettings: React.FC = () => {
     setApiForm((prev) => ({ ...prev, [field]: value }));
   };
 
+<<<<<<< HEAD
+=======
+  const setCreditPricingField = <K extends keyof UpdateCreditPricingSettingsRequest>(
+    field: K,
+    value: UpdateCreditPricingSettingsRequest[K]
+  ) => {
+    setCreditPricingForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const setCreditPackageField = (
+    packageId: string,
+    field: 'name' | 'baseCredits' | 'bonusCredits' | 'price' | 'popular',
+    value: string | number | boolean
+  ) => {
+    setCreditPricingForm((prev) => ({
+      ...prev,
+      packages: prev.packages.map((item) => (
+        item.id === packageId
+          ? { ...item, [field]: value }
+          : item
+      )),
+    }));
+  };
+
+>>>>>>> 52f4c4e (feat: add persistent admin credit pricing settings)
   const setEditUserField = <K extends keyof AdminUserUpdateRequest>(field: K, value: AdminUserUpdateRequest[K]) => {
     setEditUserForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
@@ -314,6 +396,47 @@ const AdminSettings: React.FC = () => {
       showSuccess('Configuracoes de API atualizadas com sucesso.');
     } catch (error: unknown) {
       showError(error, 'Nao foi possivel salvar as configuracoes de API.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveCreditPricingSettings = async () => {
+    try {
+      setSaving(true);
+      const payload: UpdateCreditPricingSettingsRequest = {
+        ...creditPricingForm,
+        customPricePerCredit: Number(creditPricingForm.customPricePerCredit),
+        packages: creditPricingForm.packages.map((item) => ({
+          ...item,
+          name: item.name.trim(),
+          baseCredits: Number(item.baseCredits),
+          bonusCredits: Number(item.bonusCredits),
+          price: Number(item.price),
+        })),
+      };
+
+      const settings = await adminSettingsService.updateCreditPricingSettings(payload);
+      setCurrentCreditPricing(settings);
+      setCreditPricingForm({
+        welcomeCredits: settings.welcomeCredits,
+        singleLotCreditCost: settings.singleLotCreditCost,
+        smallProjectMaxLots: settings.smallProjectMaxLots,
+        smallProjectCreditCost: settings.smallProjectCreditCost,
+        largeProjectCreditCost: settings.largeProjectCreditCost,
+        customPricePerCredit: settings.customPricePerCredit,
+        packages: settings.packages.map((item) => ({
+          id: item.id,
+          name: item.name,
+          baseCredits: item.baseCredits,
+          bonusCredits: item.bonusCredits,
+          price: item.price,
+          popular: item.popular,
+        })),
+      });
+      showSuccess('Tabela de creditos atualizada com sucesso.');
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel salvar a tabela de creditos.');
     } finally {
       setSaving(false);
     }
@@ -663,6 +786,206 @@ const AdminSettings: React.FC = () => {
                   disabled={saving}
                 >
                   {saving ? 'Salvando...' : 'Salvar Configuracoes da API'}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'creditos' && (
+        <section className="admin-settings-card admin-settings-panel">
+          <div className="admin-settings-panel-header">
+            <div>
+              <h2>Precificacao de Creditos</h2>
+              <p>Defina os valores em reais, os pacotes exibidos na compra e a regra de consumo operacional.</p>
+            </div>
+          </div>
+          {loadingCreditPricing ? (
+            <p>Carregando tabela de creditos...</p>
+          ) : (
+            <>
+              <div className="admin-panel-highlights">
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Boas-vindas</span>
+                  <strong>{creditPricingForm.welcomeCredits} creditos</strong>
+                  <span>saldo inicial por usuario</span>
+                </div>
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Preco Customizado</span>
+                  <strong>R$ {Number(creditPricingForm.customPricePerCredit).toFixed(2)}</strong>
+                  <span>por credito avulso</span>
+                </div>
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Projeto Pequeno</span>
+                  <strong>{creditPricingForm.smallProjectCreditCost} creditos</strong>
+                  <span>ate {creditPricingForm.smallProjectMaxLots} lotes</span>
+                </div>
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Pacotes</span>
+                  <strong>{creditPricingForm.packages.length}</strong>
+                  <span>ofertas publicadas na conta</span>
+                </div>
+              </div>
+
+              <div className="admin-settings-subsections">
+                <section className="admin-settings-subsection">
+                  <div className="admin-settings-subsection-header">
+                    <div>
+                      <h3>Regras Gerais</h3>
+                      <p>Esses valores controlam saldo inicial e consumo por geracao de memorial.</p>
+                    </div>
+                  </div>
+                  <div className="admin-settings-form">
+                    <div className="admin-settings-row">
+                      <div className="admin-settings-field">
+                        <label htmlFor="welcome-credits">Creditos de Boas-vindas</label>
+                        <input
+                          id="welcome-credits"
+                          type="number"
+                          min={0}
+                          value={creditPricingForm.welcomeCredits}
+                          onChange={(e) => setCreditPricingField('welcomeCredits', Number(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div className="admin-settings-field">
+                        <label htmlFor="custom-price">Preco por Credito Avulso (R$)</label>
+                        <input
+                          id="custom-price"
+                          type="number"
+                          min={0.01}
+                          step="0.01"
+                          value={creditPricingForm.customPricePerCredit}
+                          onChange={(e) => setCreditPricingField('customPricePerCredit', Number(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                    <div className="admin-settings-row">
+                      <div className="admin-settings-field">
+                        <label htmlFor="single-lot-credit-cost">1 lote</label>
+                        <input
+                          id="single-lot-credit-cost"
+                          type="number"
+                          min={1}
+                          value={creditPricingForm.singleLotCreditCost}
+                          onChange={(e) => setCreditPricingField('singleLotCreditCost', Number(e.target.value) || 1)}
+                        />
+                      </div>
+                      <div className="admin-settings-field">
+                        <label htmlFor="small-project-max-lots">Maximo do Projeto Pequeno</label>
+                        <input
+                          id="small-project-max-lots"
+                          type="number"
+                          min={2}
+                          value={creditPricingForm.smallProjectMaxLots}
+                          onChange={(e) => setCreditPricingField('smallProjectMaxLots', Number(e.target.value) || 2)}
+                        />
+                      </div>
+                      <div className="admin-settings-field">
+                        <label htmlFor="small-project-credit-cost">Custo do Projeto Pequeno</label>
+                        <input
+                          id="small-project-credit-cost"
+                          type="number"
+                          min={1}
+                          value={creditPricingForm.smallProjectCreditCost}
+                          onChange={(e) => setCreditPricingField('smallProjectCreditCost', Number(e.target.value) || 1)}
+                        />
+                      </div>
+                      <div className="admin-settings-field">
+                        <label htmlFor="large-project-credit-cost">Custo do Projeto Grande</label>
+                        <input
+                          id="large-project-credit-cost"
+                          type="number"
+                          min={1}
+                          value={creditPricingForm.largeProjectCreditCost}
+                          onChange={(e) => setCreditPricingField('largeProjectCreditCost', Number(e.target.value) || 1)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="admin-settings-subsection">
+                  <div className="admin-settings-subsection-header">
+                    <div>
+                      <h3>Pacotes Publicados</h3>
+                      <p>Os valores abaixo aparecem na tela de compra e passam a valer para novas recargas.</p>
+                    </div>
+                  </div>
+                  <div className="admin-users-list">
+                    <table className="admin-users-table">
+                      <thead>
+                        <tr>
+                          <th>Pacote</th>
+                          <th>Base</th>
+                          <th>Bonus</th>
+                          <th>Preco</th>
+                          <th>Destaque</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {creditPricingForm.packages.map((item) => (
+                          <tr key={item.id}>
+                            <td>
+                              <input
+                                value={item.name}
+                                onChange={(e) => setCreditPackageField(item.id, 'name', e.target.value)}
+                                placeholder="Nome do pacote"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.baseCredits}
+                                onChange={(e) => setCreditPackageField(item.id, 'baseCredits', Number(e.target.value) || 1)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min={0}
+                                value={item.bonusCredits}
+                                onChange={(e) => setCreditPackageField(item.id, 'bonusCredits', Number(e.target.value) || 0)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min={0.01}
+                                step="0.01"
+                                value={item.price}
+                                onChange={(e) => setCreditPackageField(item.id, 'price', Number(e.target.value) || 0)}
+                              />
+                              <div className="admin-user-email">
+                                Total: {item.baseCredits + item.bonusCredits} creditos
+                              </div>
+                            </td>
+                            <td>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={item.popular}
+                                  onChange={(e) => setCreditPackageField(item.id, 'popular', e.target.checked)}
+                                />
+                                Mais vendido
+                              </label>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+
+              <div className="admin-settings-actions">
+                <button
+                  className="admin-settings-button primary"
+                  onClick={handleSaveCreditPricingSettings}
+                  disabled={saving}
+                >
+                  {saving ? 'Salvando...' : 'Salvar Tabela de Creditos'}
                 </button>
               </div>
             </>

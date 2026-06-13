@@ -1,6 +1,7 @@
 package com.momorialPro.CadMemorial.controller;
 
 import com.momorialPro.CadMemorial.dto.CreditBalanceDTO;
+import com.momorialPro.CadMemorial.dto.CreditPricingSettingsDTO;
 import com.momorialPro.CadMemorial.dto.CreditPurchaseRequestDTO;
 import com.momorialPro.CadMemorial.dto.CreditPurchaseResponseDTO;
 import com.momorialPro.CadMemorial.dto.CreditTransactionDTO;
@@ -9,6 +10,7 @@ import com.momorialPro.CadMemorial.model.CreditTransaction;
 import com.momorialPro.CadMemorial.model.UserCredits;
 import com.momorialPro.CadMemorial.mapper.CreditMapper;
 import com.momorialPro.CadMemorial.security.AuthUtils;
+import com.momorialPro.CadMemorial.service.CreditPricingSettingsService;
 import com.momorialPro.CadMemorial.service.CreditService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ import java.util.UUID;
 public class CreditController {
 
     private final CreditService creditService;
+    private final CreditPricingSettingsService creditPricingSettingsService;
     private final CreditMapper creditMapper;
 
     /**
@@ -79,6 +82,16 @@ public class CreditController {
         }
     }
 
+    @GetMapping("/settings")
+    public ResponseEntity<CreditPricingSettingsDTO> getCreditPricingSettings() {
+        try {
+            return ResponseEntity.ok(creditPricingSettingsService.getSettings());
+        } catch (Exception e) {
+            log.error("❌ Erro ao carregar configuracao de creditos: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     /**
      * 3. POST /api/credits/purchase/start
      * Inicia uma compra de créditos
@@ -91,8 +104,10 @@ public class CreditController {
 
             CreditPurchase purchase = creditService.startPurchase(
                 userId, 
-                request.getCredits(), 
-                request.getAmountReais()
+                request.getPackageId(),
+                request.getCredits(),
+                request.getAmountReais(),
+                request.getPaymentProvider()
             );
             
             CreditPurchaseResponseDTO responseDTO = creditMapper.toPurchaseResponseDTO(

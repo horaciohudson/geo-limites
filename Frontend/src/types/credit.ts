@@ -15,8 +15,9 @@ export interface CreditTransaction {
 }
 
 export interface CreditPurchaseRequest {
-  credits: number;
-  amountReais: number;
+  packageId?: string;
+  credits?: number;
+  amountReais?: number;
   paymentProvider?: string;
 }
 
@@ -41,6 +42,27 @@ export interface CreditUsageInfo {
   estimatedLots: number;
   canGenerate: boolean;
   message: string;
+}
+
+export interface CreditPackage {
+  id: string;
+  name: string;
+  baseCredits: number;
+  bonusCredits: number;
+  totalCredits: number;
+  price: number;
+  pricePerCredit: number;
+  popular: boolean;
+}
+
+export interface CreditPricingSettings {
+  welcomeCredits: number;
+  singleLotCreditCost: number;
+  smallProjectMaxLots: number;
+  smallProjectCreditCost: number;
+  largeProjectCreditCost: number;
+  customPricePerCredit: number;
+  packages: CreditPackage[];
 }
 
 // Tipos para formulários
@@ -82,24 +104,10 @@ export interface CreditPurchaseFilter {
   limit?: number;
 }
 
-// Constantes
-export const CREDIT_PRICING = {
-  SINGLE_LOT: 1,      // 1 lote = 1 crédito
-  SMALL_PROJECT: 3,   // 2-5 lotes = 3 créditos
-  LARGE_PROJECT: 10   // 6+ lotes = 10 créditos
-} as const;
-
 export const PAYMENT_PROVIDERS = [
   { value: 'stripe', label: 'Cartão de Crédito (Stripe)' },
   { value: 'paypal', label: 'PayPal' },
   { value: 'pix', label: 'PIX' },
   { value: 'boleto', label: 'Boleto Bancário' },
   { value: 'default', label: 'Padrão do Sistema' }
-] as const;
-
-export const CREDIT_PACKAGES = [
-  { credits: 10, price: 25.00, bonus: 0, popular: false },
-  { credits: 50, price: 100.00, bonus: 5, popular: true },
-  { credits: 100, price: 180.00, bonus: 20, popular: false },
-  { credits: 250, price: 400.00, bonus: 75, popular: false }
 ] as const;

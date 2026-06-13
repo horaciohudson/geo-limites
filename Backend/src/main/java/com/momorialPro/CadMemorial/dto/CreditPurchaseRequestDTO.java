@@ -16,14 +16,14 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreditPurchaseRequestDTO {
-    
-    @NotNull(message = "Quantidade de créditos é obrigatória")
+
+    private String packageId;
+
     @Min(value = 1, message = "Quantidade mínima é 1 crédito")
     private Integer credits;
-    
-    @NotNull(message = "Valor em reais é obrigatório")
+
     @DecimalMin(value = "0.01", message = "Valor mínimo é R$ 0,01")
     private BigDecimal amountReais;
-    
+
     private String paymentProvider = "default";
 }

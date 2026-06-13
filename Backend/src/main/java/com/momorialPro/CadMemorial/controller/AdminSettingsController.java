@@ -7,8 +7,11 @@ import com.momorialPro.CadMemorial.dto.TenantSettingsDTO;
 import com.momorialPro.CadMemorial.dto.UpdateSmtpSettingsRequest;
 import com.momorialPro.CadMemorial.dto.UpdateTenantSettingsRequest;
 import com.momorialPro.CadMemorial.dto.ApiSettingsDTO;
+import com.momorialPro.CadMemorial.dto.CreditPricingSettingsDTO;
 import com.momorialPro.CadMemorial.dto.UpdateApiSettingsRequest;
+import com.momorialPro.CadMemorial.dto.UpdateCreditPricingSettingsRequest;
 import com.momorialPro.CadMemorial.service.ApiSettingsService;
+import com.momorialPro.CadMemorial.service.CreditPricingSettingsService;
 import com.momorialPro.CadMemorial.service.SmtpMailService;
 import com.momorialPro.CadMemorial.service.SmtpSettingsService;
 import com.momorialPro.CadMemorial.service.TenantSettingsService;
@@ -36,6 +39,7 @@ public class AdminSettingsController {
     private final SmtpMailService smtpMailService;
     private final TenantSettingsService tenantSettingsService;
     private final ApiSettingsService apiSettingsService;
+    private final CreditPricingSettingsService creditPricingSettingsService;
 
     @GetMapping("/api")
     public ResponseEntity<ApiSettingsDTO> getApiSettings() {
@@ -45,6 +49,16 @@ public class AdminSettingsController {
     @PatchMapping("/api")
     public ResponseEntity<ApiSettingsDTO> updateApiSettings(@Valid @RequestBody UpdateApiSettingsRequest request) {
         return ResponseEntity.ok(apiSettingsService.updateSettings(request));
+    }
+
+    @GetMapping("/credits")
+    public ResponseEntity<CreditPricingSettingsDTO> getCreditPricingSettings() {
+        return ResponseEntity.ok(creditPricingSettingsService.getSettings());
+    }
+
+    @PatchMapping("/credits")
+    public ResponseEntity<CreditPricingSettingsDTO> updateCreditPricingSettings(@Valid @RequestBody UpdateCreditPricingSettingsRequest request) {
+        return ResponseEntity.ok(creditPricingSettingsService.updateSettings(request));
     }
 
     @GetMapping("/tenant")
