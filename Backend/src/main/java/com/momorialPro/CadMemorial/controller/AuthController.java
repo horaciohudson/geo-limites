@@ -5,6 +5,7 @@ package com.momorialPro.CadMemorial.controller;
 
 import com.momorialPro.CadMemorial.dto.AuthRequestDTO;
 import com.momorialPro.CadMemorial.dto.AuthResponseDTO;
+import com.momorialPro.CadMemorial.dto.ChangePasswordRequestDTO;
 import com.momorialPro.CadMemorial.dto.MessageResponseDTO;
 import com.momorialPro.CadMemorial.dto.RefreshTokenRequestDTO;
 import com.momorialPro.CadMemorial.dto.RegisterRequestDTO;
@@ -77,5 +78,11 @@ public class AuthController {
     @Operation(summary = "Atualizar perfil do usuário atual", description = "Atualiza os dados cadastrais básicos do usuário autenticado")
     public ResponseEntity<UserDTO> updateProfile(@Valid @RequestBody UserProfileUpdateDTO dto) {
         return ResponseEntity.ok(auth.updateCurrentUserProfile(dto));
+    }
+
+    @PutMapping("/change-password")
+    @Operation(summary = "Alterar senha do usuário atual", description = "Valida a senha atual e grava uma nova senha para o usuário autenticado")
+    public ResponseEntity<MessageResponseDTO> changePassword(@Valid @RequestBody ChangePasswordRequestDTO dto) {
+        return ResponseEntity.ok(auth.changeCurrentUserPassword(dto));
     }
 }

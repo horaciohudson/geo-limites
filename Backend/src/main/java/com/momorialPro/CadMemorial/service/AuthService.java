@@ -2,6 +2,7 @@ package com.momorialPro.CadMemorial.service;
 
 import com.momorialPro.CadMemorial.dto.AuthRequestDTO;
 import com.momorialPro.CadMemorial.dto.AuthResponseDTO;
+import com.momorialPro.CadMemorial.dto.ChangePasswordRequestDTO;
 import com.momorialPro.CadMemorial.dto.RefreshTokenRequestDTO;
 import com.momorialPro.CadMemorial.dto.RegisterRequestDTO;
 import com.momorialPro.CadMemorial.dto.RegisterResponseDTO;
@@ -246,6 +247,33 @@ public class AuthService {
         currentUser.setZipCode(normalizeOptionalText(dto.getZipCode(), 9));
 
         return mapper.toDTO(repo.save(currentUser));
+    }
+
+    @Transactional
+    public MessageResponseDTO changeCurrentUserPassword(ChangePasswordRequestDTO dto) {
+        User currentUser = repo.findByIdAndTenantId(AuthUtils.getRequiredCurrentUser().getId(), AuthUtils.getRequiredCurrentTenantId())
+                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado"));
+
+        String currentPassword = dto.currentPassword() != null ? dto.currentPassword().trim() : "";
+        String newPassword = dto.newPassword() != null ? dto.newPassword().trim() : "";
+
+        if (!encoder.matches(currentPassword, currentUser.getPassword())) {
+            throw new IllegalArgumentException("A senha atual informada não confere.");
+        }
+
+        if (newPassword.length() < 6) {
+            throw new IllegalArgumentException("A nova senha deve ter pelo menos 6 caracteres.");
+        }
+
+        if (encoder.matches(newPassword, currentUser.getPassword())) {
+            throw new IllegalArgumentException("A nova senha deve ser diferente da senha atual.");
+        }
+
+        currentUser.setPassword(encoder.encode(newPassword));
+        repo.save(currentUser);
+        refreshTokenService.revokeAllByUser(currentUser);
+
+        return new MessageResponseDTO("Senha alterada com sucesso. Faça login novamente com a nova senha.");
     }
 
 
