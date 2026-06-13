@@ -6,10 +6,7 @@ import adminSettingsService, {
   type MessageResponse,
   type SmtpOperationResult,
   type SmtpSettings,
-<<<<<<< HEAD
-=======
   type UpdateCreditPricingSettingsRequest,
->>>>>>> 52f4c4e (feat: add persistent admin credit pricing settings)
   type UpdateSmtpSettingsRequest,
   type UpdateApiSettingsRequest,
 } from '@/services/adminSettings';
@@ -286,8 +283,6 @@ const AdminSettings: React.FC = () => {
     setApiForm((prev) => ({ ...prev, [field]: value }));
   };
 
-<<<<<<< HEAD
-=======
   const setCreditPricingField = <K extends keyof UpdateCreditPricingSettingsRequest>(
     field: K,
     value: UpdateCreditPricingSettingsRequest[K]
@@ -309,8 +304,6 @@ const AdminSettings: React.FC = () => {
       )),
     }));
   };
-
->>>>>>> 52f4c4e (feat: add persistent admin credit pricing settings)
   const setEditUserField = <K extends keyof AdminUserUpdateRequest>(field: K, value: AdminUserUpdateRequest[K]) => {
     setEditUserForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
