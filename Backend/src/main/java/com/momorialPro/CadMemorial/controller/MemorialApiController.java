@@ -161,10 +161,11 @@ public class MemorialApiController {
                 userId,
                 request.propertyId()
             );
+            String sanitizedAiContent = sanitizeMemorialText(aiContent);
 
             // Cria resposta final
             MemorialExportDTO gptMemorial = new MemorialExportDTO();
-            gptMemorial.setMemorialText(aiContent);
+            gptMemorial.setMemorialText(sanitizedAiContent);
             gptMemorial.setProjectName(request.projectName());
             gptMemorial.setProjectDescription(request.projectDescription());
             gptMemorial.setComparisonSummary("Memorial assistido gerado com " + request.entities().size() + " entidades");
@@ -224,6 +225,18 @@ public class MemorialApiController {
             hexChars[j * 2 + 1] = hexArray[v & 0x0F];
         }
         return new String(hexChars);
+    }
+
+    private String sanitizeMemorialText(String content) {
+        if (content == null) {
+            return null;
+        }
+
+        return content
+                .replace("“", "")
+                .replace("”", "")
+                .replace("\"", "")
+                .trim();
     }
 }
 

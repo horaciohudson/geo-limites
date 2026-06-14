@@ -34,6 +34,12 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+const normalizeMemorialText = (content: string): string =>
+  content
+    .replace(/“|”/g, '')
+    .replace(/"/g, '')
+    .trim();
+
 // Função para obter propertyId selecionado do localStorage
 function getSelectedPropertyId(): string | null {
   try {
@@ -354,10 +360,10 @@ const Viewer: React.FC = () => {
           ? responseData 
           : (responseData?.memorialText || responseData?.memorial || JSON.stringify(responseData, null, 2));
           
-        allMemorials += realMemorial + '\n\n';
+        allMemorials += normalizeMemorialText(realMemorial) + '\n\n';
       }
       
-      setMemorial(allMemorials);
+      setMemorial(normalizeMemorialText(allMemorials));
       setGenerationProgress(100);
       setMemorialCurrentStep('Geração em lote concluída!');
     } catch (err: unknown) {
@@ -483,7 +489,11 @@ const Viewer: React.FC = () => {
       };
 
       const response = await api.post(endpoint, memorialRequestWithAI);
-      setMemorial(response.data.memorialText || 'Memorial gerado com sucesso, mas sem detalhes técnicos.');
+      setMemorial(
+        normalizeMemorialText(
+          response.data.memorialText || 'Memorial gerado com sucesso, mas sem detalhes técnicos.'
+        )
+      );
 
       // Finalizar timer
       setGenerationProgress(100);
