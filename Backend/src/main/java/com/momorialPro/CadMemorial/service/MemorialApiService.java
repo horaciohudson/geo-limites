@@ -47,6 +47,12 @@ public class MemorialApiService {
     @Autowired
     private DxfGeoReferenciaExtractorService geoExtractorService;
 
+    @Autowired
+    private ApiSettingsService apiSettingsService;
+
+    @Value("${OPENAI_API_KEY:}")
+    private String openaiApiKey;
+
     // Configurações Claude (ÚNICO PROVIDER)
     @Value("${memorialpro.claude.model}")
     private String claudeModel;
@@ -86,21 +92,21 @@ public class MemorialApiService {
      */
     public String generate(DxfCompareResultDTO r, UUID standardId, UUID userId, UUID propertyId) {
         long startTime = System.currentTimeMillis();
+        String provider = resolveMemorialProvider();
 
         // Gera chave de cache e limpa entrada existente para forçar regeneração
         String cacheKey = cacheService.generateCacheKey(r);
         cacheService.removeFromCache(cacheKey);
 
-        // VERIFICA SE A API KEY DO CLAUDE ESTÁ CONFIGURADA
-        if (claudeApiKey == null || claudeApiKey.equals("PLACEHOLDER_KEY") || claudeApiKey.trim().isEmpty()) {
-            log.error("❌ ERRO CRÍTICO: API Key do Claude não configurada!");
-            
+        if (!hasValidConfiguredProviderKey(provider)) {
+            log.error("Provedor {} configurado sem credencial valida para memoriais", provider);
+
             if (fallbackEnabled) {
-                log.warn("🔄 Usando modo FALLBACK - gerando memorial sem IA");
+                log.warn("Usando modo FALLBACK - gerando memorial sem IA");
                 return generateFallbackMemorial(r, standardId);
-            } else {
-                return "ERRO DE CONFIGURACAO\\n\\nA chave do provedor de geracao assistida nao esta configurada.";
             }
+
+            return "ERRO DE CONFIGURACAO\\n\\nA chave do provedor de geracao assistida nao esta configurada.";
         }
 
         // ===== EXTRAÇÃO AVANÇADA DE DADOS DO DXF =====
@@ -201,11 +207,30 @@ public class MemorialApiService {
         
         if (partitionEnabled && estimatedLotCount > haikuThreshold) {
             return generateWithPartitioning(r, standard, property, extractedPoints, realCoordinates,
-                    streetNames, confrontations, individualAreas, standardId, userId, propertyId, startTime, coordenadaBase);
+                    streetNames, confrontations, individualAreas, standardId, userId, propertyId, startTime, coordenadaBase, provider);
         } else {
             return generateSingleCall(r, standard, property, extractedPoints, realCoordinates,
-                    streetNames, confrontations, individualAreas, standardId, userId, propertyId, startTime);
+                    streetNames, confrontations, individualAreas, standardId, userId, propertyId, startTime, provider);
         }
+    }
+
+    private String resolveMemorialProvider() {
+        String provider = apiSettingsService.getSettings().getMemorialApiProvider();
+        return provider == null || provider.isBlank() ? "CLAUDE" : provider.trim();
+    }
+
+    private boolean isOpenAiProvider(String provider) {
+        return "OPENAI".equalsIgnoreCase(provider) || "GPT".equalsIgnoreCase(provider);
+    }
+
+    private boolean hasValidConfiguredProviderKey(String provider) {
+        if (isOpenAiProvider(provider)) {
+            return openaiApiKey != null && !openaiApiKey.trim().isEmpty();
+        }
+
+        return claudeApiKey != null
+                && !claudeApiKey.equals("PLACEHOLDER_KEY")
+                && !claudeApiKey.trim().isEmpty();
     }
 
     /**
@@ -223,7 +248,8 @@ public class MemorialApiService {
             UUID standardId,
             UUID userId,
             UUID propertyId,
-            long startTime) {
+            long startTime,
+            String provider) {
 
         int estimatedLotCount = safeEstimateLotCount(r);
         String prompt = buildPrompt(r, standard, property, extractedPoints, realCoordinates, streetNames, confrontations, individualAreas);
@@ -245,6 +271,10 @@ public class MemorialApiService {
         body.put("messages", new Object[]{
                 Map.of("role", "user", "content", prompt)
         });
+
+        if ("OPENAI".equalsIgnoreCase(provider) || "GPT".equalsIgnoreCase(provider)) {
+            return generateWithOpenAi(prompt, systemPrompt, estimatedLotCount, r, property);
+        }
 
         // TENTATIVA COM RETRY
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
@@ -329,6 +359,87 @@ public class MemorialApiService {
         }
 
         return "Erro inesperado na geração do memorial";
+    }
+
+    private String generateWithOpenAi(String prompt, List<Map<String, Object>> systemPrompt, int estimatedLotCount, DxfCompareResultDTO r, PropertyDTO property) {
+        if (openaiApiKey == null || openaiApiKey.trim().isEmpty()) {
+            throw new IllegalStateException("API Key da OpenAI não configurada (OPENAI_API_KEY).");
+        }
+
+        long startTime = System.currentTimeMillis();
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                RestTemplate restTemplate = new RestTemplate();
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.setBearerAuth(openaiApiKey);
+
+                Map<String, Object> body = new HashMap<>();
+                body.put("model", "gpt-4o");
+                body.put("temperature", 0.2);
+
+                List<Map<String, Object>> messages = new ArrayList<>();
+                for (Map<String, Object> sp : systemPrompt) {
+                    messages.add(Map.of("role", "system", "content", sp.get("text") != null ? sp.get("text") : ""));
+                }
+                messages.add(Map.of("role", "user", "content", prompt));
+                body.put("messages", messages);
+
+                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+                ResponseEntity<Map> response = restTemplate.exchange(
+                        "https://api.openai.com/v1/chat/completions",
+                        HttpMethod.POST,
+                        entity,
+                        Map.class
+                );
+
+                Map<String, Object> responseBody = response.getBody();
+                List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
+                Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+                String content = (String) message.get("content");
+
+                boolean isComplete = validateCompleteness(content, estimatedLotCount);
+                if (!isComplete) {
+                    log.warn("⚠️ MEMORIAL INCOMPLETO (OpenAI)");
+                    content = String.format("⚠️ AVISO: Este memorial está incompleto. Foram gerados apenas alguns lotes.\\n" +
+                            "Para memorial completo com %d lotes, tente gerar novamente.\\n\\n", estimatedLotCount) + content;
+                }
+
+                String result = content;
+
+                String projectName = property != null && property.getName() != null ? property.getName() : "Projeto sem nome";
+                String fileName = r.getNewFileName() != null ? r.getNewFileName() : "Arquivo DXF";
+                String aiInfo = String.format("Memorial Descritivo\\n Projeto: %s\\n Arquivo: %s\\n Data: %s\\n",
+                        projectName, fileName, new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new Date()));
+
+                result = aiInfo + String.format("<!-- Gerado por: %s em %s -->\\n",
+                        "gpt-4o",
+                        java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))) + result;
+
+                long processingTime = System.currentTimeMillis() - startTime;
+                int entitiesProcessed = (r.getAdded() != null ? r.getAdded().size() : 0) +
+                        (r.getRemoved() != null ? r.getRemoved().size() : 0) +
+                        (r.getModified() != null ? r.getModified().size() : 0);
+                metricsService.recordSuccessfulGeneration(processingTime, estimatedLotCount, entitiesProcessed, result.length());
+
+                String cacheKey = cacheService.generateCacheKey(r);
+                cacheService.putInCache(cacheKey, result, estimatedLotCount);
+
+                return result;
+
+            } catch (Exception e) {
+                log.error("Exceção na tentativa {} da OpenAI: {}", attempt, e.getMessage());
+                if (attempt == maxRetries) {
+                    if (fallbackEnabled) {
+                        return generateFallbackMemorial(r, null);
+                    }
+                    throw new RuntimeException("Falha na geração do memorial (OpenAI) após " + maxRetries + " tentativas: " + e.getMessage(), e);
+                }
+                try { Thread.sleep(2000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            }
+        }
+        return "Erro inesperado na geração do memorial (OpenAI)";
     }
 
     /**
@@ -644,7 +755,8 @@ public class MemorialApiService {
             UUID userId,
             UUID propertyId,
             long startTime,
-            DxfGeoReferenciaExtractorService.CoordenadaGeo coordenadaBase) {
+            DxfGeoReferenciaExtractorService.CoordenadaGeo coordenadaBase,
+            String provider) {
 
         int totalLots = safeEstimateLotCount(r);
         
@@ -666,7 +778,7 @@ public class MemorialApiService {
             
             try {
                 String chunkContent = generateLotChunk(startLot, endLot, r, standard, property, 
-                        extractedPoints, realCoordinates, streetNames, confrontations, individualAreas, coordenadaBase);
+                        extractedPoints, realCoordinates, streetNames, confrontations, individualAreas, coordenadaBase, provider);
                 
                 finalMemorial.append(chunkContent).append("\n");
                 long chunkTime = System.currentTimeMillis() - chunkStartTime;
@@ -743,22 +855,24 @@ public class MemorialApiService {
                                    MemorialStandardDTO standard, PropertyDTO property,
                                    List<SimplePoint> extractedPoints, Map<String, CoordinateExtractionService.RealCoordinate> realCoordinates,
                                    List<String> streetNames, Map<String, List<String>> confrontations,
-                                   Map<String, Double> individualAreas, DxfGeoReferenciaExtractorService.CoordenadaGeo coordenadaBase) {
+                                   Map<String, Double> individualAreas, DxfGeoReferenciaExtractorService.CoordenadaGeo coordenadaBase,
+                                   String provider) {
 
         StringBuilder chunkPrompt = new StringBuilder();
         int estimatedLots = safeEstimateLotCount(r);
         Double areaReferencia = resolveReferenceArea(property, individualAreas, estimatedLots);
         Double perimetroReferencia = resolveReferencePerimeter(property, estimatedLots);
 
-        chunkPrompt.append("=== FORMATO OBRIGATORIO PARA CADA LOTE ===\n");
+        chunkPrompt.append("=== FORMATO OBRIGATORIO PARA CADA LOTE (TEXTO CORRIDO, SEM MARKDOWN, SEM ASPAS) ===\n");
         chunkPrompt.append("LOTE X:\n");
-        chunkPrompt.append("Um imovel urbano, localizado na [RUA], bairro [BAIRRO], [CIDADE]/[ESTADO],\n");
-        chunkPrompt.append("possuindo formato poligonal conforme vertices e coordenadas efetivamente identificados no levantamento,\n");
-        chunkPrompt.append("com perimetro, area e confrontacoes compativeis com os dados tecnicos disponiveis.\n");
-        chunkPrompt.append("AO NORTE: informar medida, sentido e confrontante com base no levantamento.\n");
-        chunkPrompt.append("AO SUL: informar medida, sentido e confrontante com base no levantamento.\n");
-        chunkPrompt.append("AO LESTE: informar medida, sentido e confrontante com base no levantamento.\n");
-        chunkPrompt.append("AO OESTE: informar medida, sentido e confrontante com base no levantamento.\n");
+        chunkPrompt.append("Um imóvel urbano, localizado na [RUA], bairro [BAIRRO], [CIDADE]/[ESTADO], ");
+        chunkPrompt.append("possuindo formato poligonal e irregular, conforme seus pontos P01 (coordenadas E [X]m e N [Y]m), P02..., ");
+        chunkPrompt.append("perfazendo assim, um perímetro de [PERIMETRO]m (escrever por extenso), com uma área territorial total de [AREA]m² (escrever por extenso), com as seguinte medidas e confrontações:\n");
+        chunkPrompt.append("AO NORTE: (fundos), medindo uma distância total de [MEDIDA]m (escrever por extenso), partindo do ponto [P_INICIO], segue até o ponto [P_FIM], limitando-se com [CONFRONTANTE].\n");
+        chunkPrompt.append("AO SUL: (frente) no sentido [SENTIDO], medindo uma distância de [MEDIDA]m (escrever por extenso), partindo do ponto [P_INICIO], segue até o ponto [P_FIM], limitando-se com [CONFRONTANTE].\n");
+        chunkPrompt.append("AO LESTE: (lado esquerdo), medindo uma distância total de [MEDIDA]m (escrever por extenso), partindo do ponto [P_INICIO], segue até o ponto [P_FIM], limitando-se com [CONFRONTANTE].\n");
+        chunkPrompt.append("AO OESTE: (lado direito), medindo uma distância total de [MEDIDA]m (escrever por extenso), partindo do ponto [P_INICIO], segue até o ponto [P_FIM], limitando-se com [CONFRONTANTE].\n");
+        chunkPrompt.append("NOTA IMPORTANTISSIMA: NUNCA USE '*', '**', '#' OU '- ' NO INÍCIO DAS FRASES. ESCREVA EXATAMENTE NESTE FORMATO LIMPO.\n");
         chunkPrompt.append("----------------------------------------------------------------------\n\n");
 
         chunkPrompt.append("Gere descricao completa dos LOTES ").append(startLot).append(" a ").append(endLot).append(".\n");
@@ -821,6 +935,10 @@ public class MemorialApiService {
         chunkPrompt.append("- Leste: ").append(resolveBoundary(property, confrontations, "LESTE")).append("\n");
         chunkPrompt.append("- Oeste: ").append(resolveBoundary(property, confrontations, "OESTE")).append("\n\n");
         
+        if (isOpenAiProvider(provider)) {
+            return generateChunkWithOpenAi(chunkPrompt.toString(), standard);
+        }
+
         // Fazer chamada para Claude
         Map<String, Object> body = new HashMap<>();
         body.put("model", claudeModel);
@@ -853,6 +971,44 @@ public class MemorialApiService {
         } catch (Exception e) {
             log.error("❌ Erro ao gerar chunk lotes {}-{}: {}", startLot, endLot, e.getMessage());
             throw new RuntimeException("Erro no chunk: " + e.getMessage());
+        }
+    }
+
+    private String generateChunkWithOpenAi(String chunkPrompt, MemorialStandardDTO standard) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(openaiApiKey);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("model", "gpt-4o");
+            body.put("max_tokens", 3500);
+            body.put("temperature", 0.2);
+
+            List<Map<String, Object>> messages = new ArrayList<>();
+            List<Map<String, Object>> systemPrompt = promptCacheService.buildCachedSystemPrompt(standard);
+            for (Map<String, Object> sp : systemPrompt) {
+                messages.add(Map.of("role", "system", "content", sp.get("text") != null ? sp.get("text") : ""));
+            }
+            messages.add(Map.of("role", "user", "content", chunkPrompt));
+            body.put("messages", messages);
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    "https://api.openai.com/v1/chat/completions",
+                    HttpMethod.POST,
+                    entity,
+                    Map.class
+            );
+
+            Map<String, Object> responseBody = response.getBody();
+            List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
+            Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+            return (String) message.get("content");
+        } catch (Exception e) {
+            log.error("Erro ao gerar chunk com OpenAI: {}", e.getMessage());
+            throw new RuntimeException("Erro no chunk: " + e.getMessage(), e);
         }
     }
     
