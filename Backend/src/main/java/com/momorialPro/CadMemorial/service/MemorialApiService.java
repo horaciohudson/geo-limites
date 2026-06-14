@@ -297,7 +297,7 @@ public class MemorialApiService {
                 );
 
                 Map<String, Object> responseBody = response.getBody();
-                String content = extractContentFromClaudeResponse(responseBody);
+                String content = sanitizeMemorialText(extractContentFromClaudeResponse(responseBody));
 
                 // Validação de completude
                 boolean isComplete = validateCompleteness(content, estimatedLotCount);
@@ -397,7 +397,7 @@ public class MemorialApiService {
                 Map<String, Object> responseBody = response.getBody();
                 List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
                 Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
-                String content = (String) message.get("content");
+                String content = sanitizeMemorialText((String) message.get("content"));
 
                 boolean isComplete = validateCompleteness(content, estimatedLotCount);
                 if (!isComplete) {
@@ -966,7 +966,7 @@ public class MemorialApiService {
             );
 
             Map<String, Object> responseBody = response.getBody();
-            return extractContentFromClaudeResponse(responseBody);
+            return sanitizeMemorialText(extractContentFromClaudeResponse(responseBody));
             
         } catch (Exception e) {
             log.error("❌ Erro ao gerar chunk lotes {}-{}: {}", startLot, endLot, e.getMessage());
@@ -1005,7 +1005,7 @@ public class MemorialApiService {
             Map<String, Object> responseBody = response.getBody();
             List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
             Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
-            return (String) message.get("content");
+            return sanitizeMemorialText((String) message.get("content"));
         } catch (Exception e) {
             log.error("Erro ao gerar chunk com OpenAI: {}", e.getMessage());
             throw new RuntimeException("Erro no chunk: " + e.getMessage(), e);
@@ -1161,6 +1161,28 @@ public class MemorialApiService {
         } catch (Exception e) {
             throw new RuntimeException("Error extracting content from Claude response: " + e.getMessage());
         }
+    }
+
+    private String sanitizeMemorialText(String content) {
+        if (content == null) {
+            return null;
+        }
+
+        String sanitized = content
+                .replace("\r\n", "\n")
+                .replace("```markdown", "")
+                .replace("```text", "")
+                .replace("```", "")
+                .replace("“", "")
+                .replace("”", "")
+                .replace("\"", "")
+                .trim();
+
+        if (sanitized.startsWith("'") && sanitized.endsWith("'") && sanitized.length() > 1) {
+            sanitized = sanitized.substring(1, sanitized.length() - 1).trim();
+        }
+
+        return sanitized;
     }
 
     /**
