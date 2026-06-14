@@ -3,14 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useConfig } from '@/contexts/ConfigContext';
 import { Input } from '@/components';
 import { memorialStandardsService } from '@/services/memorial-standards';
+import { templatesService } from '@/services/templates';
 import type { MemorialStandard } from '@/types/memorial-standard';
 import './ConfigureTemplates.css';
 
-interface UploadedExample {
-  id: string;
-  name: string;
-  fileName: string;
-}
 
 interface DirectoryPickerHandle {
   name: string;
@@ -74,14 +70,10 @@ const ConfigureTemplates: React.FC = () => {
     name: '',
     municipality: '',
     memorialStandardId: '',
-    exampleId: '',
     description: ''
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
-
-  // Estados para exemplos
-  const [availableExamples, setAvailableExamples] = useState<UploadedExample[]>([]);
-  const [loadingExamples, setLoadingExamples] = useState(true);
 
   // Carregar normas e exemplos disponíveis
   useEffect(() => {
@@ -91,20 +83,11 @@ const ConfigureTemplates: React.FC = () => {
         setLoadingStandards(true);
         const standards = await memorialStandardsService.getAll();
         setMemorialStandards(standards);
-
-        // Carregar exemplos do localStorage (vindos do Upload de Exemplo)
-        setLoadingExamples(true);
-        const examplesJson = localStorage.getItem('uploadedExamples');
-
-        const examples = JSON.parse(examplesJson || '[]') as UploadedExample[];
-        setAvailableExamples(examples);
       } catch (error) {
         console.error('❌ Erro ao carregar dados:', error);
         setMemorialStandards([]);
-        setAvailableExamples([]);
       } finally {
         setLoadingStandards(false);
-        setLoadingExamples(false);
       }
     };
 
@@ -169,8 +152,8 @@ const ConfigureTemplates: React.FC = () => {
         const userPath = prompt(
           `📁 Pasta "${directoryHandle.name}" selecionada!\n\n` +
           `Digite o caminho COMPLETO da pasta que você selecionou:\n\n` +
-          `Exemplo: C:\\Desenvolvimento\\GeoLimitesMemorial\\templates`,
-          `C:\\Desenvolvimento\\GeoLimitesMemorial\\${directoryHandle.name}`
+          `Exemplo: C:\\Desenvolvimento\\GeoLimites\\Templates`,
+          `C:\\Desenvolvimento\\GeoLimites\\${directoryHandle.name}`
         );
         
         if (userPath && userPath.trim()) {
@@ -208,8 +191,8 @@ const ConfigureTemplates: React.FC = () => {
       return;
     }
 
-    if (!templateData.exampleId) {
-      alert('Por favor, selecione um modelo exemplo.');
+    if (!selectedFile) {
+      alert('Por favor, selecione um arquivo de exemplo PDF.');
       return;
     }
 
@@ -221,14 +204,6 @@ const ConfigureTemplates: React.FC = () => {
     try {
       setCreatingTemplate(true);
 
-      // Buscar dados do exemplo selecionado
-      const selectedExample = availableExamples.find((example) => example.id === templateData.exampleId);
-      
-      if (!selectedExample) {
-        alert('Exemplo selecionado não encontrado.');
-        return;
-      }
-
       // Buscar dados da norma selecionada
       const selectedStandard = memorialStandards.find(s => s.id === templateData.memorialStandardId);
       
@@ -237,144 +212,31 @@ const ConfigureTemplates: React.FC = () => {
         return;
       }
 
-      // Gerar conteúdo do template baseado na norma e exemplo
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Chama a API real do backend para gerar o template usando IA
+      const response = await templatesService.generateTemplate(selectedFile, {
+        name: templateData.name,
+        description: templateData.description,
+        municipality: templateData.municipality,
+        memorialStandardId: templateData.memorialStandardId,
+        targetFolderPath: templatesFolder || ''
+      });
 
-      // Criar ID único para o template
-      const templateId = `${templateData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${selectedStandard.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_v1`;
+      // O backend retorna o JSON gerado no campo templateContent (agora é content)
+      const templateContent = (response as any).content || (response as any).templateContent || '';
 
-      // Criar conteúdo do template no formato JSON correto
-      const templateJson = {
-        "template_id": templateId,
-        "descricao": `Template ${templateData.name} baseado na norma ${selectedStandard.name} para elaboracao de memoriais descritivos${templateData.municipality ? ` - ${templateData.municipality}` : ''}`,
-        "versao": "1.0",
-        "norma_referencia": selectedStandard.name,
-        "modo_texto": "texto corrido cartorial",
-        "municipio_especifico": templateData.municipality || null,
-        "exemplo_base": {
-          "nome": selectedExample.name,
-          "arquivo": selectedExample.fileName
-        },
-        "estrutura": {
-          "cabecalho": "MEMORIAL DESCRITIVO DE DESMEMBRAMENTO DE ÁREA\\n\\nTerreno: Urbano | Proprietário: {{proprietario}} | Localização: {{logradouro}} – Bairro: {{bairro}} | Município/UF: {{municipio}}/{{uf}}\\nObjetivo: Levantamento Topográfico Planimétrico de imóvel urbano georreferenciado no Datum SIRGAS 2000 para fins de Desmembramento de Área.",
-          
-          "situacao_antes": "SITUAÇÃO ANTES DESTE DESMEMBRAMENTO DE ÁREA\\n\\nTERRENO {{id_terreno}}\\nUm imóvel urbano localizado na {{logradouro}}, bairro {{bairro}}, município de {{municipio}}/{{uf}}, possuindo formato poligonal e irregular, conforme seus pontos {{vertices_lista}}, perfazendo um perímetro de {{perimetro_total}} m ({{perimetro_total_extenso}}) e uma área total de {{area_total}} m² ({{area_total_extenso}}), apresentando as seguintes medidas e confrontações:\\n\\nAO NORTE (fundos): {{norte_detalhes}}\\nAO SUL (frente): {{sul_detalhes}}\\nAO LESTE (lateral esquerda): {{leste_detalhes}}\\nAO OESTE (lateral direita): {{oeste_detalhes}}.",
-          
-          "situacao_depois": "SITUAÇÃO DEPOIS DESTE DESMEMBRAMENTO DE ÁREA\\n\\nLOTE {{numero_lote}}\\nUm imóvel urbano localizado na {{logradouro}}, bairro {{bairro}}, município de {{municipio}}/{{uf}}, possuindo formato poligonal conforme seus pontos {{vertices_lista}}, perfazendo um perímetro de {{perimetro_total}} m ({{perimetro_total_extenso}}) e uma área territorial de {{area_total}} m² ({{area_total_extenso}}), apresentando as seguintes medidas e confrontações:\\n\\nAO NORTE (fundos): {{norte_detalhes}}\\nAO SUL (frente): {{sul_detalhes}}\\nAO LESTE (lateral esquerda): {{leste_detalhes}}\\nAO OESTE (lateral direita): {{oeste_detalhes}}.",
-          
-          "declaracao_final": `E por ser verdade, firmamos o presente memorial descritivo, elaborado conforme a ${selectedStandard.name} e em total conformidade com as exigências cartoriais vigentes, apto para instrução de averbação e registro.`
-        },
-        "placeholders": {
-          "proprietario": "Nome completo ou razão social do proprietário do imóvel",
-          "logradouro": "Nome oficial da rua, avenida ou via pública de acesso ao imóvel",
-          "bairro": "Nome do bairro onde o imóvel está situado",
-          "municipio": "Nome do município onde o imóvel está situado",
-          "uf": "Sigla da unidade federativa (ex: CE, SP, MG)",
-          "id_terreno": "Identificação do terreno original antes do desmembramento (ex: 1)",
-          "numero_lote": "Número do lote gerado após o desmembramento",
-          "vertices_lista": "Lista ordenada dos vértices com coordenadas (E/N) no sistema SIRGAS 2000 – Fuso 24M",
-          "area_total": "Área numérica do terreno em metros quadrados (ex: 130.00)",
-          "area_total_extenso": "Área por extenso (ex: cento e trinta metros quadrados)",
-          "perimetro_total": "Perímetro numérico do polígono em metros (ex: 60.40)",
-          "perimetro_total_extenso": "Perímetro por extenso (ex: sessenta metros e quarenta centímetros)",
-          "norte_detalhes": "Descrição detalhada dos segmentos do lado norte, com direção, pontos e confrontantes",
-          "sul_detalhes": "Descrição detalhada dos segmentos do lado sul, com direção, pontos e confrontantes",
-          "leste_detalhes": "Descrição detalhada dos segmentos do lado leste, com direção, pontos e confrontantes",
-          "oeste_detalhes": "Descrição detalhada dos segmentos do lado oeste, com direção, pontos e confrontantes"
-        },
-        "observacoes": [
-          "O texto deve ser gerado em formato contínuo, sem marcadores, listas ou quebras de seção.",
-          "Todas as medidas devem ser apresentadas em números arábicos e também por extenso.",
-          "Quando houver mais de um segmento em um lado, utilizar a expressão 'DIVIDIDO EM DOIS SEGMENTOS: o primeiro segmento...' conforme norma " + selectedStandard.name + ".",
-          "Os vértices devem ser listados em sequência de fechamento (P01 → P02 → ... → P01).",
-          "As direções e confrontantes devem respeitar o sentido geográfico (Norte, Sul, Leste, Oeste) obtido do arquivo PR-02."
-        ],
-        "norma_completa": selectedStandard.standardText || "Texto da norma não disponível",
-        "prompt_ia": selectedStandard.promptTemplate || "Template operacional nao disponivel",
-        "metadados": {
-          "criado_em": new Date().toISOString(),
-          "criado_por": "GeoLimites Memorial",
-          "exemplo_utilizado": selectedExample.name,
-          "arquivo_exemplo": selectedExample.fileName,
-          "descricao_personalizada": templateData.description || null
-        }
-      };
-
-      // Converter para JSON formatado
-      const templateContent = JSON.stringify(templateJson, null, 2);
-
-      // Criar objeto do template
+      // Criar objeto do template para listagem local
       const newTemplate = {
-        id: Date.now().toString(),
+        id: response.id || Date.now().toString(),
         name: templateData.name,
         description: templateData.description,
         municipality: templateData.municipality,
         memorialStandardId: templateData.memorialStandardId,
         memorialStandardName: selectedStandard.name,
-        exampleId: templateData.exampleId,
-        exampleName: selectedExample.name,
-        exampleFileName: selectedExample.fileName,
+        exampleFileName: selectedFile.name,
         targetFolder: templatesFolder,
         createdAt: new Date().toISOString(),
         content: templateContent
       };
-
-      // Salvar arquivo físico do template
-      try {
-        // Criar nome do arquivo
-        const fileName = `${templateData.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.json`;
-
-        // Usar File System Access API com sugestão da pasta configurada
-        const fileSystemWindow = window as FileSystemAccessWindow;
-
-        if (fileSystemWindow.showSaveFilePicker) {
-          try {
-            const fileHandle = await fileSystemWindow.showSaveFilePicker({
-              suggestedName: fileName,
-              startIn: 'documents',
-              types: [{
-                description: 'Template de Memorial JSON',
-                accept: { 'application/json': ['.json'] }
-              }]
-            });
-            
-            const writable = await fileHandle.createWritable();
-            await writable.write(templateContent);
-            await writable.close();
-          } catch (saveError: unknown) {
-            if (getErrorName(saveError) !== 'AbortError') {
-              console.error('❌ Erro ao salvar:', saveError);
-            }
-            
-            // Fallback: download automático
-            const blob = new Blob([templateContent], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          // Fallback para navegadores sem suporte
-          const blob = new Blob([templateContent], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = fileName;
-          
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        }
-        
-      } catch (fileError) {
-        console.error('❌ Erro geral ao salvar arquivo:', fileError);
-      }
 
       // Salvar no localStorage para controle interno
       const existingTemplates = JSON.parse(localStorage.getItem('createdTemplates') || '[]');
@@ -386,13 +248,13 @@ const ConfigureTemplates: React.FC = () => {
         name: '',
         municipality: '',
         memorialStandardId: '',
-        exampleId: '',
         description: ''
       });
+      setSelectedFile(null);
       setShowCreateForm(false);
       
       // Mostrar onde o template foi salvo
-      alert(`✅ Template JSON "${templateData.name}" criado com sucesso!\n\n📁 Salve o arquivo em: ${templatesFolder}\n\n📄 Template contém:\n• Estrutura completa do memorial\n• Placeholders ({{proprietario}}, {{area_total}}, etc.)\n• Norma ${selectedStandard.name}\n• Observações técnicas\n\n💡 Após salvar na pasta correta, o template estará disponível para gerar memoriais.`);
+      alert(`✅ Template JSON "${templateData.name}" criado com sucesso!\n\n📁 O arquivo foi salvo automaticamente na pasta configurada:\n${templatesFolder}\n\n📄 Template contém:\n• Estrutura completa do memorial\n• Placeholders ({{proprietario}}, {{area_total}}, etc.)\n• Norma ${selectedStandard.name}\n• Observações técnicas\n\n💡 O template já está disponível para uso.`);
 
     } catch (error: unknown) {
       console.error('❌ Erro detalhado ao criar template:', error);
@@ -411,9 +273,9 @@ const ConfigureTemplates: React.FC = () => {
       name: '',
       municipality: '',
       memorialStandardId: '',
-      exampleId: '',
       description: ''
     });
+    setSelectedFile(null);
   };
 
   return (
@@ -481,7 +343,7 @@ const ConfigureTemplates: React.FC = () => {
                 type="text"
                 value={folderPath}
                 onChange={(value) => setFolderPath(value)}
-                placeholder="Ex: C:\Desenvolvimento\GeoLimitesMemorial\templates"
+                placeholder="Ex: C:\Desenvolvimento\GeoLimites\Templates"
                 disabled={!isEditing}
                 style={{ 
                   width: '100%', 
@@ -531,9 +393,9 @@ const ConfigureTemplates: React.FC = () => {
               </div>
             )}
             <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: '#6c757d' }}>
-              <p>💡 <strong>Dica:</strong> Use "📁 Selecionar" para escolher a pasta ou digite o caminho completo manualmente</p>
+              <p>💡 <strong>Dica:</strong> Digite o caminho completo manualmente</p>
               <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '4px', fontSize: '0.8rem' }}>
-                <strong>Exemplo:</strong> <code>C:\Desenvolvimento\GeoLimitesMemorial\templates</code>
+                <strong>Exemplo:</strong> <code>C:\Desenvolvimento\GeoLimites\Templates</code>
               </div>
             </div>
             
@@ -711,41 +573,19 @@ const ConfigureTemplates: React.FC = () => {
 
               <div className="form-group">
                 <label className="form-label">
-                  📄 Modelo Exemplo *
+                  📄 Arquivo de Exemplo (PDF) *
                   <span className="label-hint">
-                    (Arquivo de exemplo que servira como referencia operacional)
+                    (Envie o PDF do memorial que servirá como referência para a IA)
                   </span>
                 </label>
-                {loadingExamples ? (
-                  <div className="loading-text">
-                    ⏳ Carregando exemplos...
-                  </div>
-                ) : availableExamples.length === 0 ? (
-                  <div style={{ 
-                    padding: '0.75rem', 
-                    color: '#dc3545', 
-                    border: '1px solid #f5c6cb', 
-                    borderRadius: '8px',
-                    backgroundColor: '#f8d7da'
-                  }}>
-                    ⚠️ Nenhum exemplo disponível. <br/>
-                    <small>Vá para "📤 Upload de Exemplo" para enviar arquivos de referência primeiro.</small>
-                  </div>
-                ) : (
-                  <select
-                    value={templateData.exampleId}
-                    onChange={(e) => handleTemplateInputChange('exampleId', e.target.value)}
-                    required
-                    className="form-select"
-                  >
-                    <option value="">Selecione um exemplo...</option>
-                    {availableExamples.map((example) => (
-                      <option key={example.id} value={example.id}>
-                        📄 {example.name} ({example.fileName})
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  required
+                  className="form-input"
+                  style={{ padding: '0.5rem', backgroundColor: '#fff' }}
+                />
               </div>
 
               <div className="form-group">
