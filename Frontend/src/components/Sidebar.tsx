@@ -68,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewerActions: _viewerActions }) => {
                 }
               >
                 <span className={styles.sidebarIcon}>📋</span>
-                <span className={styles.sidebarLabel}>Normas do Memorial</span>
+                <span className={styles.sidebarLabel}>Normas e Templates</span>
               </NavLink>
             </li>
 
@@ -159,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewerActions: _viewerActions }) => {
                 }
               >
                 <span className={styles.sidebarIcon}>⚙️</span>
-                <span className={styles.sidebarLabel}>Normas e Templates Base</span>
+                <span className={styles.sidebarLabel}>Normas e Exemplos</span>
               </NavLink>
             </li>
 

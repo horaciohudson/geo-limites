@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getStoredToken } from '@/auth/session';
 import { memorialStandardsService } from '../services/memorial-standards';
+import { templatesService } from '../services/templates';
 import type { MemorialStandard, MemorialStandardFormData } from '../types/memorial-standard';
+import { useConfig } from '../contexts/ConfigContext';
 import Input from '../components/Input';
 import Loading from '../components/Loading';
 
@@ -51,6 +53,7 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 };
 
 const ManageStandards: React.FC = () => {
+  const { templatesFolder, isTemplatesFolderConfigured } = useConfig();
   const [standards, setStandards] = useState<MemorialStandard[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -116,29 +119,33 @@ const ManageStandards: React.FC = () => {
           
           // Converter templates do banco para formato local
           templatesFromDB = dbTemplates.map((t: TemplateApiRecord) => {
+            const baseData = {
+              template_id: t.name || t.id,
+              name: t.name || t.id,
+              descricao: t.description,
+              municipio: t.municipality,
+              norma_abnt: t.abntNorm,
+              _dbId: t.id,
+              _fromDB: true
+            };
+
             try {
-              // Se templateContent é JSON, fazer parse
-              const templateData = typeof t.templateContent === 'string' 
-                ? JSON.parse(t.templateContent) as StoredTemplateData
-                : (t.templateContent as StoredTemplateData);
-              
-              return {
-                ...templateData,
-                _dbId: t.id, // Manter referência do banco
-                _fromDB: true
-              };
-            } catch {
-              // Se não conseguir fazer parse, criar estrutura básica
-              return {
-                template_id: t.name || t.id,
-                descricao: t.description,
-                estrutura: {},
-                municipio: t.municipality,
-                norma_abnt: t.abntNorm,
-                _dbId: t.id,
-                _fromDB: true
-              };
+              if (t.templateContent) {
+                const templateData = typeof t.templateContent === 'string' 
+                  ? JSON.parse(t.templateContent) as StoredTemplateData
+                  : (t.templateContent as StoredTemplateData);
+                
+                return {
+                  ...baseData,
+                  ...templateData,
+                  template_id: templateData.template_id || baseData.template_id
+                };
+              }
+            } catch (e) {
+              console.warn('Erro ao parsear templateContent:', e);
             }
+            
+            return baseData;
           });
         }
       } catch (dbError) {
@@ -429,97 +436,119 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
 
   // Função para upload de template (JSON) - NOVA
   const handleTemplateUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isTemplatesFolderConfigured || !templatesFolder) {
+      alert('Atenção: A pasta de templates não está configurada! Por favor, configure a pasta no sistema antes de importar modelos base.');
+      // Limpar input
+      (event.target as HTMLInputElement).value = '';
+      return;
+    }
+
     const file = event.target.files?.[0];
     if (!file) {
       return;
     }
 
-    if (file.type !== 'application/json') {
-      alert('Por favor, selecione apenas arquivos JSON para templates.');
+    // Aceitar .json, .pdf e .txt
+    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    const isJson = file.type === 'application/json' || fileExtension === '.json';
+    const isPdf = file.type === 'application/pdf' || fileExtension === '.pdf';
+    const isTxt = file.type === 'text/plain' || fileExtension === '.txt';
+
+    if (!isJson && !isPdf && !isTxt) {
+      alert('Por favor, selecione apenas arquivos JSON, PDF ou TXT.');
+      (event.target as HTMLInputElement).value = '';
       return;
     }
 
     try {
       setUploadingPDF(true); // Reutilizando o estado de upload
       
-      // Ler conteúdo do arquivo JSON
-      const text = await file.text();
-      const templateData = JSON.parse(text);
-      
-      // Validar estrutura básica do template
-      if (!templateData.template_id || !templateData.estrutura) {
-        throw new Error('Arquivo JSON não é um template válido');
-      }
-      
-      // Adicionar aos templates existentes
-      const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
-      
-      // Verificar se já existe
-      const existingIndex = existingTemplates.findIndex((t) => t.template_id === templateData.template_id);
-      
-      if (existingIndex >= 0) {
-        if (confirm(`Template "${templateData.template_id}" já existe. Deseja substituir?`)) {
-          existingTemplates[existingIndex] = templateData;
-        } else {
-          return;
+      if (isJson) {
+        // Ler conteúdo do arquivo JSON
+        const text = await file.text();
+        const templateData = JSON.parse(text);
+        
+        // Validar estrutura básica do template
+        if (!templateData.template_id || !templateData.estrutura) {
+          throw new Error('Arquivo JSON não é um modelo base válido');
         }
-      } else {
-        existingTemplates.push(templateData);
-      }
-      
-      localStorage.setItem('createdTemplates', JSON.stringify(existingTemplates));
-      
-      // SALVAR NO BANCO DE DADOS (igual às normas)
-      try {
-        // Usar o endpoint de geração de templates que aceita multipart/form-data
+        
         // Criar um arquivo blob com o conteúdo JSON
         const templateBlob = new Blob([JSON.stringify(templateData, null, 2)], {
           type: 'application/json'
         });
         
-        // Criar FormData para envio multipart
-        const formData = new FormData();
-        formData.append('exampleFile', templateBlob, `${templateData.template_id}.json`);
-        formData.append('name', templateData.template_id);
-        formData.append('description', templateData.descricao || `Template ${templateData.template_id}`);
-        
-        if (templateData.municipio) {
-          formData.append('municipality', templateData.municipio);
+        // SALVAR NO BANCO DE DADOS E DISCO PRIMEIRO
+        try {
+          const fileToUpload = new File([templateBlob], `${templateData.template_id}.json`, {
+            type: 'application/json'
+          });
+
+          await templatesService.generateTemplate(fileToUpload, {
+            name: templateData.template_id,
+            description: templateData.descricao || `Template ${templateData.template_id}`,
+            municipality: templateData.municipio,
+            abntNorm: templateData.norma_referencia,
+            targetFolderPath: templatesFolder
+          });
+          
+          // Remover do localStorage já que foi salvo no banco
+          const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
+          const updatedTemplates = existingTemplates.filter((t) => t.template_id !== templateData.template_id);
+          localStorage.setItem('createdTemplates', JSON.stringify(updatedTemplates));
+          
+          alert(`✅ Modelo base "${templateData.template_id}" importado com sucesso!\n\n🌐 Salvo no banco de dados e gravado em disco.`);
+          
+        } catch (backendError: unknown) {
+          console.error('❌ Erro completo ao salvar template no banco:', backendError);
+          const errorMsg = getErrorMessage(backendError, 'Falha desconhecida');
+          
+          // Se a pasta não estiver configurada, não salvar em localStorage de jeito nenhum
+          if (!isTemplatesFolderConfigured || !templatesFolder) {
+            alert(`❌ Falha na importação: A pasta de templates não está configurada.\nNenhum arquivo ou cache foi salvo.`);
+          } else {
+            // Fallback para localStorage apenas se a pasta estiver configurada no frontend,
+            // mas houve outro erro qualquer no backend
+            const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
+            const existingIndex = existingTemplates.findIndex((t) => t.template_id === templateData.template_id);
+            
+            if (existingIndex >= 0) {
+              existingTemplates[existingIndex] = templateData;
+            } else {
+              existingTemplates.push(templateData);
+            }
+            localStorage.setItem('createdTemplates', JSON.stringify(existingTemplates));
+            
+            alert(`✅ Modelo base "${templateData.template_id}" importado com sucesso!\n\n📦 Salvo temporariamente no navegador\n⚠️ Erro ao salvar no banco/disco: ${errorMsg}`);
+          }
         }
-        if (templateData.norma_referencia) {
-          formData.append('abntNorm', templateData.norma_referencia);
+      } else {
+        // Fluxo para PDF ou TXT (Geração via IA)
+        const defaultName = file.name.replace(/\.[^/.]+$/, "").replace(/\s+/g, '_').toLowerCase();
+        const templateName = prompt("Informe um nome identificador para este template (ex: memorial_desmembramento_v1):", defaultName);
+        
+        if (!templateName || !templateName.trim()) {
+           alert('Geração cancelada. O nome do template é obrigatório.');
+           (event.target as HTMLInputElement).value = '';
+           setUploadingPDF(false);
+           return;
         }
 
-        const response = await fetch('/api/templates/generate', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${getStoredToken() || ''}`
-          },
-          body: formData
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Erro na resposta:', errorText);
-          throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
+        try {
+          alert("Enviando arquivo para a IA configurada extrair e estruturar o memorial.\nIsso pode levar até um minuto. Aguarde...");
+          
+          await templatesService.generateTemplate(file, {
+            name: templateName.trim(),
+            description: `Template gerado por IA a partir do exemplo: ${file.name}`,
+            targetFolderPath: templatesFolder
+          });
+          
+          alert(`✅ Modelo base gerado com sucesso via IA!\n\n🌐 O JSON foi extraído, estruturado, salvo no banco de dados e gravado em disco.`);
+        } catch (backendError: unknown) {
+          console.error('❌ Erro ao gerar template via IA:', backendError);
+          const errorMsg = getErrorMessage(backendError, 'Falha desconhecida');
+          alert(`❌ Falha na geração do template via IA: ${errorMsg}\n\nVerifique no log do Backend se a API Key da IA foi configurada corretamente.`);
         }
-        
-        await response.json();
-        
-        // Remover do localStorage já que foi salvo no banco
-        const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
-        const updatedTemplates = existingTemplates.filter((t) => t.template_id !== templateData.template_id);
-        localStorage.setItem('createdTemplates', JSON.stringify(updatedTemplates));
-        
-        alert(`✅ Template "${templateData.template_id}" cadastrado com sucesso!\n\n🌐 Salvo no banco de dados\n\nO template está agora disponível para uso.`);
-        
-      } catch (backendError: unknown) {
-        console.error('❌ Erro completo ao salvar template no banco:', backendError);
-        if (typeof backendError === 'object' && backendError !== null && 'stack' in backendError) {
-          console.error('❌ Stack trace:', (backendError as ErrorLike).stack);
-        }
-        
-        alert(`✅ Template "${templateData.template_id}" cadastrado com sucesso!\n\n📦 Salvo no localStorage\n⚠️ Erro ao salvar no banco: ${getErrorMessage(backendError, 'Falha desconhecida')}\n\nO template está disponível na sessão atual.`);
       }
       
       // Recarregar templates
@@ -527,10 +556,7 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
       
     } catch (error: unknown) {
       console.error('❌ Erro detalhado ao processar template:', error);
-      if (typeof error === 'object' && error !== null && 'stack' in error) {
-        console.error('Stack trace:', (error as ErrorLike).stack);
-      }
-      alert(`Erro ao processar template JSON: ${getErrorMessage(error, 'Falha desconhecida')}\n\nVerifique se o arquivo está no formato correto.`);
+      alert(`Erro ao processar o modelo base JSON: ${getErrorMessage(error, 'Falha desconhecida')}\n\nVerifique se o arquivo está no formato correto.`);
     } finally {
       setUploadingPDF(false);
       // Limpar input
@@ -539,7 +565,7 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm(`Tem certeza que deseja excluir o template "${templateId}"?`)) {
+    if (!confirm(`Tem certeza que deseja excluir o modelo base "${templateId}"?`)) {
       return;
     }
 
@@ -574,10 +600,10 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
       // RECARREGAR TEMPLATES (do banco + localStorage)
       await loadTemplates();
       
-      alert(`✅ Template "${templateId}" excluído com sucesso!`);
+      alert(`✅ Modelo base "${templateId}" excluido com sucesso!`);
     } catch (error) {
       console.error('Erro ao excluir template:', error);
-      alert('Erro ao excluir template. Tente novamente.');
+      alert('Erro ao excluir o modelo base. Tente novamente.');
     }
   };
 
@@ -591,8 +617,11 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1 style={{ color: '#2c3e50', fontSize: '2rem', fontWeight: 'bold' }}>
-          ⚙️ Cadastrar Normas e Templates
+          ⚙️ Normas e Templates Base
         </h1>
+        <p style={{ color: '#5f6b7a', marginTop: '0.5rem' }}>
+          Esta area prepara a base estrutural reutilizada pelos memoriais do sistema.
+        </p>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           {/* Botão para carregar manualmente se necessário */}
           {standards.length === 0 && !loading && (
@@ -811,7 +840,7 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           alignItems: 'center'
         }}>
           <h3 style={{ color: '#2c3e50', margin: 0, fontSize: '1.25rem' }}>
-            📋 Normas Cadastradas ({standards.length})
+            📋 Normas Base ({standards.length})
           </h3>
           
           {/* Botão Carregar Norma PDF */}
@@ -851,16 +880,16 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
             marginBottom: '1.5rem',
             fontSize: '0.9rem'
           }}>
-            <strong>💡 Instruções:</strong> Selecione um arquivo PDF de norma ABNT para cadastrar no sistema. 
-            O sistema extrairá o texto e criará automaticamente a norma com um template padrão.
+            <strong>💡 Instruções:</strong> Importe aqui a norma estrutural que podera ser usada em varios trabalhos. 
+            O sistema extrai o texto e monta a base documental inicial dessa norma.
           </div>
 
           {standards.length === 0 ? (
             <div style={{ padding: '2rem', textAlign: 'center', color: '#6c757d', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
               <p style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>
-                📋 Nenhuma norma cadastrada ainda.
+                📋 Nenhuma norma base cadastrada ainda.
               </p>
-              <p>Clique em "📄 Carregar Norma PDF" acima para cadastrar sua primeira norma ABNT.</p>
+              <p>Clique em "📄 Carregar Norma PDF" acima para importar sua primeira norma base.</p>
             </div>
           ) : (
           <div style={{ padding: '1.5rem' }}>
@@ -958,12 +987,18 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           alignItems: 'center'
         }}>
           <h3 style={{ color: '#2c3e50', margin: 0, fontSize: '1.25rem' }}>
-            📄 Templates Cadastrados ({templates.length})
+            📄 Modelos Base ({templates.length})
           </h3>
           
           {/* Botão Cadastrar Template */}
           <button
-            onClick={() => document.getElementById('templateUploadManage')?.click()}
+            onClick={() => {
+              if (!isTemplatesFolderConfigured || !templatesFolder) {
+                alert('Atenção: A pasta de templates não está configurada! Por favor, configure a pasta no sistema antes de importar modelos base.');
+                return;
+              }
+              document.getElementById('templateUploadManage')?.click();
+            }}
             disabled={uploadingPDF}
             style={{ 
               backgroundColor: uploadingPDF ? '#95a5a6' : '#8e44ad',
@@ -977,14 +1012,14 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
               opacity: uploadingPDF ? 0.7 : 1
             }}
           >
-            {uploadingPDF ? '⏳ Processando...' : '📄 Carregar Template JSON'}
+            {uploadingPDF ? '⏳ Processando...' : '📄 Gerar/Importar Modelo (JSON/PDF/TXT)'}
           </button>
         </div>
 
         <input
           id="templateUploadManage"
           type="file"
-          accept=".json"
+          accept=".json,.pdf,.txt"
           style={{ display: 'none' }}
           onChange={handleTemplateUpload}
         />
@@ -998,12 +1033,12 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
             marginBottom: '1.5rem',
             fontSize: '0.9rem'
           }}>
-            <strong>💡 Instruções:</strong> Selecione um arquivo JSON de template para cadastrar no sistema. 
-            O template será validado e salvo no banco de dados, ficando disponível para seleção na página "Normas e Templates".
+            <strong>💡 Instruções:</strong> Importe aqui um modelo documental estrutural em JSON, ou faça upload de um memorial de exemplo em PDF/TXT para que a IA gere automaticamente a estrutura do template. 
+            Ele será validado e salvo para depois aparecer na geração de memoriais.
             
             <br/><br/>
-            <strong>✅ Persistência:</strong> Os templates são salvos no banco de dados e ficam disponíveis permanentemente. 
-            Também são mantidos no navegador para acesso rápido.
+            <strong>✅ Persistencia:</strong> Os modelos base sao salvos no banco de dados e ficam disponiveis de forma permanente. 
+            Tambem podem permanecer no navegador como apoio temporario.
           </div>
 
 
@@ -1018,10 +1053,10 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
               border: '1px solid #e9ecef' 
             }}>
               <p style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>
-                📄 Nenhum template cadastrado ainda.
+                📄 Nenhum modelo base cadastrado ainda.
               </p>
               <p style={{ fontSize: '0.9rem' }}>
-                Clique em "📄 Carregar Template JSON" acima para cadastrar seu primeiro template.
+                Clique em "📄 Importar Modelo JSON" acima para trazer seu primeiro modelo base.
               </p>
             </div>
           ) : (
@@ -1051,9 +1086,9 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
                       )}
                       
                       <div style={{ fontSize: '0.8rem', color: '#6c757d', marginTop: '0.5rem' }}>
-                        <span>Seções: {template.estrutura ? Object.keys(template.estrutura).length : 0}</span>
+                        <span>Secoes: {template.estrutura ? Object.keys(template.estrutura).length : 0}</span>
                         <span style={{ margin: '0 0.5rem' }}>•</span>
-                        <span>Template ID: {template.template_id}</span>
+                        <span>Identificador: {template.template_id}</span>
                       </div>
                     </div>
                     

@@ -377,7 +377,7 @@ const Files: React.FC = () => {
           Envie aqui os arquivos tecnicos do trabalho e deixe selecionados os que vao entrar no memorial atual.
         </p>
         <p style={{ margin: 0, color: '#5f6b7a' }}>
-          Depois disso, siga para <strong>Operacao {'>'} Normas do Memorial</strong> e <strong>Visualizador</strong>.
+          Depois disso, siga para <strong>Operacao {'>'} Normas e Templates</strong> e <strong>Visualizador</strong>.
         </p>
       </div>
 
