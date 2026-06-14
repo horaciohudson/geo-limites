@@ -4,6 +4,7 @@ import { ViewerDXF, Loading, ErrorBoundary } from '@/components';
 import { useSidebarActions } from '@/App';
 import { useFileContext } from '@/contexts/FileContext';
 import api from '@/services/api';
+import type { Point2D } from '@/utils/geometry';
 import aiService from '@/services/aiService';
 import type { AsyncPropertyData } from '@/services/polling-memorial';
 import type { FileMetadata } from '@/types';
@@ -60,6 +61,15 @@ function getSelectedPropertyId(): string | null {
     return null;
   } catch (e) {
     console.error('❌ Erro ao ler propriedade do localStorage:', e);
+    return null;
+  }
+}
+
+function getSelectedPropertyData(): StoredPropertySelection | null {
+  try {
+    return JSON.parse(localStorage.getItem('selectedPropertyForMemorial') || 'null') as StoredPropertySelection | null;
+  } catch (e) {
+    console.error('❌ Erro ao ler dados da propriedade do localStorage:', e);
     return null;
   }
 }
@@ -210,34 +220,13 @@ const Viewer: React.FC = () => {
         const elapsed = Math.floor((Date.now() - memorialStartTime) / 1000);
         setMemorialTimeElapsed(elapsed);
 
-        // PROGRESSO INTELIGENTE baseado no particionamento real do backend
+        // Progresso calculado dinamicamente com base nos lotes
         let progress = 0;
         let currentStep = '';
+        progress = Math.min(99, elapsed * 2);
+        currentStep = 'Processando memoriais em lote...';
 
-        if (elapsed < 5) {
-          // Fase inicial: Processamento DXF
-          progress = Math.min(10, elapsed * 2);
-          currentStep = 'Processando dados DXF...';
-        } else if (elapsed < 15) {
-          // Chunk 1/3: Lotes 1-10 (9 segundos esperados)
-          const chunkProgress = Math.min(30, ((elapsed - 5) / 10) * 30);
-          progress = 10 + chunkProgress;
-          currentStep = 'Consolidando etapa 1/3: lotes 1-10...';
-        } else if (elapsed < 27) {
-          // Chunk 2/3: Lotes 11-20 (10 segundos esperados)
-          const chunkProgress = Math.min(30, ((elapsed - 15) / 12) * 30);
-          progress = 40 + chunkProgress;
-          currentStep = 'Consolidando etapa 2/3: lotes 11-20...';
-        } else if (elapsed < 35) {
-          // Chunk 3/3: Lotes 21-25 (5 segundos esperados)
-          const chunkProgress = Math.min(25, ((elapsed - 27) / 8) * 25);
-          progress = 70 + chunkProgress;
-          currentStep = 'Consolidando etapa 3/3: lotes 21-25...';
-        } else {
-          // Finalização
-          progress = Math.min(98, 95 + ((elapsed - 35) / 5) * 3);
-          currentStep = 'Finalizando memorial...';
-        }
+        // Removido progresso mockado pois agora será calculado de forma real
 
         setGenerationProgress(Math.round(progress));
         setMemorialCurrentStep(currentStep);
@@ -281,6 +270,110 @@ const Viewer: React.FC = () => {
     setDxfData(data);
   };
 
+  const handlePolygonConfirmed = async (polygons: Point2D[][], sourceFile?: FileMetadata | null) => {
+    const currentFile = sourceFile || files[currentFileIndex] || file;
+    try {
+      if (!currentFile) {
+        setMemorialError('Arquivo de origem não disponível para gerar o memorial interativo.');
+        return;
+      }
+
+      const fileIndex = files.findIndex(fileItem => fileItem.id === currentFile.id);
+      if (fileIndex >= 0 && fileIndex !== currentFileIndex) {
+        setCurrentFileIndex(fileIndex);
+      }
+
+      setIsGeneratingMemorial(true);
+      setMemorialStartTime(Date.now());
+      setMemorialError('');
+      setMemorial('');
+      setMemorialCurrentStep('Iniciando geração em lote...');
+      setGenerationProgress(0);
+
+      let standardId = null;
+      const savedNorms = localStorage.getItem('selectedMemorialNorms');
+      if (savedNorms) {
+        try {
+          const parsedNorms = JSON.parse(savedNorms);
+          if (parsedNorms && parsedNorms.length > 0) {
+            standardId = parsedNorms[0].id;
+          }
+        } catch (error) {}
+      }
+
+      if (!standardId) {
+        setMemorialError('❌ ERRO: Nenhuma norma selecionada! Vá em "Operação > Normas do Memorial" e selecione uma norma antes de gerar o memorial interativo.');
+        setIsGeneratingMemorial(false);
+        setMemorialStartTime(null);
+        return;
+      }
+
+      const propertyId = getSelectedPropertyId();
+      const propertyData = getSelectedPropertyData();
+      const aiConfig = aiService.getAIConfig();
+      let allMemorials = '';
+
+      for (let i = 0; i < polygons.length; i++) {
+        setMemorialCurrentStep(`Gerando memorial do Lote ${i + 1} de ${polygons.length}...`);
+        setGenerationProgress(Math.round(((i + 1) / polygons.length) * 100));
+
+        // Construir uma entidade POLYLINE a partir dos vértices do polígono
+        const polylineEntity = {
+          type: 'POLYLINE',
+          layer: 'Seleção Interativa',
+          vertices: polygons[i]
+        };
+
+        const request = {
+          entities: [polylineEntity],
+          fileName: currentFile.originalName,
+          projectName: propertyData?.name || currentFile.originalName.replace(/\.[^/.]+$/, ''),
+          projectDescription: `Lote ${i + 1} - Memorial gerado a partir de seleção em lote`,
+          standardId,
+          propertyId,
+          propertyData: propertyData ? {
+            registrationNumber: propertyData.registrationNumber,
+            name: propertyData.name,
+            street: propertyData.street,
+            number: propertyData.number || undefined,
+            neighborhood: propertyData.neighborhood,
+            city: propertyData.city,
+            state: propertyData.state,
+            ownerName: propertyData.ownerName,
+            ownerDocument: propertyData.ownerDocument,
+            propertyType: propertyData.propertyType
+          } : null,
+          ...aiService.getAIParameters()
+        };
+
+        const response = await api.post(aiConfig.endpoint, request);
+        
+        allMemorials += `================ LOTE ${i + 1} ================\n`;
+        const responseData = response.data;
+        const realMemorial = typeof responseData === 'string' 
+          ? responseData 
+          : (responseData?.memorialText || responseData?.memorial || JSON.stringify(responseData, null, 2));
+          
+        allMemorials += realMemorial + '\n\n';
+      }
+      
+      setMemorial(allMemorials);
+      setGenerationProgress(100);
+      setMemorialCurrentStep('Geração em lote concluída!');
+    } catch (err: unknown) {
+      console.error('Erro ao gerar memorial interativo:', err);
+      setMemorialError(getErrorMessage(err, 'Erro ao gerar memorial descritivo a partir da seleção'));
+      setMemorialCurrentStep('Erro na geração');
+    } finally {
+      setIsGeneratingMemorial(false);
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        setTimerInterval(null);
+      }
+      setMemorialStartTime(null);
+    }
+  };
+
   const generateMemorial = async () => {
     const currentFile = files[currentFileIndex] || file;
     const currentFileId = currentFile?.id;
@@ -322,15 +415,7 @@ const Viewer: React.FC = () => {
       }
 
       // Carregar dados da propriedade do localStorage
-      let propertyData: StoredPropertySelection | null = null;
-      const savedProperty = localStorage.getItem('selectedPropertyForMemorial');
-      if (savedProperty) {
-        try {
-          propertyData = JSON.parse(savedProperty) as StoredPropertySelection;
-        } catch (error) {
-          console.error('❌ Erro ao parsear propriedade do localStorage no Viewer:', error);
-        }
-      }
+      const propertyData = getSelectedPropertyData();
 
       const memorialRequest = {
         entities: (dxfData.entities || []).map(entity => {
@@ -660,6 +745,8 @@ const Viewer: React.FC = () => {
                     fileId={fileItem.id}
                     className="drawing-viewer"
                     onDXFDataLoaded={index === currentFileIndex ? handleDXFDataLoaded : undefined}
+                    interactive={true}
+                    onPolygonConfirmed={(polygons) => handlePolygonConfirmed(polygons, fileItem)}
                   />
                 </div>
               </div>
@@ -673,6 +760,8 @@ const Viewer: React.FC = () => {
               fileId={files[currentFileIndex]?.id || fileId || undefined}
               className="main-viewer"
               onDXFDataLoaded={handleDXFDataLoaded}
+              interactive={true}
+              onPolygonConfirmed={(polygons) => handlePolygonConfirmed(polygons, files[currentFileIndex] || file)}
             />
           </div>
         )}
