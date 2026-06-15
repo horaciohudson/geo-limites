@@ -552,7 +552,6 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
         }
 
         try {
-          alert("Enviando arquivo para a IA configurada extrair e estruturar o memorial.\nIsso pode levar até um minuto. Aguarde...");
           const pendingSaveTarget = await prepareTemplateLocalSave(
             `${templateName.trim()}.json`,
             templatesFolder
