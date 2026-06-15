@@ -16,5 +16,7 @@ public class TemplateGenerationResponseDTO {
     private String name;
     private String fileUrl;
     private String filePath;
+    private String suggestedFileName;
+    private String templateContent;
     private String message;
 }

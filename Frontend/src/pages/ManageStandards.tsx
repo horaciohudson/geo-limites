@@ -6,6 +6,7 @@ import type { MemorialStandard, MemorialStandardFormData } from '../types/memori
 import { useConfig } from '../contexts/ConfigContext';
 import Input from '../components/Input';
 import Loading from '../components/Loading';
+import { saveTemplateJsonLocally } from '../utils/templateLocalSave';
 
 interface TemplateApiRecord {
   id: string;
@@ -478,37 +479,40 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           type: 'application/json'
         });
         
-        // SALVAR NO BANCO DE DADOS E DISCO PRIMEIRO
         try {
           const fileToUpload = new File([templateBlob], `${templateData.template_id}.json`, {
             type: 'application/json'
           });
 
-          await templatesService.generateTemplate(fileToUpload, {
+          const response = await templatesService.generateTemplate(fileToUpload, {
             name: templateData.template_id,
             description: templateData.descricao || `Template ${templateData.template_id}`,
             municipality: templateData.municipio,
             abntNorm: templateData.norma_referencia,
             targetFolderPath: templatesFolder
           });
-          
-          // Remover do localStorage já que foi salvo no banco
+
+          const templateContent = response.templateContent || JSON.stringify(templateData, null, 2);
+          const suggestedFileName = response.suggestedFileName || `${templateData.template_id}.json`;
+          const savedLocation = await saveTemplateJsonLocally(templateContent, suggestedFileName, templatesFolder);
+
           const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
           const updatedTemplates = existingTemplates.filter((t) => t.template_id !== templateData.template_id);
+          updatedTemplates.push({
+            ...templateData,
+            saved_path: savedLocation
+          });
           localStorage.setItem('createdTemplates', JSON.stringify(updatedTemplates));
           
-          alert(`✅ Modelo base "${templateData.template_id}" importado com sucesso!\n\n🌐 Salvo no banco de dados e gravado em disco.`);
+          alert(`✅ Modelo base "${templateData.template_id}" importado com sucesso!\n\n📁 Arquivo salvo em:\n${savedLocation}\n\n💡 O salvamento agora é local no frontend; o servidor não guarda mais esse arquivo.`);
           
         } catch (backendError: unknown) {
-          console.error('❌ Erro completo ao salvar template no banco:', backendError);
+          console.error('❌ Erro ao gerar ou salvar template localmente:', backendError);
           const errorMsg = getErrorMessage(backendError, 'Falha desconhecida');
           
-          // Se a pasta não estiver configurada, não salvar em localStorage de jeito nenhum
           if (!isTemplatesFolderConfigured || !templatesFolder) {
             alert(`❌ Falha na importação: A pasta de templates não está configurada.\nNenhum arquivo ou cache foi salvo.`);
           } else {
-            // Fallback para localStorage apenas se a pasta estiver configurada no frontend,
-            // mas houve outro erro qualquer no backend
             const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
             const existingIndex = existingTemplates.findIndex((t) => t.template_id === templateData.template_id);
             
@@ -519,7 +523,7 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
             }
             localStorage.setItem('createdTemplates', JSON.stringify(existingTemplates));
             
-            alert(`✅ Modelo base "${templateData.template_id}" importado com sucesso!\n\n📦 Salvo temporariamente no navegador\n⚠️ Erro ao salvar no banco/disco: ${errorMsg}`);
+            alert(`✅ Modelo base "${templateData.template_id}" importado para o navegador.\n\n📦 O arquivo não foi salvo localmente.\n⚠️ Detalhe: ${errorMsg}`);
           }
         }
       } else {
@@ -537,13 +541,34 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
         try {
           alert("Enviando arquivo para a IA configurada extrair e estruturar o memorial.\nIsso pode levar até um minuto. Aguarde...");
           
-          await templatesService.generateTemplate(file, {
+          const response = await templatesService.generateTemplate(file, {
             name: templateName.trim(),
             description: `Template gerado por IA a partir do exemplo: ${file.name}`,
             targetFolderPath: templatesFolder
           });
-          
-          alert(`✅ Modelo base gerado com sucesso via IA!\n\n🌐 O JSON foi extraído, estruturado, salvo no banco de dados e gravado em disco.`);
+
+          const templateContent = response.templateContent;
+          if (!templateContent) {
+            throw new Error('A IA gerou o template, mas o backend não retornou o conteúdo JSON.');
+          }
+
+          const savedLocation = await saveTemplateJsonLocally(
+            templateContent,
+            response.suggestedFileName || `${templateName.trim()}.json`,
+            templatesFolder
+          );
+
+          const parsedTemplate = JSON.parse(templateContent) as StoredTemplateData;
+          const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
+          const updatedTemplates = existingTemplates.filter((t) => t.template_id !== (parsedTemplate.template_id || templateName.trim()));
+          updatedTemplates.push({
+            ...parsedTemplate,
+            template_id: parsedTemplate.template_id || templateName.trim(),
+            saved_path: savedLocation
+          });
+          localStorage.setItem('createdTemplates', JSON.stringify(updatedTemplates));
+
+          alert(`✅ Modelo base gerado com sucesso via IA!\n\n📁 Arquivo salvo em:\n${savedLocation}\n\n💡 O salvamento agora é local no frontend; o servidor não guarda mais esse arquivo.`);
         } catch (backendError: unknown) {
           console.error('❌ Erro ao gerar template via IA:', backendError);
           const errorMsg = getErrorMessage(backendError, 'Falha desconhecida');

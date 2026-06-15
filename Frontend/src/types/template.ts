@@ -61,10 +61,12 @@ export interface TemplateGenerationRequest {
 }
 
 export interface TemplateGenerationResponse {
-  id: string;
+  id?: string;
   name: string;
-  fileUrl: string;
-  filePath: string;
+  fileUrl?: string;
+  filePath?: string;
+  suggestedFileName?: string;
+  templateContent?: string;
   message: string;
 }
 

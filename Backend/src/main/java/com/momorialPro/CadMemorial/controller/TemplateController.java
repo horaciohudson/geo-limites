@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
@@ -33,9 +32,6 @@ import java.util.UUID;
 public class TemplateController {
 
     private final TemplateService templateService;
-
-    @Value("${memorialpro.storage.templates-dir:templates}")
-    private String templatesDir;
 
     @GetMapping
     @Operation(summary = "Listar templates disponíveis para o usuário")
@@ -140,19 +136,12 @@ public class TemplateController {
                 return ResponseEntity.badRequest().build();
             }
             
-            // Verificar se já existe template com mesmo nome
-            if (templateService.existsByName(name.trim(), userId)) {
-                log.warn("Template com nome '{}' já existe para o usuário {}", name, userId);
-                return ResponseEntity.status(HttpStatus.CONFLICT).build();
-            }
-            
             TemplateGenerationRequestDTO request = TemplateGenerationRequestDTO.builder()
                     .name(name.trim())
                     .description(description)
                     .municipality(municipality)
                     .abntNorm(abntNorm)
                     .memorialStandardId(memorialStandardId)
-                    .targetFolderPath(templatesDir)
                     .build();
             
             TemplateGenerationResponseDTO response = templateService.generateTemplate(file, request, userId);

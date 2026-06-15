@@ -5,6 +5,7 @@ import { Input } from '@/components';
 import { memorialStandardsService } from '@/services/memorial-standards';
 import { templatesService } from '@/services/templates';
 import type { MemorialStandard } from '@/types/memorial-standard';
+import { saveTemplateJsonLocally } from '@/utils/templateLocalSave';
 import './ConfigureTemplates.css';
 
 
@@ -220,13 +221,29 @@ const ConfigureTemplates: React.FC = () => {
         memorialStandardId: templateData.memorialStandardId,
         targetFolderPath: templatesFolder || ''
       });
-      const savedLocation = response.filePath || 'pasta de templates configurada no servidor';
+      const templateContent = response.templateContent;
+      const suggestedFileName = response.suggestedFileName || `${templateData.name.trim().replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
 
-      // O backend retorna o JSON gerado no campo templateContent (agora é content)
-      const templateContent = (response as any).content || (response as any).templateContent || '';
+      if (!templateContent) {
+        throw new Error('O backend gerou o template, mas não retornou o conteúdo JSON para salvar localmente.');
+      }
 
-      // Criar objeto do template para listagem local
+      const savedLocation = await saveTemplateJsonLocally(
+        templateContent,
+        suggestedFileName,
+        templatesFolder || ''
+      );
+
+      let storedTemplateData: Record<string, unknown>;
+      try {
+        storedTemplateData = JSON.parse(templateContent) as Record<string, unknown>;
+      } catch {
+        storedTemplateData = {};
+      }
+
       const newTemplate = {
+        ...storedTemplateData,
+        template_id: (storedTemplateData.template_id as string) || templateData.name,
         id: response.id || Date.now().toString(),
         name: templateData.name,
         description: templateData.description,
@@ -235,7 +252,7 @@ const ConfigureTemplates: React.FC = () => {
         memorialStandardName: selectedStandard.name,
         exampleFileName: selectedFile.name,
         targetFolder: savedLocation,
-        filePath: response.filePath || '',
+        filePath: savedLocation,
         createdAt: new Date().toISOString(),
         content: templateContent
       };
@@ -255,7 +272,7 @@ const ConfigureTemplates: React.FC = () => {
       setSelectedFile(null);
       setShowCreateForm(false);
       
-      alert(`✅ Template JSON "${templateData.name}" criado com sucesso!\n\n📁 Arquivo salvo em:\n${savedLocation}\n\n📄 Template contém:\n• Estrutura completa do memorial\n• Placeholders ({{proprietario}}, {{area_total}}, etc.)\n• Norma ${selectedStandard.name}\n• Observações técnicas\n\n💡 O template já está disponível para uso.`);
+      alert(`✅ Template JSON "${templateData.name}" criado com sucesso!\n\n📁 Arquivo salvo em:\n${savedLocation}\n\n📄 Template contém:\n• Estrutura completa do memorial\n• Placeholders ({{proprietario}}, {{area_total}}, etc.)\n• Norma ${selectedStandard.name}\n• Observações técnicas\n\n💡 O salvamento agora é local no frontend; o servidor não guarda mais esse arquivo.`);
 
     } catch (error: unknown) {
       console.error('❌ Erro detalhado ao criar template:', error);

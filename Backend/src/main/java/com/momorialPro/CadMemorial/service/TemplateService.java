@@ -179,7 +179,6 @@ public class TemplateService {
 
     public TemplateGenerationResponseDTO generateTemplate(MultipartFile file, TemplateGenerationRequestDTO request, UUID ownerId) {
         try {
-            // Salvar arquivo usando o nome fornecido ou o nome original
             String originalFileName = file.getOriginalFilename();
             String baseName = "template";
             
@@ -196,26 +195,7 @@ public class TemplateService {
             }
             
             String targetFileName = baseName + ".json";
-            
-            // Validar diretório de destino (obrigatório configurar pasta local)
-            if (request.getTargetFolderPath() == null || request.getTargetFolderPath().trim().isEmpty()) {
-                throw new IllegalArgumentException("A pasta de destino dos templates não está configurada.");
-            }
-            String targetDirectory = request.getTargetFolderPath().trim();
-            Path templatePath = resolveTemplatePath(targetDirectory, targetFileName);
 
-            if (request.getName() != null && existsByName(request.getName(), ownerId)) {
-                throw new IllegalArgumentException("Já existe um template com este nome para este usuário");
-            }
-
-            if (Files.exists(templatePath)) {
-                throw new IllegalArgumentException("Já existe um arquivo de template com este nome na pasta de destino.");
-            }
-            
-            // Criar diretório se não existir
-            Files.createDirectories(templatePath.getParent());
-
-            // Processamento do arquivo: extrair texto e chamar Claude se necessário
             String extractedText = "";
             boolean isJson = false;
 
@@ -259,34 +239,15 @@ public class TemplateService {
                 jsonContent = generateTemplateWithAi(extractedText, request.getName(), request.getAbntNorm());
             }
 
-            // Gravar o conteúdo JSON no arquivo de destino
-            Files.writeString(templatePath, jsonContent, java.nio.charset.StandardCharsets.UTF_8);
-            log.info("Template gravado com sucesso em: {}", templatePath);
-            
-            // Criar template no banco
-            TemplateCreateDTO createDTO = TemplateCreateDTO.builder()
-                    .name(request.getName())
-                    .description(request.getDescription())
-                    .fileUrl("/templates/" + targetFileName)
-                    .filePath(templatePath.toString())
-                    .memorialStandardId(request.getMemorialStandardId())
-                    .municipality(request.getMunicipality())
-                    .abntNorm(request.getAbntNorm())
-                    .status(Template.TemplateStatus.ACTIVE)
-                    .build();
-            
-            TemplateDTO created = create(createDTO, ownerId);
-
             return TemplateGenerationResponseDTO.builder()
-                    .id(created.getId())
-                    .name(created.getName())
-                    .fileUrl(created.getFileUrl())
-                    .filePath(created.getFilePath())
-                    .message("Template gerado com sucesso!")
+                    .name(request.getName())
+                    .suggestedFileName(targetFileName)
+                    .templateContent(jsonContent)
+                    .message("Template gerado com sucesso. Salve o arquivo na pasta configurada pelo navegador.")
                     .build();
                     
         } catch (IOException e) {
-            log.error("Erro ao salvar arquivo do template", e);
+            log.error("Erro ao processar arquivo do template", e);
             throw new RuntimeException("Erro ao processar arquivo do template", e);
         }
     }
