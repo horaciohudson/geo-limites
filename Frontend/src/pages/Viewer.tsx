@@ -36,8 +36,20 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 const normalizeMemorialText = (content: string): string =>
   content
+    .replace(/\r\n/g, '\n')
+    .replace(/```(?:markdown|text)?/gi, '')
+    .replace(/```/g, '')
     .replace(/“|”/g, '')
     .replace(/"/g, '')
+    // Remove marcadores de titulos/lists do markdown antes de exibir e exportar.
+    .replace(/^[ \t]*#{1,6}[ \t]*/gm, '')
+    .replace(/^[ \t]*[-*+][ \t]+/gm, '')
+    .replace(/^\s*---+\s*$/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 
 // Função para obter propertyId selecionado do localStorage
