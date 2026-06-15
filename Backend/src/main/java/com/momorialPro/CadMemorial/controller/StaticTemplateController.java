@@ -1,6 +1,7 @@
 package com.momorialPro.CadMemorial.controller;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -19,11 +20,27 @@ import java.nio.file.Paths;
 @CrossOrigin(origins = "*")
 public class StaticTemplateController {
 
+    @Value("${memorialpro.storage.templates-dir:templates}")
+    private String templatesDir;
+
     @GetMapping("/{templateName}.json")
     public ResponseEntity<String> getTemplate(@PathVariable String templateName) {
         try {
-            // Primeiro, tenta buscar no diretório raiz do backend
-            Path templatePath = Paths.get(templateName + ".json");
+            Path configuredTemplatePath = Paths.get(templatesDir, templateName + ".json")
+                    .normalize()
+                    .toAbsolutePath();
+
+            if (Files.exists(configuredTemplatePath)) {
+                String content = Files.readString(configuredTemplatePath);
+
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                        .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                        .body(content);
+            }
+
+            // Compatibilidade com templates antigos gravados no diretório raiz do backend
+            Path templatePath = Paths.get(templateName + ".json").normalize().toAbsolutePath();
 
             if (Files.exists(templatePath)) {
                 String content = Files.readString(templatePath);

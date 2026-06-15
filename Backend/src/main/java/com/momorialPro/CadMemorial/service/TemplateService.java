@@ -53,6 +53,9 @@ public class TemplateService {
     @Value("${memorialpro.claude.endpoint}")
     private String claudeEndpoint;
 
+    @Value("${memorialpro.storage.templates-dir:templates}")
+    private String templatesDir;
+
 
     public List<TemplateDTO> findAll() {
         UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
@@ -156,6 +159,7 @@ public class TemplateService {
             throw new IllegalArgumentException("Você não tem permissão para deletar este template");
         }
 
+        deleteTemplateFile(template);
         templateRepository.delete(template);
     }
 
@@ -197,8 +201,8 @@ public class TemplateService {
             if (request.getTargetFolderPath() == null || request.getTargetFolderPath().trim().isEmpty()) {
                 throw new IllegalArgumentException("A pasta de destino dos templates não está configurada.");
             }
-            String templatesDir = request.getTargetFolderPath().trim();
-            Path templatePath = Paths.get(templatesDir, targetFileName);
+            String targetDirectory = request.getTargetFolderPath().trim();
+            Path templatePath = resolveTemplatePath(targetDirectory, targetFileName);
 
             if (request.getName() != null && existsByName(request.getName(), ownerId)) {
                 throw new IllegalArgumentException("Já existe um template com este nome para este usuário");
@@ -500,6 +504,33 @@ public class TemplateService {
 
     public boolean existsByName(String name, UUID ownerId) {
         return templateRepository.existsByNameAndOwnerId(name, ownerId);
+    }
+
+    private Path resolveTemplatePath(String directory, String fileName) {
+        String resolvedDirectory = (directory == null || directory.trim().isEmpty())
+                ? templatesDir
+                : directory.trim();
+
+        return Paths.get(resolvedDirectory, fileName)
+                .normalize()
+                .toAbsolutePath();
+    }
+
+    private void deleteTemplateFile(Template template) {
+        if (template.getFilePath() == null || template.getFilePath().isBlank()) {
+            return;
+        }
+
+        try {
+            Path filePath = Paths.get(template.getFilePath()).normalize();
+            if (Files.deleteIfExists(filePath)) {
+                log.info("Arquivo de template removido do disco: {}", filePath);
+            } else {
+                log.warn("Arquivo de template não encontrado ao deletar: {}", filePath);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Erro ao remover arquivo físico do template", e);
+        }
     }
 
     private TemplateDTO convertToDTO(Template template) {

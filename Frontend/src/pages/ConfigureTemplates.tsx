@@ -220,6 +220,7 @@ const ConfigureTemplates: React.FC = () => {
         memorialStandardId: templateData.memorialStandardId,
         targetFolderPath: templatesFolder || ''
       });
+      const savedLocation = response.filePath || 'pasta de templates configurada no servidor';
 
       // O backend retorna o JSON gerado no campo templateContent (agora é content)
       const templateContent = (response as any).content || (response as any).templateContent || '';
@@ -233,7 +234,8 @@ const ConfigureTemplates: React.FC = () => {
         memorialStandardId: templateData.memorialStandardId,
         memorialStandardName: selectedStandard.name,
         exampleFileName: selectedFile.name,
-        targetFolder: templatesFolder,
+        targetFolder: savedLocation,
+        filePath: response.filePath || '',
         createdAt: new Date().toISOString(),
         content: templateContent
       };
@@ -253,8 +255,7 @@ const ConfigureTemplates: React.FC = () => {
       setSelectedFile(null);
       setShowCreateForm(false);
       
-      // Mostrar onde o template foi salvo
-      alert(`✅ Template JSON "${templateData.name}" criado com sucesso!\n\n📁 O arquivo foi salvo automaticamente na pasta configurada:\n${templatesFolder}\n\n📄 Template contém:\n• Estrutura completa do memorial\n• Placeholders ({{proprietario}}, {{area_total}}, etc.)\n• Norma ${selectedStandard.name}\n• Observações técnicas\n\n💡 O template já está disponível para uso.`);
+      alert(`✅ Template JSON "${templateData.name}" criado com sucesso!\n\n📁 Arquivo salvo em:\n${savedLocation}\n\n📄 Template contém:\n• Estrutura completa do memorial\n• Placeholders ({{proprietario}}, {{area_total}}, etc.)\n• Norma ${selectedStandard.name}\n• Observações técnicas\n\n💡 O template já está disponível para uso.`);
 
     } catch (error: unknown) {
       console.error('❌ Erro detalhado ao criar template:', error);
