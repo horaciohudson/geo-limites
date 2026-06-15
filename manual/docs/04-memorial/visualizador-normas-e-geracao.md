@@ -1,44 +1,56 @@
-# Visualizador, Normas e Geracao
+# Normas, Visualizador e Geracao
+
+## Visao geral do fluxo atual
+
+No produto atual, o fluxo principal do memorial passa por tres pontos:
+
+1. **Imoveis e arquivos tecnicos preparados**
+2. **Norma e modelo selecionados em Normas e Templates**
+3. **Geracao, revisao e exportacao dentro do Visualizador**
+
+A antiga ideia de usar uma pagina separada chamada **Memorial** como etapa final nao representa mais o uso principal mostrado na navegacao atual.
 
 ## Dependencias do fluxo
 
-Pelo comportamento atual do sistema, a geracao do memorial depende de quatro condicoes principais:
+Antes de gerar o memorial, o usuario deve garantir que estes dados estejam prontos:
 
-1. haver arquivos selecionados
-2. haver dados tecnicos carregados
-3. haver pelo menos uma norma aplicada
-4. haver um modelo documental selecionado
+1. **Imovel selecionado**
+2. **Arquivo tecnico DXF selecionado**
+3. **Norma do memorial definida**
+4. **Modelo base disponivel para a geracao**
 
-## Normas Aplicadas
+Na pratica, a selecao operacional de norma e modelo acontece na area **Normas e Templates**, enquanto a geracao e a revisao acontecem no **Visualizador**.
 
-A tela `Normas Aplicadas` e usada para escolher as normas que participarao da geracao do resultado.
+## Normas e Templates
+
+A tela **Normas e Templates** e o ponto de preparacao do memorial. Nela o usuario define a base documental que sera usada no processamento:
+
+- escolhe a norma tecnica aplicavel ao trabalho atual
+- escolhe o modelo base que orienta a estrutura do texto
+- deixa a sessao pronta para que o Visualizador gere o memorial com os parametros corretos
 
 ## Visualizador
 
-O `Visualizador` serve para abrir os arquivos selecionados e carregar os dados necessarios para o fluxo tecnico.
+O **Visualizador** e hoje a tela operacional mais importante para a etapa final do documento. Ele e usado para:
 
-## Gerar Memorial
+- abrir o arquivo tecnico selecionado
+- carregar a geometria do DXF
+- inspecionar visualmente o desenho
+- acionar a geracao do memorial
+- revisar o texto retornado
+- copiar o memorial em texto
+- exportar o memorial em PDF
 
-O botao `Gerar Memorial` fica no menu lateral. Quando algum requisito nao foi cumprido, o sistema bloqueia a acao e informa o que falta.
+Quando a geracao termina, o proprio Visualizador exibe a area **Memorial Descritivo Gerado**, com botoes de **Exportar PDF** e **Copiar Texto**.
 
-## Ordem recomendada
+## Ordem recomendada de operacao
 
-1. Selecionar o imovel.
-2. Selecionar os arquivos tecnicos.
-3. Escolher as normas aplicadas.
-4. Abrir o visualizador.
-5. Confirmar o modelo documental.
-6. Acionar `Gerar Memorial`.
+1. **Selecionar o imovel** na area de trabalho.
+2. **Selecionar um ou mais arquivos DXF**.
+3. **Definir norma e modelo** em **Normas e Templates**.
+4. **Abrir o Visualizador** para carregar o desenho.
+5. **Gerar o memorial**, revisar o texto e exportar o resultado.
 
-## Se o sistema impedir a geracao
+## Observacao sobre a rota Memorial
 
-Os motivos mais provaveis sao:
-
-- nenhum arquivo selecionado
-- dados tecnicos ainda nao carregados
-- normas nao escolhidas
-- modelo documental nao definido
-
-## Resultado esperado
-
-Quando o fluxo esta completo, o usuario chega a pagina de memorial com os dados necessarios para continuar a elaboracao e revisao do documento.
+O sistema ainda pode manter a rota `/memorial` por compatibilidade interna, mas ela nao e a referencia principal de operacao no menu atual. Para treinamento e uso diario, considere o **Visualizador** como a tela correta para gerar, revisar e exportar o memorial.

@@ -4,7 +4,7 @@
 
 A entrada `Administracao` aparece para usuarios com perfil administrativo.
 
-## Estrutura atual da tela
+## Estrutura da tela
 
 A area administrativa esta organizada em tres blocos principais:
 
@@ -22,7 +22,7 @@ A aba `SMTP` serve para configurar o envio de e-mails do sistema. Isso impacta f
 
 ## Usuarios
 
-A aba `Usuarios` permite acompanhar a base de acessos, incluindo criacao, edicao, redefinicao de senha e filtros de acompanhamento.
+A aba `Usuarios` permite acompanhar a base de acessos, incluindo criacao, edicao, redefinicao de senha e filtros de consulta.
 
 ## Cuidados administrativos
 
@@ -31,7 +31,7 @@ A aba `Usuarios` permite acompanhar a base de acessos, incluindo criacao, edicao
 - Evitar criar administradores sem necessidade real.
 - Registrar internamente alteracoes criticas de ambiente.
 
-## Indicadores observados na tela
+## Indicadores da tela
 
 O frontend calcula contagens como:
 
