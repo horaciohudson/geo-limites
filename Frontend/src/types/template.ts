@@ -57,7 +57,6 @@ export interface TemplateGenerationRequest {
   abntNorm?: string;
   memorialStandardId?: string;
   exampleFileId: string;
-  targetFolderPath: string;
 }
 
 export interface TemplateGenerationResponse {

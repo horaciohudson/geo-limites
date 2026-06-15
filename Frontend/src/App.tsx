@@ -5,12 +5,11 @@ import { CreditProvider } from './contexts/CreditContext';
 import PrivateRoute from '@/routes/PrivateRoute';
 import { Navbar, Sidebar } from '@/components';
 import CreditNotification from './components/CreditNotification';
-import { Login, Register, VerifyEmail, ResendVerification, Files, Viewer, Report, MemorialStandards, Memorial, ManageStandards, ConfigureTemplates, PropertyRegister, PropertiesPresentation, MyAccount, AdminSettings } from '@/pages';
+import { Login, Register, VerifyEmail, ResendVerification, Files, Viewer, Report, MemorialStandards, Memorial, ManageStandards, PropertyRegister, PropertiesPresentation, MyAccount, AdminSettings } from '@/pages';
 import TestViewer from '@/pages/TestViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { TOKEN_STORAGE_KEY } from '@/auth/session';
 import { FileProvider } from '@/contexts/FileContext'; // ✅ Import do novo contexto
-import { ConfigProvider } from '@/contexts/ConfigContext'; // ✅ Import do contexto de configuração
 import { openHelpPage } from '@/utils/helpLinks';
 import './styles/App.css';
 
@@ -47,21 +46,18 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <SidebarContext.Provider value={{ viewerActions, setViewerActions }}>
-      {/* ✅ Envolve tudo no ConfigProvider, FileProvider e CreditProvider */}
-      <ConfigProvider>
-        <FileProvider>
-          <CreditProvider>
-          <div className="app-layout">
-            <Navbar />
-            <div className="app-content">
-              <Sidebar viewerActions={viewerActions || undefined} />
-              <main className="main-content">{children}</main>
-            </div>
-            <CreditNotification />
+      <FileProvider>
+        <CreditProvider>
+        <div className="app-layout">
+          <Navbar />
+          <div className="app-content">
+            <Sidebar viewerActions={viewerActions || undefined} />
+            <main className="main-content">{children}</main>
           </div>
-          </CreditProvider>
-        </FileProvider>
-      </ConfigProvider>
+          <CreditNotification />
+        </div>
+        </CreditProvider>
+      </FileProvider>
     </SidebarContext.Provider>
   );
 };
@@ -73,8 +69,7 @@ const App: React.FC = () => {
       // Lista de chaves que devem ser mantidas (tokens + dados de sessão importantes)
       const keysToKeep = [
         TOKEN_STORAGE_KEY,
-        'selectedFiles', 'selectedMemorialNorms', 'selectedTemplate', 'createdTemplates',
-        'memorialPro_templatesFolder' // ✅ Manter configuração de pasta de templates
+        'selectedFiles', 'selectedMemorialNorms', 'selectedTemplate', 'createdTemplates'
       ];
       
       // Padrões de chaves que devem ser mantidas
@@ -237,11 +232,7 @@ const App: React.FC = () => {
             />
             <Route
               path="/configure-templates"
-              element={
-                <PrivateRoute>
-                  <ConfigureTemplates />
-                </PrivateRoute>
-              }
+              element={<Navigate to="/manage-standards" replace />}
             />
             <Route
               path="/my-account"

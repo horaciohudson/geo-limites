@@ -21,7 +21,6 @@ interface FileSystemAccessWindow extends Window {
 export interface PendingTemplateSaveTarget {
   mode: 'picker' | 'download';
   fileName: string;
-  configuredFolderPath: string;
   fileHandle?: SaveFileHandle;
 }
 
@@ -38,8 +37,7 @@ const downloadTemplateJson = (content: string, fileName: string) => {
 };
 
 export const prepareTemplateLocalSave = async (
-  fileName: string,
-  configuredFolderPath: string
+  fileName: string
 ): Promise<PendingTemplateSaveTarget> => {
   const fileSystemWindow = window as FileSystemAccessWindow;
 
@@ -60,15 +58,13 @@ export const prepareTemplateLocalSave = async (
     return {
       mode: 'picker',
       fileName,
-      configuredFolderPath,
       fileHandle
     };
   }
 
   return {
     mode: 'download',
-    fileName,
-    configuredFolderPath
+    fileName
   };
 };
 
@@ -82,20 +78,17 @@ export const saveTemplateJsonLocally = async (
     const writable = await target.fileHandle.createWritable();
     await writable.write(normalizedContent);
     await writable.close();
-    return `${target.configuredFolderPath}\\${target.fileName}`;
+    return `Arquivo salvo localmente como "${target.fileName}"`;
   }
 
   downloadTemplateJson(normalizedContent, target.fileName);
   alert(
-    `Selecione a pasta configurada "${target.configuredFolderPath}" no navegador. Se ela ainda não existir, crie-a antes de mover o arquivo.\n\nO arquivo foi baixado como "${target.fileName}".`
+    `Escolha a pasta desejada no seu computador para guardar os templates. Se ela ainda nao existir, crie-a antes de mover o arquivo.\n\nO arquivo foi baixado como "${target.fileName}".`
   );
-  return `${target.configuredFolderPath}\\${target.fileName}`;
+  return `Download iniciado para "${target.fileName}"`;
 };
 
-export const getTemplateLocalSaveErrorMessage = (
-  error: unknown,
-  configuredFolderPath: string
-): string => {
+export const getTemplateLocalSaveErrorMessage = (error: unknown): string => {
   if (typeof error === 'object' && error !== null && 'name' in error) {
     const errorName = String((error as { name?: string }).name);
 
@@ -104,7 +97,7 @@ export const getTemplateLocalSaveErrorMessage = (
     }
 
     if (errorName === 'SecurityError') {
-      return `O navegador bloqueou a abertura da janela de salvamento. Tente novamente clicando direto na ação e, se necessário, crie a pasta "${configuredFolderPath}" manualmente antes de salvar.`;
+      return 'O navegador bloqueou a abertura da janela de salvamento. Tente novamente clicando direto na acao e escolha a pasta desejada quando o seletor abrir.';
     }
   }
 

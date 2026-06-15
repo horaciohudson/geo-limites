@@ -3,9 +3,9 @@ import { getStoredToken } from '@/auth/session';
 import { memorialStandardsService } from '../services/memorial-standards';
 import { templatesService } from '../services/templates';
 import type { MemorialStandard, MemorialStandardFormData } from '../types/memorial-standard';
-import { useConfig } from '../contexts/ConfigContext';
 import Input from '../components/Input';
 import Loading from '../components/Loading';
+import GenerationProgress from '../components/GenerationProgress';
 import {
   getTemplateLocalSaveErrorMessage,
   prepareTemplateLocalSave,
@@ -58,7 +58,6 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 };
 
 const ManageStandards: React.FC = () => {
-  const { templatesFolder, isTemplatesFolderConfigured } = useConfig();
   const [standards, setStandards] = useState<MemorialStandard[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,7 +70,21 @@ const ManageStandards: React.FC = () => {
     isDefault: false
   });
   const [uploadingPDF, setUploadingPDF] = useState(false);
+  const [generationTime, setGenerationTime] = useState(0);
   const [templates, setTemplates] = useState<StoredTemplateData[]>([]);
+
+  // Timer para o GenerationProgress
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (uploadingPDF) {
+      interval = setInterval(() => {
+        setGenerationTime((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setGenerationTime(0);
+    }
+    return () => clearInterval(interval);
+  }, [uploadingPDF]);
 
   // Carregamento automático com tratamento de erro robusto
   useEffect(() => {
@@ -439,15 +452,25 @@ Elabore um memorial descritivo seguindo rigorosamente a norma ${normName}, com b
 Ajuste estas instrucoes conforme necessario para incluir requisitos especificos da norma ${normName} apos revisar o texto completo da norma acima.`;
   };
 
+  // Fallback para navegadores que nao suportam a caixa de dialogo nativa
+  const downloadJsonLocallyFallback = (filename: string, content: string) => {
+    try {
+      const blob = new Blob([content], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro no fallback de download', error);
+    }
+  };
+
   // Função para upload de template (JSON) - NOVA
   const handleTemplateUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isTemplatesFolderConfigured || !templatesFolder) {
-      alert('Atenção: A pasta de templates não está configurada! Por favor, configure a pasta no sistema antes de importar modelos base.');
-      // Limpar input
-      (event.target as HTMLInputElement).value = '';
-      return;
-    }
-
     const file = event.target.files?.[0];
     if (!file) {
       return;
@@ -488,16 +511,14 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
             type: 'application/json'
           });
           const pendingSaveTarget = await prepareTemplateLocalSave(
-            `${templateData.template_id}.json`,
-            templatesFolder
+            `${templateData.template_id}.json`
           );
 
           const response = await templatesService.generateTemplate(fileToUpload, {
             name: templateData.template_id,
             description: templateData.descricao || `Template ${templateData.template_id}`,
             municipality: templateData.municipio,
-            abntNorm: templateData.norma_referencia,
-            targetFolderPath: templatesFolder
+            abntNorm: templateData.norma_referencia
           });
 
           const templateContent = response.templateContent || JSON.stringify(templateData, null, 2);
@@ -522,22 +543,8 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           
         } catch (backendError: unknown) {
           console.error('❌ Erro ao gerar ou salvar template localmente:', backendError);
-          const errorMsg = getTemplateLocalSaveErrorMessage(backendError, templatesFolder);
-          
-          if (!isTemplatesFolderConfigured || !templatesFolder) {
-            alert(`❌ Falha na importação: A pasta de templates não está configurada.\nNenhum arquivo ou cache foi salvo.`);
-            const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
-            const existingIndex = existingTemplates.findIndex((t) => t.template_id === templateData.template_id);
-            
-            if (existingIndex >= 0) {
-              existingTemplates[existingIndex] = templateData;
-            } else {
-              existingTemplates.push(templateData);
-            }
-            localStorage.setItem('createdTemplates', JSON.stringify(existingTemplates));
-            
-            alert(`✅ Modelo base "${templateData.template_id}" importado para o navegador.\n\n📦 O arquivo não foi salvo localmente.\n⚠️ Detalhe: ${errorMsg}`);
-          }
+          const errorMsg = getTemplateLocalSaveErrorMessage(backendError);
+          alert(`❌ Falha na importação do modelo base: ${errorMsg}`);
         }
       } else {
         // Fluxo para PDF ou TXT (Geração via IA)
@@ -551,16 +558,40 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
            return;
         }
 
+        // Pedir o local de salvamento antes da chamada longa da IA para preservar o gesto do usuario.
+        let fileHandle: FileSystemFileHandle | null = null;
         try {
-          const pendingSaveTarget = await prepareTemplateLocalSave(
-            `${templateName.trim()}.json`,
-            templatesFolder
-          );
-          
+          if ('showSaveFilePicker' in window) {
+            fileHandle = await (window as Window & {
+              showSaveFilePicker?: (options?: {
+                suggestedName?: string;
+                types?: Array<{
+                  description: string;
+                  accept: Record<string, string[]>;
+                }>;
+              }) => Promise<FileSystemFileHandle>;
+            }).showSaveFilePicker?.({
+              suggestedName: `${templateName.trim()}.json`,
+              types: [{
+                description: 'Arquivo JSON Template',
+                accept: { 'application/json': ['.json'] }
+              }]
+            }) ?? null;
+          }
+        } catch (error: unknown) {
+          if (typeof error === 'object' && error !== null && 'name' in error && (error as { name?: string }).name === 'AbortError') {
+            alert('Ação cancelada. O template não será gerado.');
+            (event.target as HTMLInputElement).value = '';
+            setUploadingPDF(false);
+            return;
+          }
+          console.warn('O navegador não abriu o diálogo nativo, usaremos fallback no final.', error);
+        }
+
+        try {
           const response = await templatesService.generateTemplate(file, {
             name: templateName.trim(),
-            description: `Template gerado por IA a partir do exemplo: ${file.name}`,
-            targetFolderPath: templatesFolder
+            description: `Template gerado por IA a partir do exemplo: ${file.name}`
           });
 
           const templateContent = response.templateContent;
@@ -568,15 +599,63 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
             throw new Error('A IA gerou o template, mas o backend não retornou o conteúdo JSON.');
           }
 
-          const savedLocation = await saveTemplateJsonLocally(
-            {
-              ...pendingSaveTarget,
-              fileName: response.suggestedFileName || `${templateName.trim()}.json`
-            },
-            templateContent
-          );
+          let cleanedContent = templateContent;
+          let parsedTemplate: StoredTemplateData | null = null;
+          try {
+            parsedTemplate = JSON.parse(cleanedContent) as StoredTemplateData;
 
-          const parsedTemplate = JSON.parse(templateContent) as StoredTemplateData;
+            const removeQuotes = (obj: Record<string, unknown>) => {
+              Object.keys(obj).forEach((key) => {
+                const value = obj[key];
+                if (typeof value === 'string') {
+                  obj[key] = value.replace(/“|”/g, '').replace(/"/g, '');
+                } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                  removeQuotes(value as Record<string, unknown>);
+                } else if (Array.isArray(value)) {
+                  value.forEach((item) => {
+                    if (typeof item === 'object' && item !== null) {
+                      removeQuotes(item as Record<string, unknown>);
+                    }
+                  });
+                }
+              });
+            };
+
+            removeQuotes(parsedTemplate as unknown as Record<string, unknown>);
+            cleanedContent = JSON.stringify(parsedTemplate, null, 2);
+          } catch (error) {
+            console.warn('A IA não retornou um JSON válido. As aspas não puderam ser limpas de forma segura.', error);
+          }
+
+          const suggestedFileName = response.suggestedFileName || `${templateName.trim()}.json`;
+          let savedLocation = `Arquivo salvo localmente como "${suggestedFileName}"`;
+
+          if (fileHandle) {
+            try {
+              const writable = await fileHandle.createWritable();
+              await writable.write(cleanedContent);
+              await writable.close();
+            } catch (error) {
+              console.error('Falha ao escrever no handle', error);
+              downloadJsonLocallyFallback(suggestedFileName, cleanedContent);
+              savedLocation = `Download iniciado para "${suggestedFileName}"`;
+              alert('✅ IA concluiu, mas houve falha no File System Access. Arquivo baixado via download clássico.');
+            }
+          } else {
+            const pendingSaveTarget = await prepareTemplateLocalSave(suggestedFileName);
+            savedLocation = await saveTemplateJsonLocally(
+              {
+                ...pendingSaveTarget,
+                fileName: suggestedFileName
+              },
+              cleanedContent
+            );
+          }
+
+          if (!parsedTemplate) {
+            parsedTemplate = JSON.parse(cleanedContent) as StoredTemplateData;
+          }
+
           const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
           const updatedTemplates = existingTemplates.filter((t) => t.template_id !== (parsedTemplate.template_id || templateName.trim()));
           updatedTemplates.push({
@@ -589,7 +668,7 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           alert(`✅ Modelo base gerado com sucesso via IA!\n\n📁 Arquivo salvo em:\n${savedLocation}\n\n💡 O salvamento agora é local no frontend; o servidor não guarda mais esse arquivo.`);
         } catch (backendError: unknown) {
           console.error('❌ Erro ao gerar template via IA:', backendError);
-          const errorMsg = getTemplateLocalSaveErrorMessage(backendError, templatesFolder);
+          const errorMsg = getTemplateLocalSaveErrorMessage(backendError);
           alert(`❌ Falha na geração do template via IA: ${errorMsg}\n\nVerifique no log do Backend se a API Key da IA foi configurada corretamente.`);
         }
       }
@@ -657,7 +736,22 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="memorial-page">
+      <GenerationProgress
+        isGenerating={uploadingPDF}
+        progress={Math.min(99, 15 + Math.floor(generationTime * (85 / 60)))}
+        currentStep="Lendo documento e extraindo parâmetros via IA"
+        timeElapsed={generationTime}
+        title="Gerando Template Base"
+        subtitle="Processando arquivo com Inteligência Artificial - aguarde..."
+        tips={
+          <>
+            <p>💡 <strong>Dica:</strong> Modelos PDF com muitas páginas demoram mais para extrair.</p>
+            <p>🔄 Por favor, não feche nem recarregue a página durante a extração.</p>
+          </>
+        }
+      />
+      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1 style={{ color: '#2c3e50', fontSize: '2rem', fontWeight: 'bold' }}>
           ⚙️ Normas e Templates Base
@@ -1035,13 +1129,7 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           
           {/* Botão Cadastrar Template */}
           <button
-            onClick={() => {
-              if (!isTemplatesFolderConfigured || !templatesFolder) {
-                alert('Atenção: A pasta de templates não está configurada! Por favor, configure a pasta no sistema antes de importar modelos base.');
-                return;
-              }
-              document.getElementById('templateUploadManage')?.click();
-            }}
+            onClick={() => document.getElementById('templateUploadManage')?.click()}
             disabled={uploadingPDF}
             style={{ 
               backgroundColor: uploadingPDF ? '#95a5a6' : '#8e44ad',
@@ -1077,11 +1165,11 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
             fontSize: '0.9rem'
           }}>
             <strong>💡 Instruções:</strong> Importe aqui um modelo documental estrutural em JSON, ou faça upload de um memorial de exemplo em PDF/TXT para que a IA gere automaticamente a estrutura do template. 
-            Ele será validado e salvo para depois aparecer na geração de memoriais.
+            Ele sera validado e salvo localmente pelo navegador para depois aparecer na geracao de memoriais.
             
             <br/><br/>
-            <strong>✅ Persistencia:</strong> Os modelos base sao salvos no banco de dados e ficam disponiveis de forma permanente. 
-            Tambem podem permanecer no navegador como apoio temporario.
+            <strong>✅ Persistencia:</strong> Os modelos base ficam disponiveis no navegador deste usuario como apoio operacional.
+            Ao salvar, escolha a pasta local desejada no seu computador.
           </div>
 
 
@@ -1157,6 +1245,7 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
