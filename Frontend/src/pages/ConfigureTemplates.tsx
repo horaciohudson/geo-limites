@@ -5,7 +5,11 @@ import { Input } from '@/components';
 import { memorialStandardsService } from '@/services/memorial-standards';
 import { templatesService } from '@/services/templates';
 import type { MemorialStandard } from '@/types/memorial-standard';
-import { saveTemplateJsonLocally } from '@/utils/templateLocalSave';
+import {
+  getTemplateLocalSaveErrorMessage,
+  prepareTemplateLocalSave,
+  saveTemplateJsonLocally
+} from '@/utils/templateLocalSave';
 import './ConfigureTemplates.css';
 
 
@@ -213,6 +217,11 @@ const ConfigureTemplates: React.FC = () => {
         return;
       }
 
+      const pendingSaveTarget = await prepareTemplateLocalSave(
+        `${templateData.name.trim().replace(/[^a-zA-Z0-9_-]/g, '_')}.json`,
+        templatesFolder || ''
+      );
+
       // Chama a API real do backend para gerar o template usando IA
       const response = await templatesService.generateTemplate(selectedFile, {
         name: templateData.name,
@@ -229,9 +238,11 @@ const ConfigureTemplates: React.FC = () => {
       }
 
       const savedLocation = await saveTemplateJsonLocally(
-        templateContent,
-        suggestedFileName,
-        templatesFolder || ''
+        {
+          ...pendingSaveTarget,
+          fileName: suggestedFileName
+        },
+        templateContent
       );
 
       let storedTemplateData: Record<string, unknown>;
@@ -279,7 +290,7 @@ const ConfigureTemplates: React.FC = () => {
       if (typeof error === 'object' && error !== null && 'stack' in error) {
         console.error('Stack trace:', (error as ErrorLike).stack);
       }
-      alert('Erro ao criar template. Tente novamente.');
+      alert(getTemplateLocalSaveErrorMessage(error, templatesFolder || 'pasta configurada'));
     } finally {
       setCreatingTemplate(false);
     }

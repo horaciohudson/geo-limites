@@ -6,7 +6,11 @@ import type { MemorialStandard, MemorialStandardFormData } from '../types/memori
 import { useConfig } from '../contexts/ConfigContext';
 import Input from '../components/Input';
 import Loading from '../components/Loading';
-import { saveTemplateJsonLocally } from '../utils/templateLocalSave';
+import {
+  getTemplateLocalSaveErrorMessage,
+  prepareTemplateLocalSave,
+  saveTemplateJsonLocally
+} from '../utils/templateLocalSave';
 
 interface TemplateApiRecord {
   id: string;
@@ -483,6 +487,10 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           const fileToUpload = new File([templateBlob], `${templateData.template_id}.json`, {
             type: 'application/json'
           });
+          const pendingSaveTarget = await prepareTemplateLocalSave(
+            `${templateData.template_id}.json`,
+            templatesFolder
+          );
 
           const response = await templatesService.generateTemplate(fileToUpload, {
             name: templateData.template_id,
@@ -494,7 +502,13 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
 
           const templateContent = response.templateContent || JSON.stringify(templateData, null, 2);
           const suggestedFileName = response.suggestedFileName || `${templateData.template_id}.json`;
-          const savedLocation = await saveTemplateJsonLocally(templateContent, suggestedFileName, templatesFolder);
+          const savedLocation = await saveTemplateJsonLocally(
+            {
+              ...pendingSaveTarget,
+              fileName: suggestedFileName
+            },
+            templateContent
+          );
 
           const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
           const updatedTemplates = existingTemplates.filter((t) => t.template_id !== templateData.template_id);
@@ -508,11 +522,10 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           
         } catch (backendError: unknown) {
           console.error('❌ Erro ao gerar ou salvar template localmente:', backendError);
-          const errorMsg = getErrorMessage(backendError, 'Falha desconhecida');
+          const errorMsg = getTemplateLocalSaveErrorMessage(backendError, templatesFolder);
           
           if (!isTemplatesFolderConfigured || !templatesFolder) {
             alert(`❌ Falha na importação: A pasta de templates não está configurada.\nNenhum arquivo ou cache foi salvo.`);
-          } else {
             const existingTemplates = parseStoredTemplates(localStorage.getItem('createdTemplates'));
             const existingIndex = existingTemplates.findIndex((t) => t.template_id === templateData.template_id);
             
@@ -540,6 +553,10 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
 
         try {
           alert("Enviando arquivo para a IA configurada extrair e estruturar o memorial.\nIsso pode levar até um minuto. Aguarde...");
+          const pendingSaveTarget = await prepareTemplateLocalSave(
+            `${templateName.trim()}.json`,
+            templatesFolder
+          );
           
           const response = await templatesService.generateTemplate(file, {
             name: templateName.trim(),
@@ -553,9 +570,11 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           }
 
           const savedLocation = await saveTemplateJsonLocally(
-            templateContent,
-            response.suggestedFileName || `${templateName.trim()}.json`,
-            templatesFolder
+            {
+              ...pendingSaveTarget,
+              fileName: response.suggestedFileName || `${templateName.trim()}.json`
+            },
+            templateContent
           );
 
           const parsedTemplate = JSON.parse(templateContent) as StoredTemplateData;
@@ -571,7 +590,7 @@ Ajuste estas instrucoes conforme necessario para incluir requisitos especificos 
           alert(`✅ Modelo base gerado com sucesso via IA!\n\n📁 Arquivo salvo em:\n${savedLocation}\n\n💡 O salvamento agora é local no frontend; o servidor não guarda mais esse arquivo.`);
         } catch (backendError: unknown) {
           console.error('❌ Erro ao gerar template via IA:', backendError);
-          const errorMsg = getErrorMessage(backendError, 'Falha desconhecida');
+          const errorMsg = getTemplateLocalSaveErrorMessage(backendError, templatesFolder);
           alert(`❌ Falha na geração do template via IA: ${errorMsg}\n\nVerifique no log do Backend se a API Key da IA foi configurada corretamente.`);
         }
       }
