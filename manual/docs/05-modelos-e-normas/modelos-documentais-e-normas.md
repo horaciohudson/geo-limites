@@ -1,54 +1,64 @@
-# Templates e Normas
+# Normas e Modelos Base
 
 ## Onde ficam essas configuracoes
 
-Na secao `Preparacao Tecnica`, o sistema apresenta estas entradas:
+Na secao **Configuracao** do menu lateral, a tela visivel hoje e **Normas e Exemplos**. Essa area concentra a manutencao da base documental reutilizada pela plataforma.
 
-- Normas Tecnicas
-- Importacao de Exemplo
-- Templates
+## O que e feito em Normas e Exemplos
 
-## Normas Tecnicas
+Essa tela e usada por perfis responsaveis pela padronizacao do trabalho. Nela a equipe pode:
 
-Essa area tende a ser usada por perfis com maior responsabilidade sobre padronizacao. O objetivo e manter a base de normas disponivel para uso no fluxo operacional.
+- carregar normas em PDF para formar a base textual da plataforma
+- gerar modelos base com apoio de IA a partir de arquivos PDF ou TXT
+- importar modelos base prontos em JSON
+- excluir normas e modelos que nao devem mais ser usados
 
-## Importacao de Exemplo
+## Normas base
 
-A importacao de exemplo ajuda a validar o ambiente, demonstrar o uso do sistema ou fornecer uma referencia interna para treinamento.
+As normas base servem como referencia tecnica para a geracao dos memoriais. Em termos praticos, essa area prepara o texto normativo e o prompt estrutural que o sistema usa depois no fluxo operacional.
 
-## Templates
+Uma norma bem cadastrada ajuda a manter:
 
-No GeoLimites, um **template** e um modelo de texto usado para montar o memorial descritivo sempre no mesmo formato.
+- terminologia correta
+- estrutura coerente
+- aderencia ao padrao tecnico esperado
 
-Ele define, por exemplo:
+## Modelos base
 
-- a estrutura do documento (cabecalho, paragrafos e ordem das informacoes)
-- o estilo do texto (ex.: texto corrido, termos padrao, forma de apresentar medidas e confrontacoes)
-- campos que o sistema preenche durante a geracao (ex.: proprietario, logradouro, area, perimetro, vertices)
+Um **modelo base** representa a estrutura documental que a equipe deseja entregar. Ele pode refletir exigencias de cartorio, prefeitura, municipio ou um padrao interno da empresa.
 
-Um template nao e a norma em si. A norma e a referencia tecnica/administrativa. O template e o formato do documento que sua equipe deseja entregar seguindo esse padrao.
+No fluxo atual, os modelos podem nascer de tres formas:
 
-### Quando usar um template diferente
+- **Importacao de JSON**: quando a equipe ja possui um modelo estruturado
+- **Geracao por IA a partir de PDF**: quando existe um memorial de exemplo em PDF
+- **Geracao por IA a partir de TXT**: quando existe um exemplo textual simples
 
-- quando a prefeitura/cartorio exige um formato especifico
-- quando o municipio tem particularidades de texto ou ordem de informacoes
-- quando a empresa quer um padrao interno de apresentacao
+## Como o salvamento funciona hoje
 
-### O que normalmente existe em um template no sistema
+O GeoLimites nao depende mais de uma configuracao de **Pasta de Templates** no servidor para esse fluxo.
 
-- nome e descricao do modelo
-- municipio (quando aplicavel)
-- norma de referencia (quando aplicavel)
-- status (ativo/inativo/rascunho), para controlar o que aparece no fluxo operacional
+Quando um modelo base e gerado:
+
+- o navegador tenta abrir a janela nativa para o usuario escolher onde salvar o arquivo `.json`
+- se o navegador nao suportar essa integracao, o sistema faz o download classico do arquivo
+- alem disso, o modelo pode permanecer no navegador para uso imediato na sessao atual
+
+Isso evita depender de um caminho fisico configurado manualmente no backend para a geracao do modelo base.
+
+## Quando usar um modelo diferente
+
+- quando a prefeitura ou cartorio exige um formato especifico
+- quando o municipio possui ordem propria de informacoes
+- quando a empresa quer manter um padrao interno de apresentacao
 
 ## Recomendacoes de governanca
 
-- Padronizar nomes de modelos.
-- Evitar modelos duplicados com pequenas variacoes sem controle.
-- Revisar periodicamente as normas ativas.
-- Testar um modelo antes de libera-lo para uso operacional amplo.
- - Quando criar variacoes, explicitar no nome (ex.: municipio, orgao e versao).
+- padronizar nomes de normas e modelos
+- evitar duplicidade de modelos com pequenas variacoes sem controle
+- revisar periodicamente as normas ativas
+- testar o modelo antes de liberar para uso operacional amplo
+- explicitar versao, municipio ou orgao no nome quando houver variacoes
 
 ## Relacao com a geracao do memorial
 
-Sem um template selecionado, o sistema pode impedir a geracao. Por isso, a manutencao dessa area influencia diretamente o sucesso do fluxo principal.
+A configuracao correta dessa area influencia diretamente a qualidade do memorial gerado em **Normas e Templates** e processado no **Visualizador**. Se a base documental estiver incompleta ou inadequada, o resultado final tambem perde consistencia.

@@ -1,6 +1,6 @@
 # Primeiro Acesso e Login
 
-## Rotas publicas observadas no sistema
+## Rotas publicas
 
 O frontend possui rotas publicas para:
 
@@ -16,7 +16,7 @@ No primeiro acesso, o usuario normalmente segue este fluxo:
 1. Recebe ou cria as credenciais.
 2. Faz login na tela inicial.
 3. Caso exigido, confirma o e-mail.
-4. Entra no sistema e e redirecionado para a area de `Imoveis`.
+4. Entra no sistema e e redirecionado para a area de Imoveis.
 
 ## O que aparece apos entrar
 
@@ -26,11 +26,22 @@ Quando autenticado, o usuario passa a ver:
 - menu lateral com as secoes principais
 - conteudo central conforme a tela escolhida
 
+As entradas principais visiveis hoje no menu sao:
+
+- **Imoveis**
+- **Normas e Templates**
+- **Arquivos DXF**
+- **Visualizador**
+- **Cadastrar Imovel**
+- **Normas e Exemplos**
+- **Conta**
+- **Administracao**, quando o perfil possuir permissao
+
 ## Boas praticas iniciais
 
 - Confirmar se o nome exibido no topo esta correto.
 - Verificar se o acesso e de usuario comum ou administrador.
-- Conferir se a conta ja possui o perfil atualizado.
+- Conferir se os dados basicos da conta estao corretos.
 
 ## Quando o login nao funciona
 
@@ -43,4 +54,4 @@ Verifique, nesta ordem:
 
 ## Atalho funcional
 
-Hoje a rota raiz do sistema redireciona para `Imoveis`, entao essa tende a ser a tela inicial de trabalho apos a autenticacao.
+A rota raiz do sistema redireciona para **Imoveis**, entao essa e a tela inicial de trabalho apos a autenticacao.

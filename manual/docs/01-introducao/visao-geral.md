@@ -6,27 +6,29 @@ O GeoLimites e um sistema voltado para organizacao de dados tecnicos de imoveis 
 
 ## Principais blocos funcionais
 
-### Fluxo operacional
-O operador trabalha principalmente com cadastro de imoveis, selecao de arquivos tecnicos, visualizacao e geracao do memorial.
+### Operacao
+O operador trabalha com a selecao de imoveis, normas e arquivos tecnicos, visualiza os desenhos e gera ou revisa o memorial no Visualizador.
 
-### Preparacao tecnica
-O sistema tambem possui areas para manter normas tecnicas, importar exemplos e configurar templates.
+### Preparacao
+O operador complementa o cadastro de imoveis quando necessario, com suporte a rascunhos locais e salvamento da base principal.
+
+### Configuracao
+Perfis com maior responsabilidade gerenciam normas e modelos base em **Normas e Exemplos**, incluindo importacao de PDF e geracao de modelos com apoio de IA.
 
 ### Conta e acesso
-Cada usuario possui uma area de conta com perfil, creditos, extrato e outras informacoes operacionais.
+Cada usuario acompanha suas informacoes de perfil, saldo de creditos, extrato e recargas na area de Conta.
 
 ### Administracao
-Usuarios administradores podem acessar configuracoes de empresa, SMTP e gestao de usuarios.
+Usuarios administradores configuram dados de empresa (Tenant), SMTP e gerenciam usuarios cadastrados.
 
 ## Sequencia recomendada de uso
 
-1. Entrar no sistema.
-2. Conferir ou cadastrar o imovel.
-3. Selecionar os arquivos tecnicos.
-4. Verificar normas aplicadas.
-5. Abrir o visualizador.
-6. Gerar o memorial.
-7. Revisar a conta ou configuracoes administrativas, quando necessario.
+1. **Entrar no sistema**: O login redireciona diretamente para **Imoveis**, ponto inicial do trabalho.
+2. **Conferir os dados do imovel**: Use **Imoveis** e, se necessario, **Cadastrar Imovel** para deixar o cadastro pronto.
+3. **Selecionar os arquivos**: Em **Arquivos DXF**, deixe definidos os arquivos que serao usados no trabalho atual.
+4. **Definir normas e modelo**: Em **Normas e Templates**, escolha a base documental da geracao.
+5. **Abrir o Visualizador**: Visualize o DXF, gere o memorial, revise o texto e exporte o PDF no proprio **Visualizador**.
+6. **Revisar a conta** ou configuracoes administrativas, quando necessario.
 
 ## Perfis comuns
 

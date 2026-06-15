@@ -2,74 +2,45 @@
 
 ## Objetivo
 
-Preparar o GeoLimites para abrir o manual do usuario de forma rapida, consistente e profissional, usando o subdominio `ajuda.geolimites.com.br`.
+O GeoLimites ja usa o manual publicado em `https://ajuda.geolimites.com.br/` como base para ajuda contextual por rota e para o atalho `Shift+F1`.
 
-## Modelo recomendado
+## Como funciona hoje
 
-O sistema pode ter dois pontos principais de acesso ao manual:
+Ao pressionar `Shift+F1`, o frontend identifica a rota atual e tenta abrir a pagina mais adequada do manual em uma nova aba.
 
-- um botao `Ajuda` visivel na interface
-- o atalho de teclado `Shift+F1`
+Se nao existir uma pagina especifica para a rota atual, o sistema abre a pagina inicial do manual.
 
-## Comportamento inicial sugerido
+## Mapeamento atual de referencia
 
-Na primeira versao, tanto o botao quanto o `Shift+F1` podem abrir a pagina inicial do manual:
+As rotas principais estao associadas hoje a estas secoes do manual:
 
-- `https://ajuda.geolimites.com.br/`
+- `/properties` e `/files` -> fluxo de imoveis e arquivos tecnicos
+- `/standards`, `/viewer` e `/memorial` -> visualizador, normas e geracao
+- `/manage-standards` -> normas e modelos base
+- `/my-account` e `/financial` -> conta, creditos e seguranca
+- `/admin` -> empresa, SMTP e usuarios
 
-Isso ja entrega valor imediato sem exigir mapeamento complexo por tela.
+## Rotas legadas ou de compatibilidade
 
-## Evolucao recomendada
+Algumas rotas ainda podem permanecer no mapeamento tecnico por compatibilidade, mesmo sem destaque no menu atual. O principal exemplo e:
 
-Depois da primeira entrega, o ideal e evoluir para ajuda contextual por rota.
+- `/configure-templates` -> redirecionada conceitualmente para a documentacao de **Normas e Modelos Base**
 
-### Exemplos de mapeamento
+Isso significa que a ajuda contextual deve tratar essas rotas como legado funcional, e nao como uma tela principal ainda recomendada ao usuario.
 
-- `/properties` -> pagina sobre cadastro e organizacao de imoveis
-- `/files` -> pagina sobre arquivos tecnicos
-- `/standards` -> pagina sobre normas aplicadas
-- `/viewer` -> pagina sobre visualizacao tecnica
-- `/memorial` -> pagina sobre geracao e revisao do memorial
-- `/configure-templates` -> pagina sobre templates
-- `/my-account` -> pagina sobre conta, creditos e seguranca
-- `/admin` -> pagina sobre empresa, SMTP e usuarios
-
-## Estrategia tecnica sugerida
-
-Uma implementacao simples no frontend pode seguir esta ideia:
-
-1. detectar a rota atual
-2. mapear a rota para uma URL do manual
-3. abrir essa URL em nova aba
-
-## Exemplo de politica funcional
+## Politica funcional recomendada
 
 - se existir pagina especifica para a rota atual, abrir essa pagina
 - se nao existir, abrir a home do manual
-- manter sempre um botao de ajuda visivel em areas-chave do sistema
-
-## Onde integrar no GeoLimites
-
-Os pontos mais naturais para essa integracao sao:
-
-- barra superior
-- menu lateral
-- telas operacionais mais importantes
+- manter o manual sempre acessivel sem interromper o trabalho em andamento
 
 ## Cuidados de usabilidade
 
-- nao bloquear atalhos nativos importantes sem necessidade
-- manter a abertura do manual em nova aba
-- evitar depender de atalhos reservados do navegador
-- usar URLs estaveis e amigaveis no manual
-
-## Ordem recomendada de entrega
-
-1. publicar o manual em `ajuda.geolimites.com.br`
-2. adicionar um botao `Ajuda` global
-3. adicionar suporte basico ao `Shift+F1`
-4. evoluir para ajuda contextual por rota
+- manter a abertura em nova aba sempre que possivel
+- oferecer fallback caso o navegador bloqueie a nova aba
+- evitar depender de atalhos reservados pelo proprio navegador
+- manter URLs do manual estaveis e amigaveis
 
 ## Beneficio direto
 
-Essa abordagem transforma o manual em parte ativa do produto, e nao apenas em um documento isolado.
+Com esse modelo, o manual deixa de ser apenas um documento estatico e passa a funcionar como apoio operacional integrado ao produto real.

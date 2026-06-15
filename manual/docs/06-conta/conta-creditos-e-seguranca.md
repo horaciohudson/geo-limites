@@ -4,9 +4,9 @@
 
 A area `Conta` centraliza informacoes do usuario e recursos operacionais relacionados ao perfil e ao consumo da plataforma.
 
-## Abas identificadas na tela
+## Abas da tela
 
-A pagina atual de conta possui estas abas:
+A pagina de conta possui estas abas:
 
 - Visao Geral
 - Perfil
@@ -22,10 +22,10 @@ A pagina atual de conta possui estas abas:
 Atualiza ou revisa seus dados cadastrais.
 
 ### Saldo e Recargas
-Consulta disponibilidade operacional e acompanha aquisicoes relacionadas ao uso do sistema.
+Consulta creditos disponiveis e acompanha recargas relacionadas ao uso do sistema.
 
 ### Extrato e Pedidos
-Monitora movimentacoes e pedidos associados a conta.
+Monitora movimentacoes, pedidos e historico operacional da conta.
 
 ### Indicadores
 Acompanha informacoes consolidadas da operacao individual.
