@@ -1,0 +1,296 @@
+{
+  "description": "🏗️ MEMORIAL INTEGRATION TEST DATA - JSON para testar integração com Property CRUD",
+  "baseUrl": "http://localhost:9010/api",
+  "authentication": "Bearer Token required in Authorization header",
+  "note": "This tests the integration between Property CRUD and Memorial generation",
+  
+  "completePropertySetup": {
+    "description": "Complete property setup for memorial generation testing",
+    
+    "step1_createProperty": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "name": "Memorial Test Property - Lot 25",
+        "internalCode": "MEM-TEST-25",
+        "ownerName": "Memorial Test Owner",
+        "ownerDocument": "111.222.333-44",
+        "ownerIdNumber": "11.222.333-4",
+        "ownerPhone": "+55 11 1111-2222",
+        "ownerEmail": "memorial.test@email.com",
+        "street": "Memorial Test Street",
+        "number": "250",
+        "neighborhood": "Test District",
+        "city": "São Paulo",
+        "state": "SP",
+        "zipCode": "01000-000",
+        "coordinateSystem": "SIRGAS 2000 / UTM zone 23S",
+        "datum": "SIRGAS 2000",
+        "utmZone": "23S",
+        "centralMeridian": "-45°",
+        "totalArea": 600.00,
+        "totalPerimeter": 100.00,
+        "mainFrontage": 20.00,
+        "averageDepth": 30.00,
+        "registrationNumber": "MEM-12345",
+        "registryOffice": "Memorial Test Registry",
+        "registrationDate": "2024-01-01",
+        "propertyType": "URBAN",
+        "zoning": "R3 - High Density Residential",
+        "observations": "Property created specifically for memorial generation testing"
+      }
+    },
+
+    "step2_createLandmarks": [
+      {
+        "description": "Landmark M1 - Starting point",
+        "method": "POST",
+        "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+        "body": {
+          "landmarkName": "M1",
+          "landmarkType": "LANDMARK",
+          "coordinateX": 325000.00,
+          "coordinateY": 7650000.00,
+          "coordinateZ": 800.00,
+          "entranceAzimuth": 0.0000,
+          "exitAzimuth": 90.0000,
+          "previousDistance": 0.00,
+          "description": "Starting landmark - concrete marker",
+          "landmarkMaterial": "Concrete",
+          "sequenceOrder": 1
+        }
+      },
+      {
+        "description": "Landmark M2 - Northeast corner",
+        "method": "POST",
+        "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+        "body": {
+          "landmarkName": "M2",
+          "landmarkType": "LANDMARK",
+          "coordinateX": 325020.00,
+          "coordinateY": 7650000.00,
+          "coordinateZ": 800.05,
+          "entranceAzimuth": 90.0000,
+          "exitAzimuth": 180.0000,
+          "previousDistance": 20.00,
+          "description": "Northeast corner landmark",
+          "landmarkMaterial": "Iron pipe",
+          "sequenceOrder": 2
+        }
+      },
+      {
+        "description": "Landmark M3 - Southeast corner",
+        "method": "POST",
+        "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+        "body": {
+          "landmarkName": "M3",
+          "landmarkType": "LANDMARK",
+          "coordinateX": 325020.00,
+          "coordinateY": 7649970.00,
+          "coordinateZ": 799.95,
+          "entranceAzimuth": 180.0000,
+          "exitAzimuth": 270.0000,
+          "previousDistance": 30.00,
+          "description": "Southeast corner landmark",
+          "landmarkMaterial": "Concrete",
+          "sequenceOrder": 3
+        }
+      },
+      {
+        "description": "Landmark M4 - Southwest corner (closing)",
+        "method": "POST",
+        "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+        "body": {
+          "landmarkName": "M4",
+          "landmarkType": "LANDMARK",
+          "coordinateX": 325000.00,
+          "coordinateY": 7649970.00,
+          "coordinateZ": 799.98,
+          "entranceAzimuth": 270.0000,
+          "exitAzimuth": 0.0000,
+          "previousDistance": 20.00,
+          "description": "Southwest corner - closing landmark",
+          "landmarkMaterial": "Concrete",
+          "sequenceOrder": 4
+        }
+      }
+    ],
+
+    "step3_createBoundaries": [
+      {
+        "description": "North boundary",
+        "method": "POST",
+        "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+        "body": {
+          "direction": "NORTH",
+          "extension": 20.00,
+          "azimuth": 90.0000,
+          "adjacentType": "STREET",
+          "adjacentName": "Memorial Test Street",
+          "fullDescription": "North boundary with Memorial Test Street, 20.00m",
+          "sequenceOrder": 1
+        }
+      },
+      {
+        "description": "East boundary",
+        "method": "POST",
+        "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+        "body": {
+          "direction": "EAST",
+          "extension": 30.00,
+          "azimuth": 180.0000,
+          "adjacentType": "OWNER",
+          "adjacentName": "Adjacent Property Owner",
+          "adjacentDocument": "999.888.777-66",
+          "fullDescription": "East boundary with property of Adjacent Property Owner, 30.00m",
+          "sequenceOrder": 2
+        }
+      },
+      {
+        "description": "South boundary",
+        "method": "POST",
+        "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+        "body": {
+          "direction": "SOUTH",
+          "extension": 20.00,
+          "azimuth": 270.0000,
+          "adjacentType": "OWNER",
+          "adjacentName": "South Property Owner",
+          "adjacentDocument": "888.777.666-55",
+          "fullDescription": "South boundary with property of South Property Owner, 20.00m",
+          "sequenceOrder": 3
+        }
+      },
+      {
+        "description": "West boundary",
+        "method": "POST",
+        "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+        "body": {
+          "direction": "WEST",
+          "extension": 30.00,
+          "azimuth": 0.0000,
+          "adjacentType": "AVENUE",
+          "adjacentName": "Test Avenue",
+          "fullDescription": "West boundary with Test Avenue, 30.00m",
+          "sequenceOrder": 4
+        }
+      }
+    ]
+  },
+
+  "memorialGenerationTest": {
+    "description": "Test memorial generation with property data",
+    
+    "generateMemorialWithProperty": {
+      "method": "POST",
+      "url": "{{baseUrl}}/memorial/generate-gpt",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "entities": [
+          {
+            "type": "LINE",
+            "layer": "BOUNDARY",
+            "x": 325000.00,
+            "y": 7650000.00,
+            "x2": 325020.00,
+            "y2": 7650000.00,
+            "fingerprint": "line_north_boundary"
+          },
+          {
+            "type": "LINE", 
+            "layer": "BOUNDARY",
+            "x": 325020.00,
+            "y": 7650000.00,
+            "x2": 325020.00,
+            "y2": 7649970.00,
+            "fingerprint": "line_east_boundary"
+          },
+          {
+            "type": "LINE",
+            "layer": "BOUNDARY", 
+            "x": 325020.00,
+            "y": 7649970.00,
+            "x2": 325000.00,
+            "y2": 7649970.00,
+            "fingerprint": "line_south_boundary"
+          },
+          {
+            "type": "LINE",
+            "layer": "BOUNDARY",
+            "x": 325000.00,
+            "y": 7649970.00,
+            "x2": 325000.00,
+            "y2": 7650000.00,
+            "fingerprint": "line_west_boundary"
+          }
+        ],
+        "fileName": "memorial-test.dxf",
+        "projectName": "Memorial Integration Test Project",
+        "projectDescription": "Testing integration between Property CRUD and Memorial generation",
+        "standardId": "{{standardId}}",
+        "propertyId": "{{propertyId}}"
+      }
+    }
+  },
+
+  "verificationEndpoints": {
+    "description": "Endpoints to verify the complete setup",
+    
+    "getPropertyWithDetails": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/details",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "listLandmarks": {
+      "method": "GET", 
+      "url": "{{baseUrl}}/properties/{{propertyId}}/landmarks",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "listBoundaries": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries", 
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    }
+  },
+
+  "testInstructions": {
+    "description": "Step-by-step testing instructions",
+    "steps": [
+      "1. First, get authentication token from /api/auth/login",
+      "2. Create property using step1_createProperty",
+      "3. Copy propertyId from response and replace {{propertyId}} in all URLs",
+      "4. Create landmarks using step2_createLandmarks (4 requests)",
+      "5. Create boundaries using step3_createBoundaries (4 requests)", 
+      "6. Verify setup using verificationEndpoints",
+      "7. Get standardId from /api/memorial-standards",
+      "8. Replace {{standardId}} in memorial generation request",
+      "9. Test memorial generation with generateMemorialWithProperty",
+      "10. Verify that memorial includes property data (owner, location, coordinates)"
+    ]
+  },
+
+  "expectedResults": {
+    "description": "What to expect from successful integration",
+    "propertyData": "Property should be created with complete owner and location info",
+    "landmarks": "4 landmarks should be created with precise UTM coordinates",
+    "boundaries": "4 boundaries should be created with adjacent information",
+    "memorial": "Generated memorial should include real property data instead of generic placeholders",
+    "coordinates": "Memorial should use actual UTM coordinates from landmarks",
+    "boundaries": "Memorial should include real boundary descriptions with adjacent names"
+  }
+}

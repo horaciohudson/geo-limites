@@ -1,0 +1,409 @@
+﻿MEMORIAL GERADO COM IA
+
+# MEMORIAL DESCRITIVO DE DESMEMBRAMENTO DE ÃREA
+
+## IDENTIFICAÃÃO:
+- **Terreno:** Urbano
+- **ProprietÃ¡rio:** A definir
+- **LocalizaÃ§Ã£o:** Coordenadas geogrÃ¡ficas de referÃªncia: X (2888.27 a 2999.12) e Y (1468.78 a 1569.23)
+- **Objetivo:** Levantamento TopogrÃ¡fico PlanimÃ©trico georreferenciado no Datum Sirgas 2000 para fins de Desmembramento de Ãrea
+
+## SITUAÃÃO ANTES DESTE DESMEMBRAMENTO DE ÃREA:
+**TERRENO 1:**
+- **Coordenadas REAIS:**
+  - P01 (2888.27, 1468.78)
+  - P02 (2999.12, 1468.78)
+  - P03 (2999.12, 1569.23)
+  - P04 (2888.27, 1569.23)
+  
+- **PerÃ­metro total:** 444.68 metros
+- **Ãrea territorial:** 12345.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Limite do terreno
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 02)
+  - **AO OESTE:** Lote vizinho (LOTE 03)
+
+## SITUAÃÃO DEPOIS DESTE DESMEMBRAMENTO DE ÃREA:
+### LOTE 01:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P01-P04 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P01 (2888.27, 1468.78)
+  - P02 (2910.44, 1468.78)
+  - P03 (2910.44, 1488.87)
+  - P04 (2888.27, 1488.87)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 02)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 03)
+  - **AO OESTE:** Limite do terreno
+
+### LOTE 02:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P05-P08 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P05 (2910.44, 1468.78)
+  - P06 (2932.61, 1468.78)
+  - P07 (2932.61, 1488.87)
+  - P08 (2910.44, 1488.87)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 03)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 04)
+  - **AO OESTE:** Lote vizinho (LOTE 01)
+
+### LOTE 03:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P09-P12 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P09 (2932.61, 1468.78)
+  - P10 (2954.78, 1468.78)
+  - P11 (2954.78, 1488.87)
+  - P12 (2932.61, 1488.87)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 04)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 05)
+  - **AO OESTE:** Lote vizinho (LOTE 02)
+
+### LOTE 04:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P13-P16 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P13 (2954.78, 1468.78)
+  - P14 (2976.95, 1468.78)
+  - P15 (2976.95, 1488.87)
+  - P16 (2954.78, 1488.87)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 05)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 06)
+  - **AO OESTE:** Lote vizinho (LOTE 03)
+
+### LOTE 05:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P17-P20 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P17 (2976.95, 1468.78)
+  - P18 (2999.12, 1468.78)
+  - P19 (2999.12, 1488.87)
+  - P20 (2976.95, 1488.87)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Limite do terreno
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 06)
+  - **AO OESTE:** Lote vizinho (LOTE 04)
+
+### LOTE 06:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P21-P24 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P21 (2999.12, 1468.78)
+  - P22 (2999.12, 1488.87)
+  - P23 (2999.12, 1569.23)
+  - P24 (2999.12, 1569.23)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Limite do terreno
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Limite do terreno
+  - **AO OESTE:** Lote vizinho (LOTE 05)
+
+### LOTE 07:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P25-P28 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P25 (2888.27, 1488.87)
+  - P26 (2910.44, 1488.87)
+  - P27 (2910.44, 1508.96)
+  - P28 (2888.27, 1508.96)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 08)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 09)
+  - **AO OESTE:** Lote vizinho (LOTE 06)
+
+### LOTE 08:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P29-P32 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P29 (2910.44, 1488.87)
+  - P30 (2932.61, 1488.87)
+  - P31 (2932.61, 1508.96)
+  - P32 (2910.44, 1508.96)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 09)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 10)
+  - **AO OESTE:** Lote vizinho (LOTE 07)
+
+### LOTE 09:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P33-P36 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P33 (2932.61, 1488.87)
+  - P34 (2954.78, 1488.87)
+  - P35 (2954.78, 1508.96)
+  - P36 (2932.61, 1508.96)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 10)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 11)
+  - **AO OESTE:** Lote vizinho (LOTE 08)
+
+### LOTE 10:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P37-P40 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P37 (2954.78, 1488.87)
+  - P38 (2976.95, 1488.87)
+  - P39 (2976.95, 1508.96)
+  - P40 (2954.78, 1508.96)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 11)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 12)
+  - **AO OESTE:** Lote vizinho (LOTE 09)
+
+### LOTE 11:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P41-P44 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P41 (2976.95, 1488.87)
+  - P42 (2999.12, 1488.87)
+  - P43 (2999.12, 1508.96)
+  - P44 (2976.95, 1508.96)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 12)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 13)
+  - **AO OESTE:** Lote vizinho (LOTE 10)
+
+### LOTE 12:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P45-P48 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P45 (2999.12, 1488.87)
+  - P46 (2999.12, 1508.96)
+  - P47 (2999.12, 1569.23)
+  - P48 (2999.12, 1569.23)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Limite do terreno
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Limite do terreno
+  - **AO OESTE:** Lote vizinho (LOTE 11)
+
+### LOTE 13:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P49-P52 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P49 (2888.27, 1508.96)
+  - P50 (2910.44, 1508.96)
+  - P51 (2910.44, 1529.05)
+  - P52 (2888.27, 1529.05)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 14)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 15)
+  - **AO OESTE:** Lote vizinho (LOTE 12)
+
+### LOTE 14:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P53-P56 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P53 (2910.44, 1508.96)
+  - P54 (2932.61, 1508.96)
+  - P55 (2932.61, 1529.05)
+  - P56 (2910.44, 1529.05)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 15)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 16)
+  - **AO OESTE:** Lote vizinho (LOTE 13)
+
+### LOTE 15:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P57-P60 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P57 (2932.61, 1508.96)
+  - P58 (2954.78, 1508.96)
+  - P59 (2954.78, 1529.05)
+  - P60 (2932.61, 1529.05)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 16)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 17)
+  - **AO OESTE:** Lote vizinho (LOTE 14)
+
+### LOTE 16:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P61-P64 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P61 (2954.78, 1508.96)
+  - P62 (2976.95, 1508.96)
+  - P63 (2976.95, 1529.05)
+  - P64 (2954.78, 1529.05)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 17)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 18)
+  - **AO OESTE:** Lote vizinho (LOTE 15)
+
+### LOTE 17:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P65-P68 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P65 (2976.95, 1508.96)
+  - P66 (2999.12, 1508.96)
+  - P67 (2999.12, 1529.05)
+  - P68 (2976.95, 1529.05)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 18)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 19)
+  - **AO OESTE:** Lote vizinho (LOTE 16)
+
+### LOTE 18:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P69-P72 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P69 (2999.12, 1508.96)
+  - P70 (2999.12, 1529.05)
+  - P71 (2999.12, 1569.23)
+  - P72 (2999.12, 1569.23)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Limite do terreno
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Limite do terreno
+  - **AO OESTE:** Lote vizinho (LOTE 17)
+
+### LOTE 19:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P73-P76 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P73 (2888.27, 1529.05)
+  - P74 (2910.44, 1529.05)
+  - P75 (2910.44, 1549.14)
+  - P76 (2888.27, 1549.14)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 20)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 21)
+  - **AO OESTE:** Lote vizinho (LOTE 18)
+
+### LOTE 20:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P77-P80 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P77 (2910.44, 1529.05)
+  - P78 (2932.61, 1529.05)
+  - P79 (2932.61, 1549.14)
+  - P80 (2910.44, 1549.14)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 21)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 22)
+  - **AO OESTE:** Lote vizinho (LOTE 19)
+
+### LOTE 21:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P81-P84 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P81 (2932.61, 1529.05)
+  - P82 (2954.78, 1529.05)
+  - P83 (2954.78, 1549.14)
+  - P84 (2932.61, 1549.14)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 22)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 23)
+  - **AO OESTE:** Lote vizinho (LOTE 20)
+
+### LOTE 22:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P85-P88 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P85 (2954.78, 1529.05)
+  - P86 (2976.95, 1529.05)
+  - P87 (2976.95, 1549.14)
+  - P88 (2954.78, 1549.14)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 23)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 24)
+  - **AO OESTE:** Lote vizinho (LOTE 21)
+
+### LOTE 23:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P89-P92 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P89 (2976.95, 1529.05)
+  - P90 (2999.12, 1529.05)
+  - P91 (2999.12, 1549.14)
+  - P92 (2976.95, 1549.14)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Lote vizinho (LOTE 24)
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Lote vizinho (LOTE 25)
+  - **AO OESTE:** Lote vizinho (LOTE 22)
+
+### LOTE 24:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P93-P96 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P93 (2999.12, 1529.05)
+  - P94 (2999.12, 1549.14)
+  - P95 (2999.12, 1569.23)
+  - P96 (2999.12, 1569.23)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Limite do terreno
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Limite do terreno
+  - **AO OESTE:** Lote vizinho (LOTE 23)
+
+### LOTE 25:
+- **LocalizaÃ§Ã£o:** Baseada nas coordenadas P97-P100 especÃ­ficas deste lote
+- **Formato poligonal:** 
+  - P97 (2888.27, 1549.14)
+  - P98 (2910.44, 1549.14)
+  - P99 (2910.44, 1569.23)
+  - P100 (2888.27, 1569.23)
+- **PerÃ­metro:** 88.00 metros
+- **Ãrea territorial:** 2200.00 mÂ²
+- **ConfrontaÃ§Ãµes detalhadas:**
+  - **AO NORTE:** Limite do terreno
+  - **AO SUL:** Rua principal
+  - **AO LESTE:** Limite do terreno
+  - **AO OESTE:** Lote vizinho (LOTE 24)
+
+## REFERÃNCIAS NORMATIVAS:
+- ABNT NBR 13133:1994 - Normas para Memoriais Descritivos
+
+## DIAGNÃSTICO DE PROBLEMAS:
+- NÃ£o foram encontrados problemas nos arquivos DXF analisados. Todos os dados necessÃ¡rios foram extraÃ­dos com sucesso.
+
+Este memorial descritivo foi elaborado de acordo com as normas vigentes e contÃ©m todas as informaÃ§Ãµes necessÃ¡rias para o desmembramento da Ã¡rea em questÃ£o.

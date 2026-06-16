@@ -1,0 +1,494 @@
+﻿MEMORIAL GERADO COM IA
+
+MEMORIAL DESCRITIVO DE DESMEMBRAMENTO DE ÃREA
+(Gerado automaticamente - Modo Fallback)
+
+â ï¸ AVISO: Este memorial foi gerado em modo fallback devido a problemas de conectividade com a IA.
+Recomenda-se revisar e completar as informaÃ§Ãµes manualmente.
+
+ANÃLISE AUTOMÃTICA DOS DADOS DXF:
+- Lotes detectados: 25
+- Entidades processadas: 12
+- Entidades adicionadas: 4
+- Entidades removidas: 3
+- Entidades modificadas: 5
+
+COORDENADAS EXTRAÃDAS DOS ARQUIVOS DXF:
+P01: E 2937,19m, N 1491,24m
+P02: E 2949,42m, N 1491,24m
+P03: E 2961,65m, N 1491,24m
+P04: E 2973,88m, N 1491,24m
+
+ESTRUTURA BÃSICA DO MEMORIAL:
+
+1. IDENTIFICAÃÃO DO IMÃVEL
+   - Terreno: [A ser preenchido]
+   - ProprietÃ¡rio: [A ser preenchido]
+   - LocalizaÃ§Ã£o: [A ser preenchido]
+   - MatrÃ­cula: [A ser preenchido]
+
+2. SITUAÃÃO ANTES DO DESMEMBRAMENTO
+   - Ãrea total: [Calcular baseado nas coordenadas]
+   - PerÃ­metro: [Calcular baseado nas coordenadas]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+3. SITUAÃÃO APÃS O DESMEMBRAMENTO
+   LOTE 01:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 02:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 03:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 04:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 05:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 06:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 07:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 08:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 09:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 10:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 11:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 12:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 13:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 14:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 15:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 16:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 17:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 18:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 19:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 20:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 21:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 22:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 23:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 24:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+   LOTE 25:
+   - Coordenadas: [Usar coordenadas extraÃ­das dos DXFs]
+   - Ãrea: [Calcular]
+   - PerÃ­metro: [Calcular]
+   - ConfrontaÃ§Ãµes: [A ser preenchido]
+
+INSTRUÃÃES PARA COMPLETAR O MEMORIAL:
+1. Preencher as informaÃ§Ãµes de identificaÃ§Ã£o do imÃ³vel
+2. Calcular Ã¡reas e perÃ­metros baseados nas coordenadas extraÃ­das
+3. Definir confrontaÃ§Ãµes baseadas na anÃ¡lise do terreno
+4. Revisar todas as coordenadas e medidas
+5. Adicionar referÃªncias normativas (ABNT NBR 13133:1994)
+
+DADOS TÃCNICOS EXTRAÃDOS:
+🎯 COORDENADAS REAIS OBRIGATÃRIAS (USE APENAS ESTAS):
+   P01: E 2937,19m, N 1491,24m
+   P02: E 2949,42m, N 1491,24m
+   P03: E 2961,65m, N 1491,24m
+   P04: E 2973,88m, N 1491,24m
+
+📊 VALIDAÃÃO OBRIGATÃRIA:
+   Range X (Este): 2937,19 a 2973,88
+   Range Y (Norte): 1491,24 a 1491,24
+   â ï¸ MEMORIAL DEVE CONTER COORDENADAS DENTRO DESTES RANGES!
+
+📝 EXEMPLO OBRIGATÃRIO DE USO:
+   "P01 coordenadas E 2937,19m e N 1491,24m"
+   "P02 coordenadas E 2949,42m e N 1491,24m"
+
+ENTIDADES ADICIONADAS COM ANÃLISE GEOMÃTRICA:
+- TEXT (Layer: LOTE_13)
+  * Coordenadas principais: E 2937,19m, N 1491,24m
+  * Texto: "LOTE 13"
+
+- TEXT (Layer: LOTE_14)
+  * Coordenadas principais: E 2949,42m, N 1491,24m
+  * Texto: "LOTE 14"
+
+- TEXT (Layer: LOTE_15)
+  * Coordenadas principais: E 2961,65m, N 1491,24m
+  * Texto: "LOTE 15"
+
+- TEXT (Layer: LOTE_16)
+  * Coordenadas principais: E 2973,88m, N 1491,24m
+  * Texto: "LOTE 16"
+
+ENTIDADES REMOVIDAS:
+- LINE (Layer: LOTE_01)
+  * Coordenadas: E 2888,27m, N 1468,78m
+- LINE (Layer: LOTE_02)
+  * Coordenadas: E 2900,50m, N 1468,78m
+- LINE (Layer: LOTE_03)
+  * Coordenadas: E 2912,73m, N 1468,78m
+
+ENTIDADES MODIFICADAS:
+- TEXT (Layer: LOTE_13)
+  * Coordenadas atuais: E 2937,19m, N 1491,24m
+- TEXT (Layer: LOTE_14)
+  * Coordenadas atuais: E 2949,42m, N 1491,24m
+- TEXT (Layer: LOTE_15)
+  * Coordenadas atuais: E 2961,65m, N 1491,24m
+- TEXT (Layer: LOTE_16)
+  * Coordenadas atuais: E 2973,88m, N 1491,24m
+- TEXT (Layer: LOTE_17)
+  * Coordenadas atuais: E 2986,11m, N 1491,24m
+
+🎯 ANÃLISE AUTOMÃTICA DO DXF:
+   🔢 LOTES DETECTADOS: 25 (GERAR TODOS NO MEMORIAL)
+   📊 Tipos de entidades: TEXT(4)
+   🏷ï¸ Layers identificados: LOTE_13, LOTE_14, LOTE_15, LOTE_16
+   â ï¸ VALIDAÃÃO OBRIGATÃRIA: Memorial deve conter 25 seÃ§Ãµes de LOTE
+
+📍 COORDENADAS REAIS PARA O MEMORIAL:
+   IMPORTANTE: Gere coordenadas baseadas no range real dos DXFs
+   Range X (Este): 2888.27 a 2999.12
+   Range Y (Norte): 1468.78 a 1569.23
+
+🎯 GERAÃÃO DINÃMICA DE COORDENADAS PARA 25 LOTES
+📐 LAYOUT OTIMIZADO: 25 lotes em grade 5x5
+   Ãrea total: 110,85m x 100,45m
+   DimensÃ£o por lote: 22,17m x 20,09m
+   Range X: 2888,27 a 2999,12
+   Range Y: 1468,78 a 1569,23
+
+📍 LOTE 01 - Coordenadas (4 pontos):
+   P01: E 2888,46m, N 1468,43m (SW - Sudoeste)
+   P02: E 2910,14m, N 1468,43m (SE - Sudeste)
+   P03: E 2910,14m, N 1488,45m (NE - Nordeste)
+   P04: E 2888,46m, N 1488,45m (NW - Noroeste)
+   Ãrea calculada: 434,11 mÂ²
+   PerÃ­metro calculado: 83,41 m
+
+📍 LOTE 02 - Coordenadas (4 pontos):
+   P05: E 2910,70m, N 1469,40m (SW - Sudoeste)
+   P06: E 2932,66m, N 1469,40m (SE - Sudeste)
+   P07: E 2932,66m, N 1488,88m (NE - Nordeste)
+   P08: E 2910,70m, N 1488,88m (NW - Noroeste)
+   Ãrea calculada: 427,93 mÂ²
+   PerÃ­metro calculado: 82,89 m
+
+📍 LOTE 03 - Coordenadas (4 pontos):
+   P09: E 2933,38m, N 1468,85m (SW - Sudoeste)
+   P10: E 2954,81m, N 1468,85m (SE - Sudeste)
+   P11: E 2954,81m, N 1489,35m (NE - Nordeste)
+   P12: E 2933,38m, N 1489,35m (NW - Noroeste)
+   Ãrea calculada: 439,11 mÂ²
+   PerÃ­metro calculado: 83,84 m
+
+📍 LOTE 04 - Coordenadas (4 pontos):
+   P13: E 2955,55m, N 1469,54m (SW - Sudoeste)
+   P14: E 2976,46m, N 1469,54m (SE - Sudeste)
+   P15: E 2976,46m, N 1488,52m (NE - Nordeste)
+   P16: E 2955,55m, N 1488,52m (NW - Noroeste)
+   Ãrea calculada: 396,92 mÂ²
+   PerÃ­metro calculado: 79,79 m
+
+📍 LOTE 05 - Coordenadas (4 pontos):
+   P17: E 2976,81m, N 1469,75m (SW - Sudoeste)
+   P18: E 2998,53m, N 1469,75m (SE - Sudeste)
+   P19: E 2998,53m, N 1488,58m (NE - Nordeste)
+   P20: E 2976,81m, N 1488,58m (NW - Noroeste)
+   Ãrea calculada: 408,99 mÂ²
+   PerÃ­metro calculado: 81,10 m
+
+📍 LOTE 06 - Coordenadas (4 pontos):
+   P21: E 2888,06m, N 1489,38m (SW - Sudoeste)
+   P22: E 2909,90m, N 1489,38m (SE - Sudeste)
+   P23: E 2909,90m, N 1508,23m (NE - Nordeste)
+   P24: E 2888,06m, N 1508,23m (NW - Noroeste)
+   Ãrea calculada: 411,70 mÂ²
+   PerÃ­metro calculado: 81,38 m
+
+📍 LOTE 07 - Coordenadas (4 pontos):
+   P25: E 2909,94m, N 1488,96m (SW - Sudoeste)
+   P26: E 2932,70m, N 1488,96m (SE - Sudeste)
+   P27: E 2932,70m, N 1508,37m (NE - Nordeste)
+   P28: E 2909,94m, N 1508,37m (NW - Noroeste)
+   Ãrea calculada: 441,74 mÂ²
+   PerÃ­metro calculado: 84,34 m
+
+📍 LOTE 08 - Coordenadas (4 pontos):
+   P29: E 2931,65m, N 1488,19m (SW - Sudoeste)
+   P30: E 2953,79m, N 1488,19m (SE - Sudeste)
+   P31: E 2953,79m, N 1508,46m (NE - Nordeste)
+   P32: E 2931,65m, N 1508,46m (NW - Noroeste)
+   Ãrea calculada: 448,64 mÂ²
+   PerÃ­metro calculado: 84,81 m
+
+📍 LOTE 09 - Coordenadas (4 pontos):
+   P33: E 2955,18m, N 1489,06m (SW - Sudoeste)
+   P34: E 2977,64m, N 1489,06m (SE - Sudeste)
+   P35: E 2977,64m, N 1509,74m (NE - Nordeste)
+   P36: E 2955,18m, N 1509,74m (NW - Noroeste)
+   Ãrea calculada: 464,28 mÂ²
+   PerÃ­metro calculado: 86,26 m
+
+📍 LOTE 10 - Coordenadas (4 pontos):
+   P37: E 2977,12m, N 1489,40m (SW - Sudoeste)
+   P38: E 3000,05m, N 1489,40m (SE - Sudeste)
+   P39: E 3000,05m, N 1509,30m (NE - Nordeste)
+   P40: E 2977,12m, N 1509,30m (NW - Noroeste)
+   Ãrea calculada: 456,39 mÂ²
+   PerÃ­metro calculado: 85,67 m
+
+📍 LOTE 11 - Coordenadas (4 pontos):
+   P41: E 2888,93m, N 1508,73m (SW - Sudoeste)
+   P42: E 2909,72m, N 1508,73m (SE - Sudeste)
+   P43: E 2909,72m, N 1528,59m (NE - Nordeste)
+   P44: E 2888,93m, N 1528,59m (NW - Noroeste)
+   Ãrea calculada: 412,79 mÂ²
+   PerÃ­metro calculado: 81,29 m
+
+📍 LOTE 12 - Coordenadas (4 pontos):
+   P45: E 2910,45m, N 1508,21m (SW - Sudoeste)
+   P46: E 2931,81m, N 1508,21m (SE - Sudeste)
+   P47: E 2931,81m, N 1528,65m (NE - Nordeste)
+   P48: E 2910,45m, N 1528,65m (NW - Noroeste)
+   Ãrea calculada: 436,64 mÂ²
+   PerÃ­metro calculado: 83,60 m
+
+📍 LOTE 13 - Coordenadas (4 pontos):
+   P49: E 2933,41m, N 1509,86m (SW - Sudoeste)
+   P50: E 2954,56m, N 1509,86m (SE - Sudeste)
+   P51: E 2954,56m, N 1529,76m (NE - Nordeste)
+   P52: E 2933,41m, N 1529,76m (NW - Noroeste)
+   Ãrea calculada: 421,02 mÂ²
+   PerÃ­metro calculado: 82,11 m
+
+📍 LOTE 14 - Coordenadas (4 pontos):
+   P53: E 2954,42m, N 1509,47m (SW - Sudoeste)
+   P54: E 2977,74m, N 1509,47m (SE - Sudeste)
+   P55: E 2977,74m, N 1528,90m (NE - Nordeste)
+   P56: E 2954,42m, N 1528,90m (NW - Noroeste)
+   Ãrea calculada: 453,12 mÂ²
+   PerÃ­metro calculado: 85,50 m
+
+📍 LOTE 15 - Coordenadas (4 pontos):
+   P57: E 2977,21m, N 1508,48m (SW - Sudoeste)
+   P58: E 2999,05m, N 1508,48m (SE - Sudeste)
+   P59: E 2999,05m, N 1529,23m (NE - Nordeste)
+   P60: E 2977,21m, N 1529,23m (NW - Noroeste)
+   Ãrea calculada: 453,08 mÂ²
+   PerÃ­metro calculado: 85,17 m
+
+📍 LOTE 16 - Coordenadas (4 pontos):
+   P61: E 2889,04m, N 1528,37m (SW - Sudoeste)
+   P62: E 2910,94m, N 1528,37m (SE - Sudeste)
+   P63: E 2910,94m, N 1548,90m (NE - Nordeste)
+   P64: E 2889,04m, N 1548,90m (NW - Noroeste)
+   Ãrea calculada: 449,50 mÂ²
+   PerÃ­metro calculado: 84,85 m
+
+📍 LOTE 17 - Coordenadas (4 pontos):
+   P65: E 2909,49m, N 1529,51m (SW - Sudoeste)
+   P66: E 2932,24m, N 1529,51m (SE - Sudeste)
+   P67: E 2932,24m, N 1548,54m (NE - Nordeste)
+   P68: E 2909,49m, N 1548,54m (NW - Noroeste)
+   Ãrea calculada: 432,79 mÂ²
+   PerÃ­metro calculado: 83,55 m
+
+📍 LOTE 18 - Coordenadas (4 pontos):
+   P69: E 2931,84m, N 1528,14m (SW - Sudoeste)
+   P70: E 2954,53m, N 1528,14m (SE - Sudeste)
+   P71: E 2954,53m, N 1549,35m (NE - Nordeste)
+   P72: E 2931,84m, N 1549,35m (NW - Noroeste)
+   Ãrea calculada: 481,25 mÂ²
+   PerÃ­metro calculado: 87,80 m
+
+📍 LOTE 19 - Coordenadas (4 pontos):
+   P73: E 2955,61m, N 1528,46m (SW - Sudoeste)
+   P74: E 2976,11m, N 1528,46m (SE - Sudeste)
+   P75: E 2976,11m, N 1548,84m (NE - Nordeste)
+   P76: E 2955,61m, N 1548,84m (NW - Noroeste)
+   Ãrea calculada: 417,92 mÂ²
+   PerÃ­metro calculado: 81,77 m
+
+📍 LOTE 20 - Coordenadas (4 pontos):
+   P77: E 2977,19m, N 1528,11m (SW - Sudoeste)
+   P78: E 2998,18m, N 1528,11m (SE - Sudeste)
+   P79: E 2998,18m, N 1549,29m (NE - Nordeste)
+   P80: E 2977,19m, N 1549,29m (NW - Noroeste)
+   Ãrea calculada: 444,66 mÂ²
+   PerÃ­metro calculado: 84,35 m
+
+📍 LOTE 21 - Coordenadas (4 pontos):
+   P81: E 2888,23m, N 1548,20m (SW - Sudoeste)
+   P82: E 2911,30m, N 1548,20m (SE - Sudeste)
+   P83: E 2911,30m, N 1568,66m (NE - Nordeste)
+   P84: E 2888,23m, N 1568,66m (NW - Noroeste)
+   Ãrea calculada: 471,94 mÂ²
+   PerÃ­metro calculado: 87,05 m
+
+📍 LOTE 22 - Coordenadas (4 pontos):
+   P85: E 2910,59m, N 1549,11m (SW - Sudoeste)
+   P86: E 2932,67m, N 1549,11m (SE - Sudeste)
+   P87: E 2932,67m, N 1568,63m (NE - Nordeste)
+   P88: E 2910,59m, N 1568,63m (NW - Noroeste)
+   Ãrea calculada: 431,10 mÂ²
+   PerÃ­metro calculado: 83,21 m
+
+📍 LOTE 23 - Coordenadas (4 pontos):
+   P89: E 2932,54m, N 1549,97m (SW - Sudoeste)
+   P90: E 2955,48m, N 1549,97m (SE - Sudeste)
+   P91: E 2955,48m, N 1568,73m (NE - Nordeste)
+   P92: E 2932,54m, N 1568,73m (NW - Noroeste)
+   Ãrea calculada: 430,27 mÂ²
+   PerÃ­metro calculado: 83,39 m
+
+📍 LOTE 24 - Coordenadas (4 pontos):
+   P93: E 2955,12m, N 1548,96m (SW - Sudoeste)
+   P94: E 2976,80m, N 1548,96m (SE - Sudeste)
+   P95: E 2976,80m, N 1569,70m (NE - Nordeste)
+   P96: E 2955,12m, N 1569,70m (NW - Noroeste)
+   Ãrea calculada: 449,66 mÂ²
+   PerÃ­metro calculado: 84,84 m
+
+📍 LOTE 25 - Coordenadas (4 pontos):
+   P97: E 2977,57m, N 1549,32m (SW - Sudoeste)
+   P98: E 2999,74m, N 1549,32m (SE - Sudeste)
+   P99: E 2999,74m, N 1568,72m (NE - Nordeste)
+   P100: E 2977,57m, N 1568,72m (NW - Noroeste)
+   Ãrea calculada: 430,20 mÂ²
+   PerÃ­metro calculado: 83,15 m
+
+🚨 INSTRUÃÃES CRÃTICAS PARA A IA:
+1. â GERAR MEMORIAL COMPLETO COM TODOS OS 25 LOTES LISTADOS ACIMA
+2. â USAR EXATAMENTE AS COORDENADAS P01-P100 LISTADAS
+3. â NUNCA PARAR EM APENAS 2 OU 4 LOTES - GERAR TODOS OS 25 LOTES
+4. â CADA LOTE DEVE TER SUAS 4 COORDENADAS ESPECÃFICAS
+5. â USAR AS ÃREAS E PERÃMETROS CALCULADOS ACIMA
+6. 🎯 VALIDAÃÃO: Memorial deve conter 25 seÃ§Ãµes de LOTE XX
+
+🚨 INSTRUÃÃES CRÃTICAS - LEIA COM ATENÃÃO:
+1. â NUNCA use coordenadas 123456.78 ou 7654321.09 - SÃO PROIBIDAS!
+2. â SEMPRE use as coordenadas listadas acima
+3. â SEMPRE mantenha coordenadas dentro dos ranges 2888-2999 e 1468-1569
+4. â NUNCA deixe campos como [nÃ£o disponÃ­vel] - use as coordenadas fornecidas
+5. â SEMPRE substitua exemplos por coordenadas reais listadas
+6. 🎯 VALIDAÃÃO: Memorial deve conter coordenadas dos ranges acima
+7. 🔢 OBRIGATÃRIO: Gerar EXATAMENTE 25 lotes (LOTE 01 atÃ© LOTE 25)
+8. â PROIBIDO parar antes de completar todos os lotes
+9. â PROIBIDO usar '...' ou 'demais lotes seguem padrÃ£o'
+10. â CADA lote deve ter sua seÃ§Ã£o completa no memorial
+
+🎯 CHECKLIST FINAL OBRIGATÃRIO:
+Antes de finalizar o memorial, a IA DEVE verificar:
+â¡ Memorial contÃ©m 25 seÃ§Ãµes de LOTE (01 atÃ© 25)?
+â¡ Cada lote tem suas 4 coordenadas especÃ­ficas?
+â¡ Todas as coordenadas estÃ£o no range 2888-2999 e 1468-1569?
+â¡ Nenhum lote foi omitido ou resumido?
+â¡ Memorial estÃ¡ completo e profissional?
+
+
+--- FIM DO MEMORIAL FALLBACK ---
+Para gerar memorial completo com IA, resolva os problemas de conectividade e tente novamente.

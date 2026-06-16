@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Memorial Generation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .data { background: #f5f5f5; padding: 10px; white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; }
+        .highlight { background: yellow; }
+        .step { margin: 10px 0; padding: 10px; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Memorial Generation - MemorialPro</h1>
+    
+    <div class="section">
+        <h2>🎯 Teste Completo do Fluxo</h2>
+        <button onclick="runCompleteTest()">🚀 Executar Teste Completo</button>
+        <div id="test-progress" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📊 Dados Extraídos dos Arquivos</h2>
+        <div id="extracted-data" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📡 Requisição para o Backend</h2>
+        <div id="backend-request" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📋 Resposta do Backend</h2>
+        <div id="backend-response" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>🎯 Análise do Problema</h2>
+        <div id="problem-analysis" class="data"></div>
+    </div>
+
+    <script>
+        async function runCompleteTest() {
+            const progressDiv = document.getElementById('test-progress');
+            
+            try {
+                // Passo 1: Carregar arquivo DXF real
+                progressDiv.innerHTML = '<div class="step">🔄 Passo 1: Carregando arquivo DXF real...</div>';
+                
+                const dxfResponse = await fetch('/api/dxf/1/download');
+                if (!dxfResponse.ok) {
+                    throw new Error(`Erro ao carregar DXF: ${dxfResponse.status}`);
+                }
+                
+                const dxfContent = await dxfResponse.text();
+                progressDiv.innerHTML += '<div class="step success">✅ Passo 1: Arquivo DXF carregado (' + dxfContent.length + ' caracteres)</div>';
+                
+                // Passo 2: Fazer parsing detalhado
+                progressDiv.innerHTML += '<div class="step">🔄 Passo 2: Fazendo parsing detalhado...</div>';
+                
+                const parsedData = parseDetailedDXF(dxfContent);
+                progressDiv.innerHTML += '<div class="step success">✅ Passo 2: Parsing concluído (' + parsedData.entities.length + ' entidades)</div>';
+                
+                // Mostrar dados extraídos
+                displayExtractedData(parsedData);
+                
+                // Passo 3: Preparar dados para o backend
+                progressDiv.innerHTML += '<div class="step">🔄 Passo 3: Preparando dados para o backend...</div>';
+                
+                const requestData = {
+                    entities: parsedData.entities,
+                    fileName: 'TESTE AGENTE_DBL TERRA NOBRE_1.dxf',
+                    projectName: 'Debug Test Project',
+                    projectDescription: 'Teste de debug para identificar problema no memorial',
+                    standardId: null
+                };
+                
+                // Mostrar requisição
+                displayBackendRequest(requestData);
+                progressDiv.innerHTML += '<div class="step success">✅ Passo 3: Dados preparados para envio</div>';
+                
+                // Passo 4: Enviar para o backend
+                progressDiv.innerHTML += '<div class="step">🔄 Passo 4: Enviando para o backend...</div>';
+                
+                const memorialResponse = await fetch('/api/memorial/generate-gpt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const responseText = await memorialResponse.text();
+                progressDiv.innerHTML += '<div class="step success">✅ Passo 4: Resposta recebida (Status: ' + memorialResponse.status + ')</div>';
+                
+                // Mostrar resposta
+                displayBackendResponse(responseText, memorialResponse.status);
+                
+                // Passo 5: Analisar o problema
+                progressDiv.innerHTML += '<div class="step">🔄 Passo 5: Analisando o problema...</div>';
+                
+                analyzeProblem(parsedData, requestData, responseText);
+                progressDiv.innerHTML += '<div class="step success">✅ Passo 5: Análise concluída</div>';
+                
+            } catch (error) {
+                progressDiv.innerHTML += '<div class="step error">❌ Erro: ' + error.message + '</div>';
+            }
+        }
+        
+        function parseDetailedDXF(content) {
+            const lines = content.split('\\n').map(line => line.trim());
+            const entities = [];
+            const coordinates = [];
+            const texts = [];
+            const points = [];
+            
+            for (let i = 0; i < lines.length - 1; i++) {
+                if (lines[i] === '0') {
+                    const entityType = lines[i + 1];
+                    
+                    if (['LINE', 'LWPOLYLINE', 'TEXT', 'POINT', 'CIRCLE', 'ARC'].includes(entityType)) {
+                        const entity = {
+                            type: entityType,
+                            layer: '0',
+                            properties: {}
+                        };
+                        
+                        // Extrair propriedades detalhadas
+                        for (let j = i + 2; j < Math.min(i + 100, lines.length - 1); j += 2) {
+                            const code = lines[j];
+                            const value = lines[j + 1];
+                            
+                            if (code === '0') break;
+                            
+                            // Armazenar todas as propriedades
+                            entity.properties[`code_${code}`] = value;
+                            
+                            switch (code) {
+                                case '8': entity.layer = value; break;
+                                case '10': 
+                                    entity.properties.x = parseFloat(value);
+                                    coordinates.push({type: 'X', value: parseFloat(value), entity: entityType});
+                                    break;
+                                case '20': 
+                                    entity.properties.y = parseFloat(value);
+                                    coordinates.push({type: 'Y', value: parseFloat(value), entity: entityType});
+                                    break;
+                                case '11': entity.properties.x2 = parseFloat(value); break;
+                                case '21': entity.properties.y2 = parseFloat(value); break;
+                                case '40': entity.properties.radius = parseFloat(value); break;
+                                case '1': 
+                                    entity.properties.text = value;
+                                    texts.push({text: value, entity: entityType, layer: entity.layer});
+                                    break;
+                            }
+                        }
+                        
+                        entities.push(entity);
+                        
+                        if (entityType === 'POINT') {
+                            points.push(entity);
+                        }
+                    }
+                }
+            }
+            
+            return {
+                entities,
+                coordinates,
+                texts,
+                points,
+                stats: {
+                    totalEntities: entities.length,
+                    coordinateCount: coordinates.length,
+                    textCount: texts.length,
+                    pointCount: points.length
+                }
+            };
+        }
+        
+        function displayExtractedData(parsedData) {
+            let html = '<div class="success">✅ Dados extraídos com sucesso</div>';
+            
+            // Estatísticas gerais
+            html += '<h3>📊 Estatísticas:</h3>';
+            html += `<div>Total de entidades: ${parsedData.stats.totalEntities}</div>`;
+            html += `<div>Coordenadas encontradas: ${parsedData.stats.coordinateCount}</div>`;
+            html += `<div>Textos encontrados: ${parsedData.stats.textCount}</div>`;
+            html += `<div>Pontos encontrados: ${parsedData.stats.pointCount}</div>`;
+            
+            // Análise de coordenadas
+            if (parsedData.coordinates.length > 0) {
+                const xCoords = parsedData.coordinates.filter(c => c.type === 'X').map(c => c.value);
+                const yCoords = parsedData.coordinates.filter(c => c.type === 'Y').map(c => c.value);
+                
+                html += '<h3>📐 Análise de Coordenadas:</h3>';
+                html += `<div>X: ${Math.min(...xCoords).toFixed(2)} a ${Math.max(...xCoords).toFixed(2)}</div>`;
+                html += `<div>Y: ${Math.min(...yCoords).toFixed(2)} a ${Math.max(...yCoords).toFixed(2)}</div>`;
+                html += `<div class="highlight">🎯 COORDENADAS REAIS ENCONTRADAS!</div>`;
+            }
+            
+            // Amostra de textos
+            if (parsedData.texts.length > 0) {
+                html += '<h3>📝 Amostra de Textos:</h3>';
+                parsedData.texts.slice(0, 10).forEach((text, index) => {
+                    html += `<div>${index + 1}. "${text.text}" (${text.entity}, Layer: ${text.layer})</div>`;
+                });
+            }
+            
+            // Amostra de pontos
+            if (parsedData.points.length > 0) {
+                html += '<h3>📍 Amostra de Pontos:</h3>';
+                parsedData.points.slice(0, 5).forEach((point, index) => {
+                    html += `<div>${index + 1}. (${point.properties.x?.toFixed(2)}, ${point.properties.y?.toFixed(2)}) - Layer: ${point.layer}</div>`;
+                });
+            }
+            
+            document.getElementById('extracted-data').innerHTML = html;
+        }
+        
+        function displayBackendRequest(requestData) {
+            let html = '<div class="success">✅ Dados preparados para envio</div>';
+            
+            html += '<h3>📊 Resumo da Requisição:</h3>';
+            html += `<div>Entidades: ${requestData.entities.length}</div>`;
+            html += `<div>Arquivo: ${requestData.fileName}</div>`;
+            html += `<div>Projeto: ${requestData.projectName}</div>`;
+            
+            // Análise das entidades que serão enviadas
+            const entityTypes = requestData.entities.reduce((acc, entity) => {
+                acc[entity.type] = (acc[entity.type] || 0) + 1;
+                return acc;
+            }, {});
+            
+            html += '<h3>🎯 Tipos de Entidades Enviadas:</h3>';
+            Object.entries(entityTypes).forEach(([type, count]) => {
+                html += `<div>${type}: ${count}</div>`;
+            });
+            
+            // Verificar se há coordenadas válidas
+            const entitiesWithCoords = requestData.entities.filter(entity => {
+                return entity.properties.x !== undefined || entity.properties.y !== undefined;
+            });
+            
+            html += '<h3>📐 Verificação de Coordenadas:</h3>';
+            html += `<div>Entidades com coordenadas: ${entitiesWithCoords.length}</div>`;
+            html += `<div>Percentual: ${((entitiesWithCoords.length / requestData.entities.length) * 100).toFixed(1)}%</div>`;
+            
+            if (entitiesWithCoords.length > 0) {
+                const sampleCoords = entitiesWithCoords.slice(0, 3);
+                html += '<h3>🔍 Amostra de Coordenadas Enviadas:</h3>';
+                sampleCoords.forEach((entity, index) => {
+                    html += `<div>${index + 1}. ${entity.type}: (${entity.properties.x?.toFixed(2)}, ${entity.properties.y?.toFixed(2)})</div>`;
+                });
+                html += `<div class="highlight">🎯 COORDENADAS REAIS SENDO ENVIADAS!</div>`;
+            }
+            
+            document.getElementById('backend-request').innerHTML = html;
+        }
+        
+        function displayBackendResponse(responseText, status) {
+            let html = `<div class="success">✅ Resposta recebida (Status: ${status})</div>`;
+            
+            html += `<div>Tamanho da resposta: ${responseText.length} caracteres</div>`;
+            
+            try {
+                const jsonResponse = JSON.parse(responseText);
+                
+                if (jsonResponse.memorialText) {
+                    html += '<h3>📋 Memorial Gerado:</h3>';
+                    html += '<div class="data">' + jsonResponse.memorialText.substring(0, 1000) + '...</div>';
+                    
+                    // Verificar se contém coordenadas reais ou fictícias
+                    if (jsonResponse.memorialText.includes('123456.78') || jsonResponse.memorialText.includes('7654321.09')) {
+                        html += '<div class="error">❌ PROBLEMA: Memorial contém coordenadas fictícias!</div>';
+                    } else if (jsonResponse.memorialText.includes('2888') || jsonResponse.memorialText.includes('2900') || jsonResponse.memorialText.includes('1500')) {
+                        html += '<div class="success">✅ Memorial parece conter coordenadas reais!</div>';
+                    } else {
+                        html += '<div class="warning">⚠️ Não foi possível identificar o tipo de coordenadas</div>';
+                    }
+                } else {
+                    html += '<div class="error">❌ Campo memorialText não encontrado na resposta</div>';
+                    html += '<pre>' + JSON.stringify(jsonResponse, null, 2) + '</pre>';
+                }
+            } catch (error) {
+                html += '<div class="error">❌ Resposta não é JSON válido</div>';
+                html += '<pre>' + responseText.substring(0, 500) + '</pre>';
+            }
+            
+            document.getElementById('backend-response').innerHTML = html;
+        }
+        
+        function analyzeProblem(parsedData, requestData, responseText) {
+            let html = '<h3>🔍 Análise do Problema:</h3>';
+            
+            // Verificar se dados reais foram extraídos
+            const hasRealCoords = parsedData.coordinates.length > 0;
+            const coordRange = hasRealCoords ? {
+                minX: Math.min(...parsedData.coordinates.filter(c => c.type === 'X').map(c => c.value)),
+                maxX: Math.max(...parsedData.coordinates.filter(c => c.type === 'X').map(c => c.value)),
+                minY: Math.min(...parsedData.coordinates.filter(c => c.type === 'Y').map(c => c.value)),
+                maxY: Math.max(...parsedData.coordinates.filter(c => c.type === 'Y').map(c => c.value))
+            } : null;
+            
+            html += '<div class="step">1. Extração de Dados:</div>';
+            if (hasRealCoords) {
+                html += `<div class="success">✅ Coordenadas reais extraídas: X(${coordRange.minX.toFixed(2)} a ${coordRange.maxX.toFixed(2)}), Y(${coordRange.minY.toFixed(2)} a ${coordRange.maxY.toFixed(2)})</div>`;
+            } else {
+                html += '<div class="error">❌ Nenhuma coordenada real extraída</div>';
+            }
+            
+            // Verificar se dados foram enviados corretamente
+            html += '<div class="step">2. Envio para Backend:</div>';
+            const entitiesWithCoords = requestData.entities.filter(e => e.properties.x !== undefined);
+            if (entitiesWithCoords.length > 0) {
+                html += `<div class="success">✅ ${entitiesWithCoords.length} entidades com coordenadas enviadas</div>`;
+            } else {
+                html += '<div class="error">❌ Nenhuma entidade com coordenadas enviada</div>';
+            }
+            
+            // Verificar resposta do backend
+            html += '<div class="step">3. Processamento do Backend:</div>';
+            try {
+                const jsonResponse = JSON.parse(responseText);
+                if (jsonResponse.memorialText) {
+                    if (jsonResponse.memorialText.includes('123456.78')) {
+                        html += '<div class="error">❌ PROBLEMA IDENTIFICADO: Backend está gerando coordenadas fictícias</div>';
+                        html += '<div class="warning">🔧 SOLUÇÃO: O problema está no backend, não no frontend</div>';
+                        html += '<div class="warning">📋 O backend precisa ser corrigido para usar as coordenadas reais enviadas</div>';
+                    } else {
+                        html += '<div class="success">✅ Backend parece estar usando coordenadas corretas</div>';
+                    }
+                } else {
+                    html += '<div class="error">❌ Backend não retornou memorial válido</div>';
+                }
+            } catch (error) {
+                html += '<div class="error">❌ Backend retornou resposta inválida</div>';
+            }
+            
+            // Conclusão
+            html += '<div class="step">🎯 Conclusão:</div>';
+            if (hasRealCoords && entitiesWithCoords.length > 0) {
+                html += '<div class="highlight">O frontend está funcionando corretamente!</div>';
+                html += '<div class="highlight">O problema está no backend que gera o memorial</div>';
+                html += '<div class="warning">Ação necessária: Corrigir o backend para usar coordenadas reais</div>';
+            } else {
+                html += '<div class="error">Problema na extração ou envio de dados</div>';
+            }
+            
+            document.getElementById('problem-analysis').innerHTML = html;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+{
+  "description": "🌍 PROPERTY BOUNDARIES CRUD TEST DATA - JSON para testes no Postman",
+  "baseUrl": "http://localhost:9010/api",
+  "authentication": "Bearer Token required in Authorization header",
+  "note": "Replace {{propertyId}} with actual property ID from previous tests",
+  
+  "testData": {
+    
+    "createNorthBoundary": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "direction": "NORTH",
+        "extension": 15.50,
+        "azimuth": 90.0000,
+        "adjacentType": "STREET",
+        "adjacentName": "Flowers Street",
+        "adjacentDocument": "",
+        "fullDescription": "Borders to the north with Flowers Street, along a straight line measuring 15.50 meters",
+        "sequenceOrder": 1
+      }
+    },
+
+    "createEastBoundary": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "direction": "EAST",
+        "extension": 30.08,
+        "azimuth": 180.0000,
+        "adjacentType": "OWNER",
+        "adjacentName": "José Santos",
+        "adjacentDocument": "123.456.789-00",
+        "fullDescription": "Borders to the east with property of José Santos (CPF 123.456.789-00), along a straight line measuring 30.08 meters",
+        "sequenceOrder": 2
+      }
+    },
+
+    "createSouthBoundary": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "direction": "SOUTH",
+        "extension": 15.50,
+        "azimuth": 270.0000,
+        "adjacentType": "OWNER",
+        "adjacentName": "Maria Silva",
+        "adjacentDocument": "987.654.321-00",
+        "fullDescription": "Borders to the south with property of Maria Silva (CPF 987.654.321-00), along a straight line measuring 15.50 meters",
+        "sequenceOrder": 3
+      }
+    },
+
+    "createWestBoundary": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "direction": "WEST",
+        "extension": 30.08,
+        "azimuth": 0.0000,
+        "adjacentType": "AVENUE",
+        "adjacentName": "Oak Avenue",
+        "adjacentDocument": "",
+        "fullDescription": "Borders to the west with Oak Avenue, along a straight line measuring 30.08 meters",
+        "sequenceOrder": 4
+      }
+    },
+
+    "createComplexBoundary": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "direction": "NORTHEAST",
+        "extension": 8.75,
+        "azimuth": 45.0000,
+        "adjacentType": "RAILWAY",
+        "adjacentName": "CPTM Railway Line",
+        "adjacentDocument": "",
+        "fullDescription": "Borders to the northeast with CPTM Railway Line, along an angled line measuring 8.75 meters at 45° azimuth",
+        "sequenceOrder": 5
+      }
+    },
+
+    "createRiverBoundary": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "direction": "SOUTHWEST",
+        "extension": 12.30,
+        "azimuth": 225.0000,
+        "adjacentType": "RIVER",
+        "adjacentName": "Tietê River",
+        "adjacentDocument": "",
+        "fullDescription": "Borders to the southwest with Tietê River, following the natural course of the riverbank for approximately 12.30 meters",
+        "sequenceOrder": 6
+      }
+    },
+
+    "createCorporateBoundary": {
+      "method": "POST",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "direction": "SOUTHEAST",
+        "extension": 25.00,
+        "azimuth": 135.0000,
+        "adjacentType": "COMPANY",
+        "adjacentName": "ABC Industries Ltd.",
+        "adjacentDocument": "12.345.678/0001-90",
+        "fullDescription": "Borders to the southeast with industrial property of ABC Industries Ltd. (CNPJ 12.345.678/0001-90), along a straight line measuring 25.00 meters",
+        "sequenceOrder": 7
+      }
+    },
+
+    "updateBoundary": {
+      "method": "PUT",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries/{{boundaryId}}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {{token}}"
+      },
+      "body": {
+        "direction": "NORTH",
+        "extension": 15.52,
+        "azimuth": 90.1500,
+        "adjacentType": "STREET",
+        "adjacentName": "Flowers Street (Updated)",
+        "fullDescription": "Borders to the north with Flowers Street, along a straight line measuring 15.52 meters (updated measurement)"
+      }
+    }
+  },
+
+  "directionTypes": {
+    "description": "Available directions for direction field",
+    "cardinalDirections": [
+      "NORTH",
+      "SOUTH", 
+      "EAST",
+      "WEST"
+    ],
+    "intermediateDirections": [
+      "NORTHEAST",
+      "NORTHWEST",
+      "SOUTHEAST", 
+      "SOUTHWEST"
+    ]
+  },
+
+  "adjacentTypes": {
+    "description": "Available adjacent types for adjacentType field",
+    "types": [
+      "OWNER",
+      "STREET",
+      "AVENUE",
+      "ROAD",
+      "HIGHWAY",
+      "RIVER",
+      "STREAM",
+      "RAILWAY",
+      "COMPANY",
+      "PUBLIC_AREA",
+      "PARK",
+      "SQUARE",
+      "CEMETERY",
+      "SCHOOL",
+      "HOSPITAL",
+      "GOVERNMENT",
+      "UTILITY",
+      "VACANT_LOT"
+    ]
+  },
+
+  "otherEndpoints": {
+    "listBoundaries": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "deleteBoundary": {
+      "method": "DELETE",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries/{{boundaryId}}",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "deleteAllBoundaries": {
+      "method": "DELETE",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    },
+    
+    "countBoundaries": {
+      "method": "GET",
+      "url": "{{baseUrl}}/properties/{{propertyId}}/boundaries/count",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      }
+    }
+  },
+
+  "measurementNotes": {
+    "extension": "Extension in meters (decimal format)",
+    "azimuth": "Azimuth in decimal degrees (0.0000 - 359.9999)",
+    "azimuthReference": {
+      "0°": "North",
+      "90°": "East", 
+      "180°": "South",
+      "270°": "West"
+    }
+  },
+
+  "testSequence": {
+    "description": "Recommended test sequence",
+    "steps": [
+      "1. Create property first using property-test-data.json",
+      "2. Copy the propertyId from response",
+      "3. Replace {{propertyId}} in URLs above",
+      "4. Create boundaries in sequence (North, East, South, West)",
+      "5. Test list, update, and delete operations"
+    ]
+  }
+}

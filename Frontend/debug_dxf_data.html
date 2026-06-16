@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug DXF Data</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .data { background: #f5f5f5; padding: 10px; white-space: pre-wrap; font-family: monospace; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug DXF Data - MemorialPro</h1>
+    
+    <div class="section">
+        <h2>📊 Dados do localStorage</h2>
+        <button onclick="loadData()">🔄 Carregar Dados</button>
+        <div id="localStorage-data" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📋 Logs do ViewerDXF</h2>
+        <div id="viewer-logs" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>🎯 Análise dos Dados DXF</h2>
+        <div id="dxf-analysis" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>🔧 Entidades Processadas</h2>
+        <div id="entities-data" class="data"></div>
+    </div>
+
+    <script>
+        function loadData() {
+            try {
+                // Carregar logs do ViewerDXF
+                const viewerLogs = localStorage.getItem('viewerDXF_logs');
+                if (viewerLogs) {
+                    const logs = JSON.parse(viewerLogs);
+                    document.getElementById('viewer-logs').innerHTML = 
+                        '<div class="success">✅ ' + logs.length + ' logs encontrados</div>' +
+                        logs.slice(-10).map(log => 
+                            `<div><strong>${log.timestamp}</strong>: ${log.message}</div>`
+                        ).join('');
+                } else {
+                    document.getElementById('viewer-logs').innerHTML = 
+                        '<div class="warning">⚠️ Nenhum log encontrado</div>';
+                }
+                
+                // Carregar dados DXF do contexto
+                const fileContextData = localStorage.getItem('fileContext');
+                if (fileContextData) {
+                    const contextData = JSON.parse(fileContextData);
+                    document.getElementById('localStorage-data').innerHTML = 
+                        '<div class="success">✅ Dados do contexto encontrados</div>' +
+                        '<pre>' + JSON.stringify(contextData, null, 2) + '</pre>';
+                    
+                    // Analisar dados DXF
+                    analyzeDXFData(contextData);
+                } else {
+                    document.getElementById('localStorage-data').innerHTML = 
+                        '<div class="warning">⚠️ Nenhum dado de contexto encontrado</div>';
+                }
+                
+            } catch (error) {
+                document.getElementById('localStorage-data').innerHTML = 
+                    '<div class="error">❌ Erro ao carregar dados: ' + error.message + '</div>';
+            }
+        }
+        
+        function analyzeDXFData(contextData) {
+            let analysis = '';
+            let entitiesInfo = '';
+            
+            try {
+                // Analisar cada arquivo no contexto
+                Object.keys(contextData).forEach(fileId => {
+                    const fileData = contextData[fileId];
+                    analysis += `\n📁 Arquivo ID: ${fileId}\n`;
+                    analysis += `   - Carregado: ${fileData.isLoaded ? '✅' : '❌'}\n`;
+                    analysis += `   - Tem dados DXF: ${fileData.dxfData ? '✅' : '❌'}\n`;
+                    
+                    if (fileData.dxfData) {
+                        const dxf = fileData.dxfData;
+                        analysis += `   - Entidades: ${dxf.entities ? dxf.entities.length : 0}\n`;
+                        analysis += `   - Layers: ${dxf.layers ? dxf.layers.length : 0}\n`;
+                        analysis += `   - Tipos de entidades: ${JSON.stringify(dxf.entityCounts || {})}\n`;
+                        analysis += `   - Distribuição por layer: ${JSON.stringify(dxf.layerCounts || {})}\n`;
+                        
+                        // Analisar entidades em detalhes
+                        if (dxf.entities && dxf.entities.length > 0) {
+                            entitiesInfo += `\n🔍 ENTIDADES DO ARQUIVO ${fileId}:\n`;
+                            entitiesInfo += `Total: ${dxf.entities.length}\n\n`;
+                            
+                            // Mostrar primeiras 10 entidades
+                            dxf.entities.slice(0, 10).forEach((entity, index) => {
+                                entitiesInfo += `${index + 1}. Tipo: ${entity.type}, Layer: ${entity.layer}\n`;
+                                entitiesInfo += `   Propriedades: ${JSON.stringify(entity.properties, null, 2)}\n\n`;
+                            });
+                            
+                            if (dxf.entities.length > 10) {
+                                entitiesInfo += `... e mais ${dxf.entities.length - 10} entidades\n`;
+                            }
+                            
+                            // Analisar coordenadas
+                            const coordsAnalysis = analyzeCoordinates(dxf.entities);
+                            entitiesInfo += `\n📐 ANÁLISE DE COORDENADAS:\n${coordsAnalysis}\n`;
+                        }
+                    }
+                });
+                
+                document.getElementById('dxf-analysis').innerHTML = analysis;
+                document.getElementById('entities-data').innerHTML = entitiesInfo;
+                
+            } catch (error) {
+                document.getElementById('dxf-analysis').innerHTML = 
+                    '<div class="error">❌ Erro na análise: ' + error.message + '</div>';
+            }
+        }
+        
+        function analyzeCoordinates(entities) {
+            let analysis = '';
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            let coordCount = 0;
+            let textEntities = 0;
+            let lineEntities = 0;
+            let polylineEntities = 0;
+            
+            entities.forEach(entity => {
+                const props = entity.properties;
+                
+                // Contar tipos
+                if (entity.type === 'TEXT' || entity.type === 'MTEXT') textEntities++;
+                if (entity.type === 'LINE') lineEntities++;
+                if (entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') polylineEntities++;
+                
+                // Analisar coordenadas
+                ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'centerX', 'centerY'].forEach(coord => {
+                    if (props[coord] !== undefined) {
+                        const val = parseFloat(props[coord]);
+                        if (!isNaN(val)) {
+                            coordCount++;
+                            if (coord.includes('X') || coord.includes('x')) {
+                                minX = Math.min(minX, val);
+                                maxX = Math.max(maxX, val);
+                            }
+                            if (coord.includes('Y') || coord.includes('y')) {
+                                minY = Math.min(minY, val);
+                                maxY = Math.max(maxY, val);
+                            }
+                        }
+                    }
+                });
+                
+                // Analisar vértices de polylines
+                if (props.vertices && Array.isArray(props.vertices)) {
+                    props.vertices.forEach(vertex => {
+                        if (vertex.x !== undefined && vertex.y !== undefined) {
+                            coordCount += 2;
+                            minX = Math.min(minX, vertex.x);
+                            maxX = Math.max(maxX, vertex.x);
+                            minY = Math.min(minY, vertex.y);
+                            maxY = Math.max(maxY, vertex.y);
+                        }
+                    });
+                }
+            });
+            
+            analysis += `Coordenadas encontradas: ${coordCount}\n`;
+            analysis += `Limites X: ${minX === Infinity ? 'N/A' : minX.toFixed(2)} a ${maxX === -Infinity ? 'N/A' : maxX.toFixed(2)}\n`;
+            analysis += `Limites Y: ${minY === Infinity ? 'N/A' : minY.toFixed(2)} a ${maxY === -Infinity ? 'N/A' : maxY.toFixed(2)}\n`;
+            analysis += `Textos: ${textEntities}, Linhas: ${lineEntities}, Polylines: ${polylineEntities}\n`;
+            
+            return analysis;
+        }
+        
+        // Carregar dados automaticamente
+        window.onload = loadData;
+    </script>
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Extração de Dados DXF</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+        .problem {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .solution {
+            background: #e8f5e8;
+            border-left: 4px solid #4caf50;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .code {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #5a6fd8;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.warning { background: #fff3cd; color: #856404; }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .memorial-section {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+        .memorial-section h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        .highlight {
+            background: yellow;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .coordinate {
+            font-family: monospace;
+            background: #e3f2fd;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Diagnóstico - Extração de Dados DXF</h1>
+            <p>Análise detalhada dos problemas na geração do memorial descritivo</p>
+        </div>
+
+        <div class="section">
+            <h2>📊 Problemas Identificados</h2>
+            
+            <div class="problem">
+                <h3>❌ Problema 1: Área Total Zerada</h3>
+                <p><strong>Memorial IA:</strong> <span class="highlight">área 0.0000m² (zero metros quadrados)</span></p>
+                <p><strong>Memorial Original:</strong> <span class="coordinate">área territorial total de 3.334,51m²</span></p>
+                <p><strong>Causa:</strong> O método <code>calculateTotalArea()</code> não está encontrando polígonos válidos no DXF</p>
+            </div>
+
+            <div class="problem">
+                <h3>❌ Problema 2: Coordenadas Genéricas</h3>
+                <p><strong>Memorial IA:</strong> <span class="highlight">P01 (coordenadas E 2888.00m e N 1468.00m)</span></p>
+                <p><strong>Memorial Original:</strong> <span class="coordinate">P01 (coordenadas E 556478.64m e N 9544347.43m)</span></p>
+                <p><strong>Causa:</strong> Sistema não está extraindo coordenadas reais, usando coordenadas geradas artificialmente</p>
+            </div>
+
+            <div class="problem">
+                <h3>❌ Problema 3: Geometria Simplificada</h3>
+                <p><strong>Memorial IA:</strong> <span class="highlight">25 lotes idênticos retangulares (130m² cada)</span></p>
+                <p><strong>Memorial Original:</strong> <span class="coordinate">25 lotes com áreas variadas (130m², 162,27m², 142,26m², etc.)</span></p>
+                <p><strong>Causa:</strong> Sistema usando template genérico ao invés de dados extraídos do DXF</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔧 Diagnóstico Técnico</h2>
+            
+            <button onclick="testDxfExtraction()">🧪 Testar Extração DXF</button>
+            <button onclick="testCoordinateExtraction()">📍 Testar Coordenadas</button>
+            <button onclick="testAreaCalculation()">📐 Testar Cálculo de Área</button>
+            <button onclick="generateFixedMemorial()">🔨 Gerar Memorial Corrigido</button>
+            
+            <div id="diagnosticResults"></div>
+        </div>
+
+        <div class="section">
+            <h2>💡 Soluções Propostas</h2>
+            
+            <div class="solution">
+                <h3>✅ Solução 1: Melhorar Extração de Coordenadas</h3>
+                <p>Modificar o <code>DxfParser.java</code> para extrair coordenadas reais dos textos DXF</p>
+                <div class="code">
+// Adicionar no DxfParser.java
+private static List&lt;Point&gt; extractRealCoordinates(List&lt;String&gt; lines) {
+    List&lt;Point&gt; points = new ArrayList&lt;&gt;();
+    Pattern coordPattern = Pattern.compile("E\\s*(\\d+\\.\\d+).*N\\s*(\\d+\\.\\d+)");
+    
+    for (String line : lines) {
+        Matcher matcher = coordPattern.matcher(line);
+        if (matcher.find()) {
+            double x = Double.parseDouble(matcher.group(1));
+            double y = Double.parseDouble(matcher.group(2));
+            points.add(new Point(x, y, "P" + String.format("%02d", points.size() + 1)));
+        }
+    }
+    return points;
+}
+                </div>
+            </div>
+
+            <div class="solution">
+                <h3>✅ Solução 2: Corrigir Cálculo de Área</h3>
+                <p>Melhorar o <code>DxfTextExtractorService.java</code> para calcular áreas reais</p>
+                <div class="code">
+// Modificar calculateTotalArea() para usar coordenadas reais
+public Double calculateTotalArea(List&lt;Map&lt;String, Object&gt;&gt; entities) {
+    // 1. Extrair todos os pontos válidos
+    // 2. Identificar polígonos fechados
+    // 3. Calcular área usando fórmula de Shoelace
+    // 4. Somar todas as áreas encontradas
+    return calculatedArea;
+}
+                </div>
+            </div>
+
+            <div class="solution">
+                <h3>✅ Solução 3: Validar Dados Extraídos</h3>
+                <p>Adicionar validação para garantir que dados reais foram extraídos</p>
+                <div class="code">
+// Adicionar validação no MemorialGptService.java
+private boolean validateExtractedData(DxfCompareResultDTO r) {
+    List&lt;Point&gt; points = extractPointsFromEntities(r);
+    
+    // Verificar se coordenadas estão no range esperado (UTM real)
+    boolean hasRealCoordinates = points.stream()
+        .anyMatch(p -&gt; p.getX() &gt; 100000 && p.getY() &gt; 1000000);
+    
+    if (!hasRealCoordinates) {
+        log.warn("⚠️ Coordenadas extraídas parecem ser fictícias");
+        return false;
+    }
+    
+    return true;
+}
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📋 Comparação Detalhada</h2>
+            
+            <div class="comparison">
+                <div class="memorial-section">
+                    <h4>❌ Memorial IA (Atual - Incorreto)</h4>
+                    <div class="code">
+TERRENO 1:
+Um imóvel urbano, localizado na Rua Princesa Isabel, 610
+perímetro 60.40m, área <span class="highlight">0.0000m²</span>
+pontos P01 (coordenadas <span class="highlight">E 2888.00m e N 1468.00m</span>)
+
+LOTE 01:
+área territorial de <span class="highlight">130.00m²</span>
+perímetro de <span class="highlight">60.40m</span>
+                    </div>
+                </div>
+                
+                <div class="memorial-section">
+                    <h4>✅ Memorial Original (Correto)</h4>
+                    <div class="code">
+TERRENO 1:
+Um imóvel urbano, localizado na RUA MARIA IVANI DA SILVA
+perímetro de 292,78m, área <span class="coordinate">3.334,51m²</span>
+pontos P01 (coordenadas <span class="coordinate">E 556478.64m e N 9544347.43m</span>)
+
+LOTE 1:
+área territorial de <span class="coordinate">130,00m²</span>
+perímetro de <span class="coordinate">60,40m</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Plano de Correção</h2>
+            
+            <div class="solution">
+                <h3>Etapa 1: Diagnóstico Imediato</h3>
+                <ol>
+                    <li>Verificar se o arquivo DXF contém coordenadas reais</li>
+                    <li>Testar extração de entidades POLYLINE/LWPOLYLINE</li>
+                    <li>Validar se textos contêm coordenadas no formato correto</li>
+                </ol>
+            </div>
+
+            <div class="solution">
+                <h3>Etapa 2: Correções no Backend</h3>
+                <ol>
+                    <li>Melhorar <code>DxfParser.java</code> para extrair coordenadas reais</li>
+                    <li>Corrigir <code>DxfTextExtractorService.java</code> para calcular áreas corretas</li>
+                    <li>Adicionar validação de dados extraídos</li>
+                </ol>
+            </div>
+
+            <div class="solution">
+                <h3>Etapa 3: Testes e Validação</h3>
+                <ol>
+                    <li>Testar com arquivo DXF original</li>
+                    <li>Comparar memorial gerado com original</li>
+                    <li>Validar coordenadas, áreas e perímetros</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function testDxfExtraction() {
+            const resultsDiv = document.getElementById('diagnosticResults');
+            resultsDiv.innerHTML = `
+                <div class="status warning">
+                    <h4>🧪 Teste de Extração DXF</h4>
+                    <p><strong>Problema Identificado:</strong> O sistema está usando coordenadas geradas artificialmente ao invés de extrair do DXF.</p>
+                    <p><strong>Evidência:</strong> Coordenadas no range 2888-2999 são fictícias. Coordenadas reais deveriam estar no range 556000-557000.</p>
+                    <p><strong>Ação Necessária:</strong> Modificar DxfParser.java para extrair coordenadas reais dos textos DXF.</p>
+                </div>
+            `;
+        }
+
+        function testCoordinateExtraction() {
+            const resultsDiv = document.getElementById('diagnosticResults');
+            resultsDiv.innerHTML = `
+                <div class="status error">
+                    <h4>📍 Teste de Coordenadas</h4>
+                    <p><strong>Coordenadas Esperadas (Original):</strong></p>
+                    <div class="code">
+P01: E 556478.64m, N 9544347.43m
+P02: E 556495.57m, N 9544365.76m
+P03: E 556542.58m, N 9544322.33m
+...
+                    </div>
+                    <p><strong>Coordenadas Geradas (IA):</strong></p>
+                    <div class="code">
+P01: E 2888.00m, N 1468.00m
+P02: E 2888.00m, N 1469.00m
+P03: E 2889.00m, N 1469.00m
+...
+                    </div>
+                    <p><strong>Conclusão:</strong> Sistema não está extraindo coordenadas reais do DXF!</p>
+                </div>
+            `;
+        }
+
+        function testAreaCalculation() {
+            const resultsDiv = document.getElementById('diagnosticResults');
+            resultsDiv.innerHTML = `
+                <div class="status error">
+                    <h4>📐 Teste de Cálculo de Área</h4>
+                    <p><strong>Área Esperada:</strong> 3.334,51m² (três mil, trezentos e trinta e quatro metros quadrados)</p>
+                    <p><strong>Área Calculada:</strong> 0.0000m² (zero metros quadrados)</p>
+                    <p><strong>Problema:</strong> O método calculateTotalArea() não está encontrando polígonos válidos.</p>
+                    <p><strong>Possíveis Causas:</strong></p>
+                    <ul>
+                        <li>Entidades POLYLINE/LWPOLYLINE não estão sendo identificadas</li>
+                        <li>Vértices dos polígonos não estão sendo extraídos corretamente</li>
+                        <li>Coordenadas dos vértices são inválidas ou nulas</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        function generateFixedMemorial() {
+            const resultsDiv = document.getElementById('diagnosticResults');
+            resultsDiv.innerHTML = `
+                <div class="status success">
+                    <h4>🔨 Memorial Corrigido - Exemplo</h4>
+                    <p>Exemplo de como o memorial deveria ser gerado com dados reais:</p>
+                    <div class="code">
+MEMORIAL DESCRITIVO DE DESMEMBRAMENTO DE ÁREA
+
+IDENTIFICAÇÃO:
+- Terreno: Urbano
+- Proprietário: DBL Empreendimentos LTDA
+- Localização: Rua Maria Ivani da Silva, Gameleira, Horizonte/CE
+- Área Total: <span class="coordinate">3.334,51m²</span>
+
+SITUAÇÃO ANTES DESTE DESMEMBRAMENTO:
+TERRENO 1:
+Um imóvel urbano, localizado na RUA MARIA IVANI DA SILVA, bairro Gameleira, Horizonte/CE,
+pontos P01 (coordenadas <span class="coordinate">E 556478.64m e N 9544347.43m</span>),
+P02 (coordenadas <span class="coordinate">E 556495.57m e N 9544365.76m</span>),
+perímetro de <span class="coordinate">292,78m</span>, área territorial total de <span class="coordinate">3.334,51m²</span>
+
+LOTE 1:
+área territorial de <span class="coordinate">130,00m²</span> (cento e trinta metros quadrados)
+perímetro de <span class="coordinate">60,40m</span> (sessenta metros e quarenta centímetros)
+                    </div>
+                    <p><strong>Próximos Passos:</strong></p>
+                    <ol>
+                        <li>Implementar correções no DxfParser.java</li>
+                        <li>Melhorar extração de coordenadas reais</li>
+                        <li>Corrigir cálculo de áreas e perímetros</li>
+                        <li>Testar com arquivo DXF original</li>
+                    </ol>
+                </div>
+            `;
+        }
+
+        // Executar diagnóstico inicial
+        window.onload = function() {
+            testDxfExtraction();
+        };
+    </script>
+</body>
+</html>

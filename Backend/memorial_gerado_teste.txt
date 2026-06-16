@@ -1,0 +1,17 @@
+﻿MEMORIAL GERADO COM IA
+
+ERRO NA GERAÃÃO DO MEMORIAL
+
+Falha ao gerar memorial: Connection reset
+
+Dados processados:
+- Entidades antigas: 12
+- Entidades novas: 13
+- Adicionadas: 4
+- Removidas: 3
+- Modificadas: 5
+
+Verifique:
+1. ConfiguraÃ§Ã£o da chave da OpenAI
+2. Conectividade com a internet
+3. Logs do backend para mais detalhes

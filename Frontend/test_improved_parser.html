@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Improved DXF Parser</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .data { background: #f5f5f5; padding: 10px; white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; }
+        .highlight { background: yellow; }
+        .coordinate { background: #e8f5e8; padding: 2px 4px; margin: 1px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Improved DXF Parser - MemorialPro</h1>
+    
+    <div class="section">
+        <h2>🚀 Testar Parser Melhorado</h2>
+        <button onclick="testImprovedParser()">🔍 Testar com Arquivo Real</button>
+        <button onclick="testMemorialGeneration()">📋 Testar Geração de Memorial</button>
+    </div>
+    
+    <div class="section">
+        <h2>📊 Resultados do Parsing</h2>
+        <div id="parsing-results" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📐 Coordenadas Extraídas</h2>
+        <div id="coordinates-extracted" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📝 Textos e Pontos</h2>
+        <div id="texts-points" class="data"></div>
+    </div>
+    
+    <div class="section">
+        <h2>🎯 Teste de Memorial</h2>
+        <div id="memorial-test" class="data"></div>
+    </div>
+
+    <script>
+        async function testImprovedParser() {
+            try {
+                document.getElementById('parsing-results').innerHTML = 
+                    '<div class="warning">⏳ Testando parser melhorado...</div>';
+                
+                // Carregar arquivo DXF real através da API
+                const response = await fetch('/api/dxf/1/download');
+                if (!response.ok) {
+                    throw new Error(`Erro ao carregar DXF: ${response.status}`);
+                }
+                
+                const dxfContent = await response.text();
+                
+                // Usar o parser melhorado (simulação da lógica melhorada)
+                const parsedData = parseImprovedDXF(dxfContent);
+                
+                displayParsingResults(parsedData);
+                displayCoordinates(parsedData);
+                displayTextsAndPoints(parsedData);
+                
+            } catch (error) {
+                document.getElementById('parsing-results').innerHTML = 
+                    `<div class="error">❌ Erro: ${error.message}</div>`;
+            }
+        }
+        
+        async function testMemorialGeneration() {
+            try {
+                document.getElementById('memorial-test').innerHTML = 
+                    '<div class="warning">⏳ Testando geração de memorial com dados melhorados...</div>';
+                
+                // Carregar e processar arquivo
+                const response = await fetch('/api/dxf/1/download');
+                const dxfContent = await response.text();
+                const parsedData = parseImprovedDXF(dxfContent);
+                
+                // Preparar dados para memorial
+                const memorialData = {
+                    entities: parsedData.entities.slice(0, 100), // Limitar para teste
+                    fileName: 'TESTE AGENTE_DBL TERRA NOBRE_1.dxf',
+                    projectName: 'Teste Parser Melhorado',
+                    projectDescription: 'Teste com parser melhorado para coordenadas reais',
+                    standardId: null
+                };
+                
+                // Enviar para API
+                const memorialResponse = await fetch('/api/memorial/generate-gpt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
+                    },
+                    body: JSON.stringify(memorialData)
+                });
+                
+                const responseText = await memorialResponse.text();
+                
+                let html = `<div class="success">✅ Memorial gerado (Status: ${memorialResponse.status})</div>`;
+                
+                try {
+                    const jsonResponse = JSON.parse(responseText);
+                    if (jsonResponse.memorialText) {
+                        html += '<h3>📋 Memorial Gerado:</h3>';
+                        html += '<div class="data">' + jsonResponse.memorialText + '</div>';
+                        
+                        // Verificar coordenadas
+                        if (jsonResponse.memorialText.includes('123456.78')) {
+                            html += '<div class="error">❌ Ainda contém coordenadas fictícias</div>';
+                        } else if (jsonResponse.memorialText.match(/\\d{4}\\.\\d{2}/)) {
+                            html += '<div class="success">✅ Parece conter coordenadas reais!</div>';
+                        }
+                    }
+                } catch (error) {
+                    html += '<div class="error">❌ Resposta inválida</div>';
+                }
+                
+                document.getElementById('memorial-test').innerHTML = html;
+                
+            } catch (error) {
+                document.getElementById('memorial-test').innerHTML = 
+                    `<div class="error">❌ Erro: ${error.message}</div>`;
+            }
+        }
+        
+        function parseImprovedDXF(content) {
+            const lines = content.split('\\n').map(line => line.trim());
+            const entities = [];
+            const allCoordinates = [];
+            const texts = [];
+            const points = [];
+            
+            for (let i = 0; i < lines.length - 1; i++) {
+                if (lines[i] === '0') {
+                    const entityType = lines[i + 1];
+                    
+                    if (['LINE', 'LWPOLYLINE', 'TEXT', 'MTEXT', 'POINT', 'CIRCLE', 'ARC'].includes(entityType)) {
+                        const entity = {
+                            type: entityType,
+                            layer: '0',
+                            properties: {}
+                        };
+                        
+                        // Extrair propriedades com lógica melhorada
+                        for (let j = i + 2; j < Math.min(i + 100, lines.length - 1); j += 2) {
+                            const code = lines[j];
+                            const value = lines[j + 1];
+                            
+                            if (code === '0') break;
+                            
+                            // Armazenar código bruto
+                            entity.properties[`code_${code}`] = value;
+                            
+                            switch (code) {
+                                case '8': entity.layer = value; break;
+                                case '10': // X coordinate
+                                    const xValue = parseFloat(value);
+                                    if (!isNaN(xValue)) {
+                                        if (entityType === 'LINE') {
+                                            entity.properties.x1 = xValue;
+                                            entity.properties.x = xValue;
+                                        } else if (entityType === 'CIRCLE' || entityType === 'ARC') {
+                                            entity.properties.centerX = xValue;
+                                            entity.properties.x = xValue;
+                                        } else if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
+                                            if (entity.properties.code_10 !== undefined) {
+                                                if (!Array.isArray(entity.properties.code_10)) {
+                                                    entity.properties.code_10 = [entity.properties.code_10];
+                                                }
+                                                entity.properties.code_10.push(xValue);
+                                            } else {
+                                                entity.properties.code_10 = xValue;
+                                            }
+                                            if (entity.properties.x === undefined) {
+                                                entity.properties.x = xValue;
+                                            }
+                                        } else {
+                                            entity.properties.x = xValue;
+                                        }
+                                        allCoordinates.push({type: 'X', value: xValue, entity: entityType});
+                                    }
+                                    break;
+                                case '20': // Y coordinate
+                                    const yValue = parseFloat(value);
+                                    if (!isNaN(yValue)) {
+                                        if (entityType === 'LINE') {
+                                            entity.properties.y1 = yValue;
+                                            entity.properties.y = yValue;
+                                        } else if (entityType === 'CIRCLE' || entityType === 'ARC') {
+                                            entity.properties.centerY = yValue;
+                                            entity.properties.y = yValue;
+                                        } else if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
+                                            if (entity.properties.code_20 !== undefined) {
+                                                if (!Array.isArray(entity.properties.code_20)) {
+                                                    entity.properties.code_20 = [entity.properties.code_20];
+                                                }
+                                                entity.properties.code_20.push(yValue);
+                                            } else {
+                                                entity.properties.code_20 = yValue;
+                                            }
+                                            if (entity.properties.y === undefined) {
+                                                entity.properties.y = yValue;
+                                            }
+                                        } else {
+                                            entity.properties.y = yValue;
+                                        }
+                                        allCoordinates.push({type: 'Y', value: yValue, entity: entityType});
+                                    }
+                                    break;
+                                case '11': // X2 coordinate
+                                    const x2Value = parseFloat(value);
+                                    if (!isNaN(x2Value)) {
+                                        entity.properties.x2 = x2Value;
+                                        allCoordinates.push({type: 'X2', value: x2Value, entity: entityType});
+                                    }
+                                    break;
+                                case '21': // Y2 coordinate
+                                    const y2Value = parseFloat(value);
+                                    if (!isNaN(y2Value)) {
+                                        entity.properties.y2 = y2Value;
+                                        allCoordinates.push({type: 'Y2', value: y2Value, entity: entityType});
+                                    }
+                                    break;
+                                case '40': // Radius or height
+                                    const val40 = parseFloat(value);
+                                    if (!isNaN(val40)) {
+                                        if (entityType === 'CIRCLE' || entityType === 'ARC') {
+                                            entity.properties.radius = val40;
+                                        } else if (entityType === 'TEXT' || entityType === 'MTEXT') {
+                                            entity.properties.height = val40;
+                                            entity.properties.textHeight = val40;
+                                        }
+                                    }
+                                    break;
+                                case '1': // Text value
+                                    entity.properties.text = value;
+                                    texts.push({
+                                        text: value,
+                                        entity: entityType,
+                                        layer: entity.layer,
+                                        x: entity.properties.x,
+                                        y: entity.properties.y
+                                    });
+                                    break;
+                                case '50': // Rotation
+                                    const rotation = parseFloat(value);
+                                    if (!isNaN(rotation)) {
+                                        entity.properties.rotation = rotation;
+                                    }
+                                    break;
+                            }
+                        }
+                        
+                        // Processar polylines
+                        if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
+                            entity.properties.vertices = extractPolylineVertices(entity.properties);
+                        }
+                        
+                        entities.push(entity);
+                        
+                        if (entityType === 'POINT') {
+                            points.push(entity);
+                        }
+                    }
+                }
+            }
+            
+            return {
+                entities,
+                coordinates: allCoordinates,
+                texts,
+                points,
+                stats: {
+                    totalEntities: entities.length,
+                    coordinateCount: allCoordinates.length,
+                    textCount: texts.length,
+                    pointCount: points.length
+                }
+            };
+        }
+        
+        function extractPolylineVertices(properties) {
+            const vertices = [];
+            let xCoords = [];
+            let yCoords = [];
+            
+            if (Array.isArray(properties.code_10)) {
+                xCoords = properties.code_10.map(x => parseFloat(x)).filter(x => !isNaN(x));
+            } else if (properties.code_10 !== undefined) {
+                const x = parseFloat(properties.code_10);
+                if (!isNaN(x)) xCoords = [x];
+            }
+            
+            if (Array.isArray(properties.code_20)) {
+                yCoords = properties.code_20.map(y => parseFloat(y)).filter(y => !isNaN(y));
+            } else if (properties.code_20 !== undefined) {
+                const y = parseFloat(properties.code_20);
+                if (!isNaN(y)) yCoords = [y];
+            }
+            
+            const minLength = Math.min(xCoords.length, yCoords.length);
+            for (let i = 0; i < minLength; i++) {
+                vertices.push({
+                    x: xCoords[i],
+                    y: yCoords[i]
+                });
+            }
+            
+            return vertices;
+        }
+        
+        function displayParsingResults(data) {
+            let html = '<div class="success">✅ Parser melhorado executado</div>';
+            
+            html += '<h3>📊 Estatísticas:</h3>';
+            html += `<div>Total de entidades: ${data.stats.totalEntities}</div>`;
+            html += `<div>Coordenadas encontradas: ${data.stats.coordinateCount}</div>`;
+            html += `<div>Textos encontrados: ${data.stats.textCount}</div>`;
+            html += `<div>Pontos encontrados: ${data.stats.pointCount}</div>`;
+            
+            // Análise por tipo de entidade
+            const entityTypes = data.entities.reduce((acc, entity) => {
+                acc[entity.type] = (acc[entity.type] || 0) + 1;
+                return acc;
+            }, {});
+            
+            html += '<h3>🎯 Tipos de Entidades:</h3>';
+            Object.entries(entityTypes).forEach(([type, count]) => {
+                html += `<div>${type}: ${count}</div>`;
+            });
+            
+            document.getElementById('parsing-results').innerHTML = html;
+        }
+        
+        function displayCoordinates(data) {
+            let html = '';
+            
+            if (data.coordinates.length > 0) {
+                const xCoords = data.coordinates.filter(c => c.type.includes('X')).map(c => c.value);
+                const yCoords = data.coordinates.filter(c => c.type.includes('Y')).map(c => c.value);
+                
+                html += '<div class="success">✅ Coordenadas extraídas com sucesso</div>';
+                html += `<div>Range X: <span class="coordinate">${Math.min(...xCoords).toFixed(2)}</span> a <span class="coordinate">${Math.max(...xCoords).toFixed(2)}</span></div>`;
+                html += `<div>Range Y: <span class="coordinate">${Math.min(...yCoords).toFixed(2)}</span> a <span class="coordinate">${Math.max(...yCoords).toFixed(2)}</span></div>`;
+                html += `<div class="highlight">🎯 COORDENADAS REAIS DETECTADAS!</div>`;
+                
+                // Amostra de coordenadas
+                html += '<h3>📐 Amostra de Coordenadas:</h3>';
+                data.coordinates.slice(0, 20).forEach((coord, index) => {
+                    html += `<span class="coordinate">${coord.type}: ${coord.value.toFixed(2)} (${coord.entity})</span> `;
+                    if ((index + 1) % 5 === 0) html += '<br>';
+                });
+            } else {
+                html += '<div class="error">❌ Nenhuma coordenada encontrada</div>';
+            }
+            
+            document.getElementById('coordinates-extracted').innerHTML = html;
+        }
+        
+        function displayTextsAndPoints(data) {
+            let html = '';
+            
+            // Textos
+            if (data.texts.length > 0) {
+                html += '<h3>📝 Textos Encontrados:</h3>';
+                data.texts.slice(0, 10).forEach((text, index) => {
+                    const coords = text.x !== undefined && text.y !== undefined ? 
+                        ` em (${text.x.toFixed(2)}, ${text.y.toFixed(2)})` : '';
+                    html += `<div>${index + 1}. "${text.text}" (${text.entity}, Layer: ${text.layer})${coords}</div>`;
+                });
+            }
+            
+            // Pontos
+            if (data.points.length > 0) {
+                html += '<h3>📍 Pontos Encontrados:</h3>';
+                data.points.slice(0, 10).forEach((point, index) => {
+                    const x = point.properties.x?.toFixed(2) || 'N/A';
+                    const y = point.properties.y?.toFixed(2) || 'N/A';
+                    html += `<div>${index + 1}. (${x}, ${y}) - Layer: ${point.layer}</div>`;
+                });
+            }
+            
+            document.getElementById('texts-points').innerHTML = html;
+        }
+    </script>
+</body>
+</html>

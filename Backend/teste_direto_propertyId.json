@@ -1,0 +1,18 @@
+{
+  "entities": [
+    {
+      "type": "LINE",
+      "layer": "BOUNDARY",
+      "x": 325000.00,
+      "y": 7650000.00,
+      "x2": 325020.00,
+      "y2": 7650000.00,
+      "fingerprint": "line_test"
+    }
+  ],
+  "fileName": "teste_propertyId.dxf",
+  "projectName": "Teste PropertyId Direto",
+  "projectDescription": "Teste para verificar se propertyId está sendo enviado",
+  "standardId": "12fb339a-89ce-457c-8292-b0109de2a1f1",
+  "propertyId": "12345678-1234-1234-1234-123456789012"
+}

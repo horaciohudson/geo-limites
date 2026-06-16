@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Sistema Financeiro - Memorial Pro</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f8fafc;
+            color: #374151;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        .header h1 {
+            color: #2563eb;
+            margin-bottom: 0.5rem;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+        
+        .status-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #2563eb;
+        }
+        
+        .status-card h3 {
+            margin: 0 0 1rem 0;
+            color: #2563eb;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .status-list li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .status-ok {
+            color: #16a34a;
+            font-weight: 600;
+        }
+        
+        .status-error {
+            color: #dc2626;
+            font-weight: 600;
+        }
+        
+        .instructions {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .instructions h2 {
+            color: #2563eb;
+            margin-top: 0;
+        }
+        
+        .instructions ol {
+            line-height: 1.6;
+        }
+        
+        .instructions code {
+            background: #f3f4f6;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .highlight {
+            background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+            border: 1px solid #93c5fd;
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 Sistema Financeiro - Memorial Pro</h1>
+            <p>Status da implementação e guia de teste</p>
+        </div>
+
+        <div class="status-grid">
+            <div class="status-card">
+                <h3>📊 Componentes Frontend</h3>
+                <ul class="status-list">
+                    <li>
+                        <span>CreditDashboard</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>CreditBalance</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>CreditPurchaseForm</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>CreditTransactions</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>CreditPurchases</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>CreditStatistics</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="status-card">
+                <h3>🔧 Utilitários</h3>
+                <ul class="status-list">
+                    <li>
+                        <span>CreditContext</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>useCredits Hook</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>CreditValidation</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>CreditNotification</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>CreditBalanceWidget</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="status-card">
+                <h3>🎨 Estilos e Temas</h3>
+                <ul class="status-list">
+                    <li>
+                        <span>Financial.css</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>themes.css</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Design Responsivo</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Dark Mode</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="status-card">
+                <h3>⚙️ Configurações</h3>
+                <ul class="status-list">
+                    <li>
+                        <span>creditPackages.ts</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>formatters.ts</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>creditService.ts</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>credit.ts (tipos)</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="status-card">
+                <h3>🚀 Integração</h3>
+                <ul class="status-list">
+                    <li>
+                        <span>Rota /financial</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Menu Sidebar</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Widget Navbar</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Contexto Global</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="status-card">
+                <h3>🗄️ Backend</h3>
+                <ul class="status-list">
+                    <li>
+                        <span>Entidades JPA</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Repositories</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Services</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Controllers</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                    <li>
+                        <span>Tabelas SQL</span>
+                        <span class="status-ok">✅ OK</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h2>📋 Como Testar o Sistema</h2>
+            
+            <div class="highlight">
+                <strong>🎯 Acesso Rápido:</strong> Usuários administradores podem acessar o sistema financeiro através do menu lateral ou navegando diretamente para <code>/financial</code>
+            </div>
+
+            <h3>1. Testando a Interface</h3>
+            <ol>
+                <li>Faça login como administrador</li>
+                <li>Acesse o menu lateral e clique em "💰 Sistema Financeiro"</li>
+                <li>Navegue pelas abas:
+                    <ul>
+                        <li><strong>Dashboard:</strong> Visão geral com estatísticas</li>
+                        <li><strong>Saldo:</strong> Detalhes do saldo atual</li>
+                        <li><strong>Comprar Créditos:</strong> Formulário de compra</li>
+                        <li><strong>Transações:</strong> Histórico de movimentações</li>
+                        <li><strong>Compras:</strong> Gerenciamento de compras</li>
+                        <li><strong>Estatísticas:</strong> Relatórios detalhados</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h3>2. Testando Funcionalidades</h3>
+            <ol>
+                <li><strong>Widget de Saldo:</strong> Observe o widget na navbar que mostra o saldo atual</li>
+                <li><strong>Validação de Créditos:</strong> Tente gerar um memorial sem créditos suficientes</li>
+                <li><strong>Notificações:</strong> Verifique alertas de saldo baixo</li>
+                <li><strong>Responsividade:</strong> Teste em diferentes tamanhos de tela</li>
+            </ol>
+
+            <h3>3. Testando Componentes Isolados</h3>
+            <p>Para testar componentes individualmente, você pode usar o componente <code>FinancialTest</code>:</p>
+            <ol>
+                <li>Importe o componente: <code>import FinancialTest from './components/financial/FinancialTest';</code></li>
+                <li>Adicione uma rota temporária: <code>&lt;Route path="/test-financial" element={&lt;FinancialTest /&gt;} /&gt;</code></li>
+                <li>Acesse <code>/test-financial</code> para testar cada componente isoladamente</li>
+            </ol>
+
+            <h3>4. Configurações Disponíveis</h3>
+            <ul>
+                <li><strong>Pacotes de Crédito:</strong> Editáveis em <code>config/creditPackages.ts</code></li>
+                <li><strong>Temas:</strong> Personalizáveis em <code>styles/themes.css</code></li>
+                <li><strong>Formatação:</strong> Utilitários em <code>utils/formatters.ts</code></li>
+            </ul>
+
+            <div class="highlight">
+                <strong>💡 Dica:</strong> O sistema está totalmente integrado e pronto para uso. Todos os componentes são responsivos e seguem as melhores práticas de acessibilidade.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

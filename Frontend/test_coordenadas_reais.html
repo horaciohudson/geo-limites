@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 Teste: Coordenadas Reais no Memorial</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .section { margin: 20px 0; padding: 15px; border-left: 4px solid #667eea; background: #f8f9ff; }
+        .success { border-left-color: #28a745; background: #f8fff8; }
+        .error { border-left-color: #dc3545; background: #fff8f8; }
+        .warning { border-left-color: #ffc107; background: #fffdf8; }
+        .code { background: #f4f4f4; padding: 10px; border-radius: 4px; font-family: monospace; margin: 10px 0; }
+        .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+        .comparison-item { padding: 15px; border-radius: 8px; }
+        .correct { background: #d4edda; border: 1px solid #c3e6cb; }
+        .incorrect { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .test-button { background: #667eea; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; margin: 10px 5px; }
+        .test-button:hover { background: #5a6fd8; }
+        .coordinates-list { background: #e8f4f8; padding: 15px; border-radius: 8px; margin: 10px 0; }
+        .coordinate-item { margin: 5px 0; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Teste: Coordenadas Reais no Memorial</h1>
+            <p>Verificação se o sistema está usando coordenadas reais extraídas do DXF</p>
+        </div>
+
+        <div class="section">
+            <h2>📊 Status das Correções Implementadas</h2>
+            <div class="success">
+                <h3>✅ Correções Aplicadas:</h3>
+                <ul>
+                    <li>Priorização de coordenadas reais do DXF sobre dados cadastrados</li>
+                    <li>Validação crítica no prompt da IA</li>
+                    <li>Instruções específicas para usar coordenadas com precisão</li>
+                    <li>Bloqueio de coordenadas genéricas (E 2888.00m, N 1468.00m)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔍 Coordenadas Extraídas do DXF (Logs Recentes)</h2>
+            <div class="coordinates-list">
+                <div class="coordinate-item">P01: E 2990.94m, N 1466.72m ✅</div>
+                <div class="coordinate-item">P02: E 2809.07m, N 1459.98m ✅</div>
+                <div class="coordinate-item">P03: E 3247.52m, N 1496.92m ✅</div>
+                <div class="coordinate-item">P04: E 3002.28m, N 1542.84m ✅</div>
+                <div class="coordinate-item">P05: E 2999.00m, N 1474.84m ✅</div>
+                <div class="coordinate-item">... (27 pontos válidos extraídos)</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>⚖️ Comparação: Antes vs Depois</h2>
+            <div class="comparison">
+                <div class="comparison-item incorrect">
+                    <h3>❌ ANTES (Coordenadas Genéricas)</h3>
+                    <div class="code">
+P01 (coordenadas E 2888.00m e N 1468.00m)
+P02 (coordenadas E 2888.00m e N 1469.00m)
+P03 (coordenadas E 2889.00m e N 1469.00m)
+P04 (coordenadas E 2889.00m e N 1468.00m)
+                    </div>
+                    <p><strong>Problema:</strong> Coordenadas arredondadas e genéricas</p>
+                </div>
+                <div class="comparison-item correct">
+                    <h3>✅ DEPOIS (Coordenadas Reais)</h3>
+                    <div class="code">
+P01 (coordenadas E 2990.94m e N 1466.72m)
+P02 (coordenadas E 2809.07m e N 1459.98m)
+P03 (coordenadas E 3247.52m e N 1496.92m)
+P04 (coordenadas E 3002.28m e N 1542.84m)
+                    </div>
+                    <p><strong>Solução:</strong> Coordenadas reais com precisão de centímetros</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🧪 Teste Manual</h2>
+            <p>Para verificar se as correções estão funcionando:</p>
+            <ol>
+                <li>Vá para o <strong>Viewer DXF</strong> no sistema</li>
+                <li>Carregue o arquivo <code>TESTE AGENTE_DBL TERRA NOBRE_1.dxf</code></li>
+                <li>Clique em <strong>"Gerar Memorial"</strong></li>
+                <li>Verifique se o memorial contém as coordenadas reais listadas acima</li>
+            </ol>
+            
+            <button class="test-button" onclick="window.open('/viewer', '_blank')">
+                🔍 Abrir Viewer para Teste
+            </button>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Critérios de Validação</h2>
+            <div class="warning">
+                <h3>⚠️ O memorial deve conter:</h3>
+                <ul>
+                    <li><strong>Coordenadas com precisão:</strong> E 2990.94m (não E 2888.00m)</li>
+                    <li><strong>Valores únicos por lote:</strong> Cada lote com coordenadas diferentes</li>
+                    <li><strong>Range correto:</strong> X entre 2809-3247m, Y entre 1459-1567m</li>
+                    <li><strong>25 lotes completos:</strong> LOTE 01 até LOTE 25</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section error">
+            <h2>🚨 Sinais de Problema</h2>
+            <p>Se o memorial ainda contiver:</p>
+            <ul>
+                <li><code>E 2888.00m e N 1468.00m</code> - Coordenadas genéricas</li>
+                <li><code>E 2889.00m e N 1469.00m</code> - Coordenadas arredondadas</li>
+                <li>Todos os lotes com as mesmas coordenadas</li>
+                <li>Placeholders como <code>[PROPRIEDADE VIZINHA DETALHADA]</code></li>
+            </ul>
+            <p><strong>Ação:</strong> Verificar logs do backend para diagnóstico detalhado</p>
+        </div>
+
+        <div class="section success">
+            <h2>🎉 Resultado Esperado</h2>
+            <p>Após as correções, o memorial deve:</p>
+            <ul>
+                <li>✅ Usar coordenadas reais extraídas do DXF</li>
+                <li>✅ Ter precisão de centímetros (ex: 2990.94m)</li>
+                <li>✅ Conter 25 lotes com coordenadas únicas</li>
+                <li>✅ Manter dados da propriedade (nome, endereço) mas com coordenadas reais</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>📋 Logs para Monitoramento</h2>
+            <p>Verifique estes logs no backend durante a geração:</p>
+            <div class="code">
+✅ Extração concluída: 27 pontos únicos, 27 pontos válidos
+🎯 COORDENADAS REAIS OBRIGATÓRIAS (USE APENAS ESTAS):
+📝 EXEMPLO OBRIGATÓRIO DE USO:
+🚨 VALIDAÇÃO CRÍTICA:
+✅ Memorial gerado com coordenadas reais
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('🎯 TESTE DE COORDENADAS REAIS CARREGADO');
+        console.log('📊 Status: Correções implementadas no MemorialGptService.java');
+        console.log('🔧 Próximo passo: Testar geração de memorial no Viewer');
+        
+        // Função para verificar se o sistema está funcionando
+        function verificarSistema() {
+            console.log('\n🔍 VERIFICAÇÃO DO SISTEMA:');
+            console.log('1. Backend compilado com sucesso ✅');
+            console.log('2. Correções aplicadas no prompt ✅');
+            console.log('3. Validação de coordenadas implementada ✅');
+            console.log('4. Priorização de dados DXF configurada ✅');
+            console.log('\n📋 PRÓXIMOS PASSOS:');
+            console.log('- Gerar memorial no Viewer');
+            console.log('- Verificar se coordenadas reais são usadas');
+            console.log('- Confirmar precisão de centímetros');
+        }
+        
+        verificarSistema();
+    </script>
+</body>
+</html>

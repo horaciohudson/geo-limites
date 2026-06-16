@@ -1,0 +1,145 @@
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║    🎯 INÍCIO RÁPIDO - MEMORIAL PRO COM IA                ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+┌───────────────────────────────────────────────────────────┐
+│  ⚠️  IMPORTANTE: Spring Boot NÃO lê .env automaticamente │
+└───────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════╗
+║  📋 PASSO 1: VERIFICAR ARQUIVO .env                       ║
+╚═══════════════════════════════════════════════════════════╝
+
+Local: Backend\.env
+
+Conteúdo mínimo necessário:
+┌────────────────────────────────────────────┐
+│ OPENAI_API_KEY=sk-proj-sua-chave-aqui     │
+│ OPENAI_MODEL=gpt-4o                        │
+│ OPENAI_MAX_TOKENS=16000                    │
+└────────────────────────────────────────────┘
+
+OU para usar Claude:
+┌────────────────────────────────────────────┐
+│ ANTHROPIC_API_KEY=sk-ant-sua-chave-aqui   │
+│ CLAUDE_MODEL=claude-3-5-sonnet-20240620   │
+│ CLAUDE_MAX_TOKENS=16000                    │
+└────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════╗
+║  🚀 PASSO 2: INICIAR BACKEND                              ║
+╚═══════════════════════════════════════════════════════════╝
+
+❌ NÃO FAÇA ISSO:
+┌────────────────────────────────────────────┐
+│ mvnw spring-boot:run                       │
+│ ↑ Não carrega o .env!                      │
+└────────────────────────────────────────────┘
+
+✅ FAÇA ISSO:
+┌────────────────────────────────────────────┐
+│ start-with-env.bat                         │
+│ ↑ Carrega .env e inicia!                   │
+└────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════╗
+║  ✅ PASSO 3: VERIFICAR FUNCIONAMENTO                      ║
+╚═══════════════════════════════════════════════════════════╝
+
+Ao iniciar, deve aparecer:
+┌────────────────────────────────────────────┐
+│ [1/3] Carregando variáveis do .env...     │
+│   ✓ Carregando: OPENAI_API_KEY            │
+│   ✓ Carregando: OPENAI_MODEL              │
+│                                            │
+│ [2/3] Variáveis carregadas:                │
+│   ✓ OPENAI_API_KEY: Definida              │
+│   ℹ OPENAI_MODEL: gpt-4o                  │
+│   ℹ OPENAI_MAX_TOKENS: 16000              │
+│                                            │
+│ [3/3] Iniciando Spring Boot...            │
+└────────────────────────────────────────────┘
+
+Nos logs do backend:
+┌────────────────────────────────────────────┐
+│ 🤖 Usando OpenAI: gpt-4o                   │
+│ 🚀 Tentativa 1/3 - Enviando requisição     │
+│ ✅ Resposta recebida                       │
+│ 📄 Memorial gerado com 15234 caracteres    │
+│ 🎉 Memorial gerado com sucesso!            │
+└────────────────────────────────────────────┘
+
+NÃO DEVE MAIS APARECER:
+┌────────────────────────────────────────────┐
+│ ❌ 404 Not Found                           │
+│ ❌ 400 Bad Request: max_tokens too large   │
+│ 🔄 Usando fallback                         │
+└────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════╗
+║  🔍 VERIFICAÇÃO RÁPIDA                                    ║
+╚═══════════════════════════════════════════════════════════╝
+
+Execute:
+┌────────────────────────────────────────────┐
+│ verificar-config-ia.bat                    │
+└────────────────────────────────────────────┘
+
+Deve mostrar:
+┌────────────────────────────────────────────┐
+│ ✓ OPENAI_API_KEY: Definida                │
+│ ✓ OPENAI_MODEL: gpt-4o                    │
+│ ✓ Modelo VÁLIDO                            │
+└────────────────────────────────────────────┘
+
+Se mostrar "NÃO DEFINIDA", você precisa usar start-with-env.bat!
+
+╔═══════════════════════════════════════════════════════════╗
+║  🐛 PROBLEMAS COMUNS                                      ║
+╚═══════════════════════════════════════════════════════════╝
+
+Problema: Ainda usa fallback
+└─> Solução: Use start-with-env.bat (não mvnw spring-boot:run)
+
+Problema: Erro 400 max_tokens too large
+└─> Solução: Defina OPENAI_MAX_TOKENS=16000 no .env
+
+Problema: Erro 404 model not found
+└─> Solução: Use claude-3-5-sonnet-20240620 (não 20241022)
+
+Problema: Erro 429 rate limit
+└─> Solução: Aguarde alguns segundos (sistema retenta auto)
+
+╔═══════════════════════════════════════════════════════════╗
+║  📚 DOCUMENTAÇÃO COMPLETA                                 ║
+╚═══════════════════════════════════════════════════════════╝
+
+├─ SOLUCAO_COMPLETA_IA.md ......... Guia completo
+├─ LEIA-ME-PRIMEIRO.md ............ Instruções importantes
+├─ SOLUCAO_DOTENV_SPRING.md ....... Detalhes técnicos
+├─ CORRECAO_IMEDIATA_IA.md ........ Correção rápida
+└─ README-ENV.md .................. Config de variáveis
+
+╔═══════════════════════════════════════════════════════════╗
+║  ✅ CHECKLIST                                             ║
+╚═══════════════════════════════════════════════════════════╝
+
+[ ] Arquivo .env existe em Backend/
+[ ] OPENAI_API_KEY ou ANTHROPIC_API_KEY definida
+[ ] OPENAI_MAX_TOKENS ≤ 16000
+[ ] CLAUDE_MODEL = claude-3-5-sonnet-20240620
+[ ] Usando start-with-env.bat (não mvnw spring-boot:run)
+
+╔═══════════════════════════════════════════════════════════╗
+║  🎉 PRONTO!                                               ║
+╚═══════════════════════════════════════════════════════════╝
+
+Agora a IA deve funcionar perfeitamente!
+
+Qualquer dúvida, consulte: SOLUCAO_COMPLETA_IA.md
+
+═══════════════════════════════════════════════════════════════
+Última atualização: 21/11/2024
+
