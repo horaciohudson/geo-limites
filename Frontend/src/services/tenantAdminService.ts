@@ -6,12 +6,17 @@ export interface TenantOperationalAdminDTO {
   tenantCode: string;
   tenantName: string;
   tenantStatus: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
   onboardingStatus: string;
   billingStatus: string;
   companyDataCompleted: boolean;
   adminApproved: boolean;
   firstPaymentConfirmed: boolean;
   operationalAccessReleased: boolean;
+  emailVerifiedAt: string | null;
+  pendingApprovalAt: string | null;
   adminApprovedBy: string;
   adminApprovedAt: string;
   firstPaymentConfirmedBy: string;
@@ -19,6 +24,8 @@ export interface TenantOperationalAdminDTO {
   operationalAccessReleasedBy: string;
   operationalAccessReleasedAt: string;
   releaseNotes: string;
+  customerResearchNotes: string | null;
+  rejectionReason: string | null;
 }
 
 export interface TenantOperationalActionRequest {
@@ -42,6 +49,11 @@ class TenantAdminService {
     return response.data;
   }
 
+  async getOnboardingQueue(): Promise<TenantOperationalAdminDTO[]> {
+    const response = await api.get('/admin/tenants/onboarding-queue');
+    return response.data;
+  }
+
   async getTenantOperational(tenantId: string): Promise<TenantOperationalAdminDTO> {
     const response = await api.get(`/admin/tenants/operational/${tenantId}`);
     return response.data;
@@ -59,6 +71,21 @@ class TenantAdminService {
 
   async setOperationalAccessReleased(tenantId: string, payload: TenantOperationalActionRequest): Promise<TenantOperationalAdminDTO> {
     const response = await api.patch(`/admin/tenants/operational/${tenantId}/release`, payload);
+    return response.data;
+  }
+
+  async rejectTenant(tenantId: string, payload: TenantOperationalActionRequest): Promise<TenantOperationalAdminDTO> {
+    const response = await api.patch(`/admin/tenants/operational/${tenantId}/reject`, payload);
+    return response.data;
+  }
+
+  async reactivateRejectedTenant(tenantId: string, payload: TenantOperationalActionRequest): Promise<TenantOperationalAdminDTO> {
+    const response = await api.patch(`/admin/tenants/operational/${tenantId}/reactivate`, payload);
+    return response.data;
+  }
+
+  async setCustomerResearchNotes(tenantId: string, payload: TenantOperationalActionRequest): Promise<TenantOperationalAdminDTO> {
+    const response = await api.patch(`/admin/tenants/operational/${tenantId}/research-notes`, payload);
     return response.data;
   }
 }

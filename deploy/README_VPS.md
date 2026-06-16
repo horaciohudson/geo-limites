@@ -80,7 +80,7 @@ CLAUDE_MAX_TOKENS=8192
 CLAUDE_CHUNK_DELAY=10000
 
 BOOTSTRAP_ADMIN_ENABLED=false
-BOOTSTRAP_ADMIN_USERNAME=admin@geolimites.com.br
+BOOTSTRAP_ADMIN_USERNAME=admin@sigeve.com.br
 BOOTSTRAP_ADMIN_PASSWORD=altere-aqui
 BOOTSTRAP_ADMIN_FULL_NAME=Administrador GeoLimites
 
@@ -202,7 +202,31 @@ sudo certbot --nginx -d geolimites.com.br -d www.geolimites.com.br
 - upload DXF grava em `/opt/geolimites/backend/uploads/dxf`
 - templates gravam em `/opt/geolimites/backend/templates`
 
-## 6. Atualizacao futura
+## 6. Manual de ajuda
+
+Para publicar a ajuda em `https://ajuda.geolimites.com.br`, use o projeto em `manual/`.
+
+Build e publicacao recomendados:
+
+```bash
+cd /opt/geolimites/repo
+chmod +x deploy/scripts/deploy-help.sh
+./deploy/scripts/deploy-help.sh
+```
+
+Host Nginx de referencia:
+
+- `deploy/nginx/geolimites-ajuda-host.conf`
+
+Depois de apontar o DNS do subdominio, emitir SSL:
+
+```bash
+sudo certbot --nginx -d ajuda.geolimites.com.br
+```
+
+Se o host da ajuda for copiado novamente para `/etc/nginx/sites-available/geolimites-ajuda.conf`, rode o `certbot` outra vez para reinstalar o bloco HTTPS gerenciado. Caso contrario, o navegador pode voltar a mostrar erro de certificado.
+
+## 7. Atualizacao futura
 
 Fluxo seguro de atualizacao:
 
@@ -214,7 +238,7 @@ git pull
 ./deploy/scripts/deploy-backend.sh
 ```
 
-## 7. Comandos rapidos de verificacao
+## 8. Comandos rapidos de verificacao
 
 ```bash
 sudo systemctl status geolimites-backend --no-pager
@@ -222,4 +246,5 @@ sudo journalctl -u geolimites-backend -n 100 --no-pager
 sudo nginx -t
 curl -I https://www.geolimites.com.br
 curl -I https://www.geolimites.com.br/api/auth/login
+curl -I https://ajuda.geolimites.com.br
 ```

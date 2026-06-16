@@ -64,6 +64,12 @@ public class TenantOperationalControl extends AuditBase {
     @Builder.Default
     private Boolean operationalAccessReleased = false;
 
+    @Column(name = "email_verified_at")
+    private OffsetDateTime emailVerifiedAt;
+
+    @Column(name = "pending_approval_at")
+    private OffsetDateTime pendingApprovalAt;
+
     @Column(name = "admin_approved_by", length = 50)
     private String adminApprovedBy;
 
@@ -84,4 +90,10 @@ public class TenantOperationalControl extends AuditBase {
 
     @Column(name = "release_notes", length = 255)
     private String releaseNotes;
+
+    @Column(name = "customer_research_notes", length = 1000)
+    private String customerResearchNotes;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
 }

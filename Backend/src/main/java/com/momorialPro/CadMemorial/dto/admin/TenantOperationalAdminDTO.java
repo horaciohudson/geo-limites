@@ -16,12 +16,17 @@ public class TenantOperationalAdminDTO {
     private String tenantCode;
     private String tenantName;
     private String tenantStatus;
+    private String contactName;
+    private String contactEmail;
+    private String contactPhone;
     private String onboardingStatus;
     private String billingStatus;
     private boolean companyDataCompleted;
     private boolean adminApproved;
     private boolean firstPaymentConfirmed;
     private boolean operationalAccessReleased;
+    private OffsetDateTime emailVerifiedAt;
+    private OffsetDateTime pendingApprovalAt;
     private String adminApprovedBy;
     private OffsetDateTime adminApprovedAt;
     private String firstPaymentConfirmedBy;
@@ -29,4 +34,6 @@ public class TenantOperationalAdminDTO {
     private String operationalAccessReleasedBy;
     private OffsetDateTime operationalAccessReleasedAt;
     private String releaseNotes;
+    private String customerResearchNotes;
+    private String rejectionReason;
 }

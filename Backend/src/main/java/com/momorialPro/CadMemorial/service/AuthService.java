@@ -2,6 +2,7 @@ package com.momorialPro.CadMemorial.service;
 
 import com.momorialPro.CadMemorial.dto.AuthRequestDTO;
 import com.momorialPro.CadMemorial.dto.AuthResponseDTO;
+import com.momorialPro.CadMemorial.dto.ChangePasswordRequestDTO;
 import com.momorialPro.CadMemorial.dto.RefreshTokenRequestDTO;
 import com.momorialPro.CadMemorial.dto.RegisterRequestDTO;
 import com.momorialPro.CadMemorial.dto.RegisterResponseDTO;
@@ -11,6 +12,7 @@ import com.momorialPro.CadMemorial.dto.UserProfileUpdateDTO;
 import com.momorialPro.CadMemorial.dto.VerificationResponseDTO;
 import com.momorialPro.CadMemorial.dto.MessageResponseDTO;
 import com.momorialPro.CadMemorial.config.AuthFlowProperties;
+import com.momorialPro.CadMemorial.enums.TenantOnboardingStatus;
 import com.momorialPro.CadMemorial.model.EmailVerificationToken;
 import com.momorialPro.CadMemorial.enums.TenantStatus;
 import com.momorialPro.CadMemorial.enums.RoleName;
@@ -19,6 +21,7 @@ import com.momorialPro.CadMemorial.mapper.UserMapper;
 import com.momorialPro.CadMemorial.model.RefreshToken;
 import com.momorialPro.CadMemorial.model.Role;
 import com.momorialPro.CadMemorial.model.Tenant;
+import com.momorialPro.CadMemorial.model.TenantOperationalControl;
 import com.momorialPro.CadMemorial.model.User;
 import com.momorialPro.CadMemorial.repository.EmailVerificationTokenRepository;
 import com.momorialPro.CadMemorial.repository.RoleRepository;
@@ -54,6 +57,8 @@ public class AuthService {
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final AccountEmailService accountEmailService;
     private final AuthFlowProperties authFlowProperties;
+    private final TenantOnboardingFlowService tenantOnboardingFlowService;
+    private final OnboardingNotificationService onboardingNotificationService;
 
     @Transactional
     public RegisterResponseDTO register(RegisterRequestDTO dto) {
@@ -157,8 +162,11 @@ public class AuthService {
 
         // Se já foi usado, apenas retorne sucesso (evita erros em cliques duplos ou pre-fetch de e-mail clients)
         if (verificationToken.getUsedAt() != null) {
+            TenantOperationalControl control = user.getTenant() != null
+                    ? tenantOnboardingFlowService.handleEmailVerified(user)
+                    : null;
             return new VerificationResponseDTO(
-                    "Conta já verificada com sucesso. Agora você já pode fazer login.",
+                    buildPostVerificationMessage(control),
                     user.getTenant() != null ? user.getTenant().getCode() : null,
                     user.getEmail()
             );
@@ -173,9 +181,11 @@ public class AuthService {
 
         repo.save(user);
         emailVerificationTokenRepository.save(verificationToken);
+        TenantOperationalControl control = tenantOnboardingFlowService.handleEmailVerified(user);
+        onboardingNotificationService.notifyPendingApproval(user);
 
         return new VerificationResponseDTO(
-                "Conta verificada com sucesso. Agora você já pode fazer login.",
+                buildPostVerificationMessage(control),
                 user.getTenant() != null ? user.getTenant().getCode() : null,
                 user.getEmail()
         );
@@ -246,6 +256,33 @@ public class AuthService {
         currentUser.setZipCode(normalizeOptionalText(dto.getZipCode(), 9));
 
         return mapper.toDTO(repo.save(currentUser));
+    }
+
+    @Transactional
+    public MessageResponseDTO changeCurrentUserPassword(ChangePasswordRequestDTO dto) {
+        User currentUser = repo.findById(AuthUtils.getRequiredCurrentUser().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado"));
+
+        String currentPassword = dto.currentPassword() != null ? dto.currentPassword().trim() : "";
+        String newPassword = dto.newPassword() != null ? dto.newPassword().trim() : "";
+
+        if (!encoder.matches(currentPassword, currentUser.getPassword())) {
+            throw new IllegalArgumentException("A senha atual informada não confere.");
+        }
+
+        if (newPassword.length() < 6) {
+            throw new IllegalArgumentException("A nova senha deve ter pelo menos 6 caracteres.");
+        }
+
+        if (encoder.matches(newPassword, currentUser.getPassword())) {
+            throw new IllegalArgumentException("A nova senha deve ser diferente da senha atual.");
+        }
+
+        currentUser.setPassword(encoder.encode(newPassword));
+        repo.save(currentUser);
+        refreshTokenService.revokeAllByUser(currentUser);
+
+        return new MessageResponseDTO("Senha alterada com sucesso. Faça login novamente com a nova senha.");
     }
 
 
@@ -326,5 +363,15 @@ public class AuthService {
         return newlyCreated
                 ? "Conta criada com sucesso. Verifique seu e-mail para ativar o acesso."
                 : "Novo e-mail de confirmacao enviado com sucesso. Verifique sua caixa de entrada.";
+    }
+
+    private String buildPostVerificationMessage(TenantOperationalControl control) {
+        if (control != null
+                && control.getOnboardingStatus() == TenantOnboardingStatus.ACTIVE
+                && Boolean.TRUE.equals(control.getOperationalAccessReleased())) {
+            return "Conta verificada com sucesso. Agora voce ja pode fazer login.";
+        }
+
+        return "Seu e-mail foi confirmado com sucesso. Seu cadastro agora esta em analise e algumas areas permanecem bloqueadas ate a liberacao da equipe.";
     }
 }

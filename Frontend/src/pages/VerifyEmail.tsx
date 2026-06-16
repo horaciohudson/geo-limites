@@ -98,7 +98,7 @@ const VerifyEmail: React.FC = () => {
           <div className="modern-login-form">
             <div className="form-header">
               <h2>Verificacao de e-mail</h2>
-              <p>Estamos finalizando a ativacao do seu acesso.</p>
+              <p>Estamos confirmando seu cadastro e encaminhando sua conta para analise inicial.</p>
             </div>
 
             {state === 'loading' && (
@@ -156,8 +156,8 @@ const VerifyEmail: React.FC = () => {
       <div className="login-right-panel">
         <div className="hero-content">
           <div className="hero-text">
-            <h2>Ativacao segura da conta</h2>
-            <p>Depois da verificacao, o acesso tenant-aware fica liberado para o ambiente correto.</p>
+            <h2>Confirmacao e analise inicial</h2>
+            <p>Depois da verificacao, sua conta segue para triagem da equipe antes da liberacao operacional completa.</p>
           </div>
         </div>
       </div>

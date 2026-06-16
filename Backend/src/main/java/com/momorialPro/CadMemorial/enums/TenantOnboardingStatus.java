@@ -9,6 +9,7 @@ public enum TenantOnboardingStatus {
     PENDING_APPROVAL,
     PENDING_FIRST_PAYMENT,
     READY_FOR_RELEASE,
+    REJECTED,
     ACTIVE,
     SUSPENDED
 }

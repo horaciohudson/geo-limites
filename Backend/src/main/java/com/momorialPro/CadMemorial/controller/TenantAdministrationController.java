@@ -36,6 +36,12 @@ public class TenantAdministrationController {
         return ResponseEntity.ok(tenantAdministrationService.listOperationalTenants());
     }
 
+    @GetMapping("/onboarding-queue")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<TenantOperationalAdminDTO>> listOnboardingQueue() {
+        return ResponseEntity.ok(tenantAdministrationService.listOnboardingQueue());
+    }
+
     @GetMapping("/operational/{tenantId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TenantOperationalAdminDTO> getTenantOperational(@PathVariable UUID tenantId) {
@@ -70,6 +76,33 @@ public class TenantAdministrationController {
         boolean value = request != null && Boolean.TRUE.equals(request.getValue());
         String notes = request != null ? request.getNotes() : null;
         return ResponseEntity.ok(tenantAdministrationService.setOperationalAccessReleased(tenantId, value, notes, getCurrentActor()));
+    }
+
+    @PatchMapping("/operational/{tenantId}/research-notes")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TenantOperationalAdminDTO> setCustomerResearchNotes(
+            @PathVariable UUID tenantId,
+            @RequestBody(required = false) TenantOperationalActionRequest request) {
+        String notes = request != null ? request.getNotes() : null;
+        return ResponseEntity.ok(tenantAdministrationService.setCustomerResearchNotes(tenantId, notes, getCurrentActor()));
+    }
+
+    @PatchMapping("/operational/{tenantId}/reject")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TenantOperationalAdminDTO> rejectTenant(
+            @PathVariable UUID tenantId,
+            @RequestBody(required = false) TenantOperationalActionRequest request) {
+        String notes = request != null ? request.getNotes() : null;
+        return ResponseEntity.ok(tenantAdministrationService.rejectTenant(tenantId, notes, getCurrentActor()));
+    }
+
+    @PatchMapping("/operational/{tenantId}/reactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TenantOperationalAdminDTO> reactivateRejectedTenant(
+            @PathVariable UUID tenantId,
+            @RequestBody(required = false) TenantOperationalActionRequest request) {
+        String notes = request != null ? request.getNotes() : null;
+        return ResponseEntity.ok(tenantAdministrationService.reactivateRejectedTenant(tenantId, notes, getCurrentActor()));
     }
 
     private String getCurrentActor() {

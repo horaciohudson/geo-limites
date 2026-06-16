@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useTenantOperationalAccess } from '@/hooks/useTenantOperationalAccess';
 import creditService from '../services/creditService';
 import type { 
   CreditBalance, 
@@ -34,6 +35,13 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 const MyAccount: React.FC = () => {
   const { user } = useAuth();
+  const {
+    tenantOperational,
+    onboardingStageLabel,
+    onboardingStageTone,
+    onboardingGuidanceTitle,
+    onboardingGuidanceMessage,
+  } = useTenantOperationalAccess();
   const [currentTab, setCurrentTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +140,23 @@ const MyAccount: React.FC = () => {
   const currentTabData = tabs[currentTab];
   const pendingPurchases = purchases.filter((purchase) => purchase.status === 'PENDING').length;
   const totalTransactions = transactions.length;
+  const onboardingDates = [
+    tenantOperational?.emailVerifiedAt
+      ? `Email confirmado em ${new Date(tenantOperational.emailVerifiedAt).toLocaleString('pt-BR')}`
+      : null,
+    tenantOperational?.pendingApprovalAt
+      ? `Entrou em analise em ${new Date(tenantOperational.pendingApprovalAt).toLocaleString('pt-BR')}`
+      : null,
+    tenantOperational?.adminApprovedAt
+      ? `Aprovado em ${new Date(tenantOperational.adminApprovedAt).toLocaleString('pt-BR')}`
+      : null,
+    tenantOperational?.operationalAccessReleasedAt
+      ? `Liberado em ${new Date(tenantOperational.operationalAccessReleasedAt).toLocaleString('pt-BR')}`
+      : null,
+  ].filter(Boolean) as string[];
+  const rejectionReason = tenantOperational?.onboardingStatus === 'REJECTED'
+    ? tenantOperational.rejectionReason
+    : null;
 
   // Renderizar conteúdo da aba atual
   const renderTabContent = () => {
@@ -256,9 +281,40 @@ const MyAccount: React.FC = () => {
               <span>registros no historico</span>
             </div>
             <div className="account-overview-card">
+              <span className="overview-label">Onboarding</span>
+              <strong>{onboardingStageLabel}</strong>
+              <span>{tenantOperational?.tenantCode ? `Tenant ${tenantOperational.tenantCode}` : 'acompanhamento da liberacao'}</span>
+            </div>
+            <div className="account-overview-card">
               <span className="overview-label">Pedidos Pendentes</span>
               <strong>{pendingPurchases}</strong>
               <span>solicitacoes em analise</span>
+            </div>
+          </div>
+
+          <div className={`account-onboarding-banner tone-${onboardingStageTone}`}>
+            <div className="account-onboarding-banner-copy">
+              <span className="account-onboarding-badge">{onboardingStageLabel}</span>
+              <strong>{onboardingGuidanceTitle}</strong>
+              <p>{onboardingGuidanceMessage}</p>
+              {rejectionReason && (
+                <div className="account-onboarding-alert-detail">
+                  <span className="account-onboarding-alert-label">Motivo informado pela equipe</span>
+                  <strong>{rejectionReason}</strong>
+                </div>
+              )}
+            </div>
+            <div className="account-onboarding-banner-meta">
+              <span className="account-onboarding-meta-label">Situacao da conta</span>
+              <strong>{tenantOperational?.tenantName || 'Conta principal'}</strong>
+              <span>{tenantOperational?.contactEmail || user?.username || 'Sem e-mail principal identificado'}</span>
+              {onboardingDates.length > 0 && (
+                <div className="account-onboarding-timeline">
+                  {onboardingDates.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           

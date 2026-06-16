@@ -86,6 +86,32 @@ export interface UpdateApiSettingsRequest {
   memorialApiProvider: string;
 }
 
+export interface OnboardingNotificationSettings {
+  responsibleName: string;
+  responsibleEmail: string;
+  alternateEmail: string;
+  phone: string;
+  whatsapp: string;
+  manualApprovalEnabled: boolean;
+  notifyOnSignupCreated: boolean;
+  notifyOnEmailVerified: boolean;
+  notifyOnPendingApproval: boolean;
+  active: boolean;
+}
+
+export interface UpdateOnboardingNotificationSettingsRequest {
+  responsibleName?: string;
+  responsibleEmail?: string;
+  alternateEmail?: string;
+  phone?: string;
+  whatsapp?: string;
+  manualApprovalEnabled?: boolean;
+  notifyOnSignupCreated?: boolean;
+  notifyOnEmailVerified?: boolean;
+  notifyOnPendingApproval?: boolean;
+  active?: boolean;
+}
+
 export interface UpdateCreditPackageRequest {
   id: string;
   name: string;
@@ -151,6 +177,18 @@ const adminSettingsService = {
 
   async updateApiSettings(payload: UpdateApiSettingsRequest): Promise<ApiSettings> {
     const response = await api.patch('/admin/settings/api', payload);
+    return response.data;
+  },
+
+  async getOnboardingNotificationSettings(): Promise<OnboardingNotificationSettings> {
+    const response = await api.get('/admin/settings/onboarding');
+    return response.data;
+  },
+
+  async updateOnboardingNotificationSettings(
+    payload: UpdateOnboardingNotificationSettingsRequest
+  ): Promise<OnboardingNotificationSettings> {
+    const response = await api.patch('/admin/settings/onboarding', payload);
     return response.data;
   },
 

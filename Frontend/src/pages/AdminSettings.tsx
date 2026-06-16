@@ -4,8 +4,10 @@ import adminSettingsService, {
   type AdminUserUpdateRequest,
   type CreditPricingSettings,
   type MessageResponse,
+  type OnboardingNotificationSettings,
   type SmtpOperationResult,
   type SmtpSettings,
+  type UpdateOnboardingNotificationSettingsRequest,
   type UpdateCreditPricingSettingsRequest,
   type UpdateSmtpSettingsRequest,
   type UpdateApiSettingsRequest,
@@ -50,9 +52,23 @@ const defaultCreditPricingForm: UpdateCreditPricingSettingsRequest = {
   ],
 };
 
-type AdminTab = 'empresas' | 'smtp' | 'api' | 'creditos' | 'usuarios';
+const defaultOnboardingForm: UpdateOnboardingNotificationSettingsRequest = {
+  responsibleName: '',
+  responsibleEmail: '',
+  alternateEmail: '',
+  phone: '',
+  whatsapp: '',
+  manualApprovalEnabled: true,
+  notifyOnSignupCreated: false,
+  notifyOnEmailVerified: false,
+  notifyOnPendingApproval: true,
+  active: true,
+};
+
+type AdminTab = 'empresas' | 'onboarding' | 'smtp' | 'api' | 'creditos' | 'usuarios';
 type UserRoleFilter = 'all' | 'admin' | 'user';
 type UserStatusFilter = 'all' | 'active' | 'inactive' | 'pending';
+type OnboardingQueueFilter = 'all' | 'analysis' | 'payment' | 'release' | 'rejected' | 'released';
 
 interface ApiErrorLike {
   message?: string;
@@ -86,7 +102,11 @@ const AdminSettings: React.FC = () => {
   const [statusType, setStatusType] = useState<'success' | 'error'>('success');
   const [currentSettings, setCurrentSettings] = useState<SmtpSettings | null>(null);
   const [operationalTenants, setOperationalTenants] = useState<TenantOperationalAdminDTO[]>([]);
+  const [onboardingQueue, setOnboardingQueue] = useState<TenantOperationalAdminDTO[]>([]);
+  const [onboardingForm, setOnboardingForm] = useState<UpdateOnboardingNotificationSettingsRequest>(defaultOnboardingForm);
+  const [currentOnboardingSettings, setCurrentOnboardingSettings] = useState<OnboardingNotificationSettings | null>(null);
   const [loadingOperationalTenants, setLoadingOperationalTenants] = useState(true);
+  const [loadingOnboarding, setLoadingOnboarding] = useState(true);
   const [apiForm, setApiForm] = useState<UpdateApiSettingsRequest>({ templateApiProvider: 'CLAUDE', memorialApiProvider: 'CLAUDE' });
   const [loadingApi, setLoadingApi] = useState(true);
   const [creditPricingForm, setCreditPricingForm] = useState<UpdateCreditPricingSettingsRequest>(defaultCreditPricingForm);
@@ -106,6 +126,9 @@ const AdminSettings: React.FC = () => {
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('all');
   const [userStatusFilter, setUserStatusFilter] = useState<UserStatusFilter>('all');
+  const [researchNotesDrafts, setResearchNotesDrafts] = useState<Record<string, string>>({});
+  const [savingResearchNotesTenantId, setSavingResearchNotesTenantId] = useState<string | null>(null);
+  const [onboardingQueueFilter, setOnboardingQueueFilter] = useState<OnboardingQueueFilter>('all');
 
   const isAdmin = useMemo(
     () => user?.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN') ?? false,
@@ -124,6 +147,12 @@ const AdminSettings: React.FC = () => {
       label: 'SMTP',
       eyebrow: 'Comunicacao',
       count: currentSettings?.enabled ? 'Ativo' : 'Inativo',
+    },
+    {
+      id: 'onboarding',
+      label: 'Onboarding',
+      eyebrow: 'Liberacao manual',
+      count: `${onboardingQueue.length} na fila`,
     },
     {
       id: 'api',
@@ -169,6 +198,73 @@ const AdminSettings: React.FC = () => {
     });
   }, [users, userRoleFilter, userSearch, userStatusFilter]);
 
+  const getOnboardingStage = (tenant: TenantOperationalAdminDTO) => {
+    if (tenant.onboardingStatus === 'REJECTED') {
+      return {
+        key: 'rejected' as const,
+        label: 'Rejeitado',
+        chipClassName: 'inactive',
+      };
+    }
+
+    if (tenant.operationalAccessReleased || tenant.onboardingStatus === 'ACTIVE') {
+      return {
+        key: 'released' as const,
+        label: 'Liberado',
+        chipClassName: 'confirmed',
+      };
+    }
+
+    if (tenant.adminApproved && tenant.firstPaymentConfirmed) {
+      return {
+        key: 'release' as const,
+        label: 'Pronto para liberar',
+        chipClassName: 'active',
+      };
+    }
+
+    if (tenant.adminApproved && !tenant.firstPaymentConfirmed) {
+      return {
+        key: 'payment' as const,
+        label: 'Aguardando pagamento',
+        chipClassName: 'inactive',
+      };
+    }
+
+    return {
+      key: 'analysis' as const,
+      label: 'Em analise',
+      chipClassName: 'pending',
+    };
+  };
+
+  const onboardingQueueSummary = useMemo(() => {
+    return onboardingQueue.reduce(
+      (acc, tenant) => {
+        const stage = getOnboardingStage(tenant);
+        acc.total += 1;
+        acc[stage.key] += 1;
+        return acc;
+      },
+      {
+        total: 0,
+        analysis: 0,
+        payment: 0,
+        release: 0,
+        rejected: 0,
+        released: 0,
+      }
+    );
+  }, [onboardingQueue]);
+
+  const filteredOnboardingQueue = useMemo(() => {
+    if (onboardingQueueFilter === 'all') {
+      return onboardingQueue;
+    }
+
+    return onboardingQueue.filter((tenant) => getOnboardingStage(tenant).key === onboardingQueueFilter);
+  }, [onboardingQueue, onboardingQueueFilter]);
+
   useEffect(() => {
     if (!isAdmin) {
       setLoading(false);
@@ -176,7 +272,15 @@ const AdminSettings: React.FC = () => {
       setLoadingUsers(false);
       return;
     }
-    void Promise.all([loadOperationalTenants(), loadSettings(), loadApiSettings(), loadCreditPricingSettings(), loadUsers()]);
+    void Promise.all([
+      loadOperationalTenants(),
+      loadOnboardingSettings(),
+      loadOnboardingQueue(),
+      loadSettings(),
+      loadApiSettings(),
+      loadCreditPricingSettings(),
+      loadUsers(),
+    ]);
   }, [isAdmin]);
 
   const loadOperationalTenants = async () => {
@@ -202,6 +306,45 @@ const AdminSettings: React.FC = () => {
       showError(error, 'Nao foi possivel carregar as configuracoes SMTP.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadOnboardingSettings = async () => {
+    try {
+      setLoadingOnboarding(true);
+      const settings = await adminSettingsService.getOnboardingNotificationSettings();
+      setCurrentOnboardingSettings(settings);
+      setOnboardingForm({
+        responsibleName: settings.responsibleName || '',
+        responsibleEmail: settings.responsibleEmail || '',
+        alternateEmail: settings.alternateEmail || '',
+        phone: settings.phone || '',
+        whatsapp: settings.whatsapp || '',
+        manualApprovalEnabled: settings.manualApprovalEnabled,
+        notifyOnSignupCreated: settings.notifyOnSignupCreated,
+        notifyOnEmailVerified: settings.notifyOnEmailVerified,
+        notifyOnPendingApproval: settings.notifyOnPendingApproval,
+        active: settings.active,
+      });
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel carregar as configuracoes de onboarding.');
+    } finally {
+      setLoadingOnboarding(false);
+    }
+  };
+
+  const loadOnboardingQueue = async () => {
+    try {
+      const response = await tenantAdminService.getOnboardingQueue();
+      setOnboardingQueue(response);
+      setResearchNotesDrafts(
+        response.reduce<Record<string, string>>((acc, item) => {
+          acc[item.tenantId] = item.customerResearchNotes || '';
+          return acc;
+        }, {})
+      );
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel carregar a fila de onboarding.');
     }
   };
 
@@ -283,6 +426,13 @@ const AdminSettings: React.FC = () => {
     setApiForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const setOnboardingField = <K extends keyof UpdateOnboardingNotificationSettingsRequest>(
+    field: K,
+    value: UpdateOnboardingNotificationSettingsRequest[K]
+  ) => {
+    setOnboardingForm((prev) => ({ ...prev, [field]: value }));
+  };
+
   const setCreditPricingField = <K extends keyof UpdateCreditPricingSettingsRequest>(
     field: K,
     value: UpdateCreditPricingSettingsRequest[K]
@@ -304,7 +454,6 @@ const AdminSettings: React.FC = () => {
       )),
     }));
   };
-
   const setEditUserField = <K extends keyof AdminUserUpdateRequest>(field: K, value: AdminUserUpdateRequest[K]) => {
     setEditUserForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
@@ -345,7 +494,7 @@ const AdminSettings: React.FC = () => {
       setSaving(true);
       await tenantAdminService.setAdminApproved(tenantId, { value: true });
       showSuccess('Tenant aprovado com sucesso.');
-      await loadOperationalTenants();
+      await Promise.all([loadOperationalTenants(), loadOnboardingQueue()]);
     } catch (error) {
       showError(error, 'Erro ao aprovar tenant.');
     } finally {
@@ -358,7 +507,7 @@ const AdminSettings: React.FC = () => {
       setSaving(true);
       await tenantAdminService.setFirstPaymentConfirmed(tenantId, { value: true });
       showSuccess('Pagamento confirmado.');
-      await loadOperationalTenants();
+      await Promise.all([loadOperationalTenants(), loadOnboardingQueue()]);
     } catch (error) {
       showError(error, 'Erro ao confirmar pagamento.');
     } finally {
@@ -371,9 +520,79 @@ const AdminSettings: React.FC = () => {
       setSaving(true);
       await tenantAdminService.setOperationalAccessReleased(tenantId, { value: true });
       showSuccess('Acesso operacional liberado.');
-      await loadOperationalTenants();
+      await Promise.all([loadOperationalTenants(), loadOnboardingQueue()]);
     } catch (error) {
       showError(error, 'Erro ao liberar acesso.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResearchNotesChange = (tenantId: string, value: string) => {
+    setResearchNotesDrafts((prev) => ({
+      ...prev,
+      [tenantId]: value,
+    }));
+  };
+
+  const handleSaveResearchNotes = async (tenantId: string) => {
+    try {
+      setSavingResearchNotesTenantId(tenantId);
+      const updated = await tenantAdminService.setCustomerResearchNotes(tenantId, {
+        value: true,
+        notes: researchNotesDrafts[tenantId] || '',
+      });
+      setOnboardingQueue((prev) => prev.map((item) => (item.tenantId === tenantId ? updated : item)));
+      setOperationalTenants((prev) => prev.map((item) => (item.tenantId === tenantId ? updated : item)));
+      setResearchNotesDrafts((prev) => ({
+        ...prev,
+        [tenantId]: updated.customerResearchNotes || '',
+      }));
+      showSuccess('Notas de analise salvas com sucesso.');
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel salvar as notas de analise.');
+    } finally {
+      setSavingResearchNotesTenantId(null);
+    }
+  };
+
+  const handleRejectTenant = async (tenantId: string) => {
+    try {
+      setSaving(true);
+      const updated = await tenantAdminService.rejectTenant(tenantId, {
+        value: true,
+        notes: researchNotesDrafts[tenantId] || '',
+      });
+      setOnboardingQueue((prev) => prev.map((item) => (item.tenantId === tenantId ? updated : item)));
+      setOperationalTenants((prev) => prev.map((item) => (item.tenantId === tenantId ? updated : item)));
+      setResearchNotesDrafts((prev) => ({
+        ...prev,
+        [tenantId]: updated.customerResearchNotes || '',
+      }));
+      showSuccess('Cadastro marcado como rejeitado.');
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel rejeitar o cadastro.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReactivateRejectedTenant = async (tenantId: string) => {
+    try {
+      setSaving(true);
+      const updated = await tenantAdminService.reactivateRejectedTenant(tenantId, {
+        value: true,
+        notes: researchNotesDrafts[tenantId] || '',
+      });
+      setOnboardingQueue((prev) => prev.map((item) => (item.tenantId === tenantId ? updated : item)));
+      setOperationalTenants((prev) => prev.map((item) => (item.tenantId === tenantId ? updated : item)));
+      setResearchNotesDrafts((prev) => ({
+        ...prev,
+        [tenantId]: updated.customerResearchNotes || '',
+      }));
+      showSuccess('Cadastro devolvido para analise.');
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel reativar o cadastro rejeitado.');
     } finally {
       setSaving(false);
     }
@@ -390,6 +609,44 @@ const AdminSettings: React.FC = () => {
       showSuccess('Configuracoes de API atualizadas com sucesso.');
     } catch (error: unknown) {
       showError(error, 'Nao foi possivel salvar as configuracoes de API.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveOnboardingSettings = async () => {
+    try {
+      setSaving(true);
+      const payload: UpdateOnboardingNotificationSettingsRequest = {
+        responsibleName: onboardingForm.responsibleName?.trim() || '',
+        responsibleEmail: onboardingForm.responsibleEmail?.trim() || '',
+        alternateEmail: onboardingForm.alternateEmail?.trim() || '',
+        phone: onboardingForm.phone?.trim() || '',
+        whatsapp: onboardingForm.whatsapp?.trim() || '',
+        manualApprovalEnabled: onboardingForm.manualApprovalEnabled,
+        notifyOnSignupCreated: onboardingForm.notifyOnSignupCreated,
+        notifyOnEmailVerified: onboardingForm.notifyOnEmailVerified,
+        notifyOnPendingApproval: onboardingForm.notifyOnPendingApproval,
+        active: onboardingForm.active,
+      };
+
+      const settings = await adminSettingsService.updateOnboardingNotificationSettings(payload);
+      setCurrentOnboardingSettings(settings);
+      setOnboardingForm({
+        responsibleName: settings.responsibleName || '',
+        responsibleEmail: settings.responsibleEmail || '',
+        alternateEmail: settings.alternateEmail || '',
+        phone: settings.phone || '',
+        whatsapp: settings.whatsapp || '',
+        manualApprovalEnabled: settings.manualApprovalEnabled,
+        notifyOnSignupCreated: settings.notifyOnSignupCreated,
+        notifyOnEmailVerified: settings.notifyOnEmailVerified,
+        notifyOnPendingApproval: settings.notifyOnPendingApproval,
+        active: settings.active,
+      });
+      showSuccess('Configuracoes de onboarding salvas com sucesso.');
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel salvar as configuracoes de onboarding.');
     } finally {
       setSaving(false);
     }
@@ -599,6 +856,19 @@ const AdminSettings: React.FC = () => {
     setStatusMessage(message);
   };
 
+  const formatDateTime = (value?: string | null) => {
+    if (!value) {
+      return 'Ainda nao registrado';
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleString('pt-BR');
+  };
+
   if (!isAdmin) {
     return (
       <div className="admin-settings-page">
@@ -720,6 +990,345 @@ const AdminSettings: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'onboarding' && (
+        <section className="admin-settings-card admin-settings-panel">
+          <div className="admin-settings-panel-header">
+            <div>
+              <h2>Onboarding e Liberacao</h2>
+              <p>Defina quem recebe alertas e acompanhe os clientes que aguardam analise antes da liberacao.</p>
+            </div>
+            <div className="admin-settings-panel-stats">
+              <span className="admin-settings-stat">Fila: {onboardingQueueSummary.total}</span>
+              <span className="admin-settings-stat">
+                Modo: {currentOnboardingSettings?.manualApprovalEnabled ? 'Manual' : 'Automatico'}
+              </span>
+            </div>
+          </div>
+          {loadingOnboarding ? (
+            <p>Carregando onboarding...</p>
+          ) : (
+            <>
+              <div className="admin-panel-highlights">
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Responsavel</span>
+                  <strong>{currentOnboardingSettings?.responsibleName || 'Nao definido'}</strong>
+                  <span>{currentOnboardingSettings?.responsibleEmail || 'Sem e-mail configurado'}</span>
+                </div>
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Em analise</span>
+                  <strong>{onboardingQueueSummary.analysis}</strong>
+                  <span>clientes aguardando triagem</span>
+                </div>
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Pagamento</span>
+                  <strong>{onboardingQueueSummary.payment}</strong>
+                  <span>aprovados aguardando confirmacao financeira</span>
+                </div>
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Liberacao</span>
+                  <strong>{onboardingQueueSummary.release}</strong>
+                  <span>prontos para liberar acesso operacional</span>
+                </div>
+                <div className="admin-panel-highlight-card">
+                  <span className="admin-panel-highlight-label">Rejeitados</span>
+                  <strong>{onboardingQueueSummary.rejected}</strong>
+                  <span>cadastros encerrados pela triagem</span>
+                </div>
+              </div>
+
+              <div className="admin-settings-subsections">
+                <section className="admin-settings-subsection">
+                  <div className="admin-settings-subsection-header">
+                    <div>
+                      <h3>Contato Responsavel</h3>
+                      <p>Esses dados sao usados para avisar quem fara a analise previa do novo cliente.</p>
+                    </div>
+                  </div>
+                  <div className="admin-settings-form">
+                    <div className="admin-settings-row">
+                      <div className="admin-settings-field">
+                        <label htmlFor="onboarding-responsible-name">Nome do Responsavel</label>
+                        <input
+                          id="onboarding-responsible-name"
+                          value={onboardingForm.responsibleName || ''}
+                          onChange={(e) => setOnboardingField('responsibleName', e.target.value)}
+                          placeholder="Rodrigo Hudson"
+                        />
+                      </div>
+                      <div className="admin-settings-field">
+                        <label htmlFor="onboarding-responsible-email">E-mail Principal</label>
+                        <input
+                          id="onboarding-responsible-email"
+                          type="email"
+                          value={onboardingForm.responsibleEmail || ''}
+                          onChange={(e) => setOnboardingField('responsibleEmail', e.target.value)}
+                          placeholder="admin@geolimites.com.br"
+                        />
+                      </div>
+                    </div>
+                    <div className="admin-settings-row">
+                      <div className="admin-settings-field">
+                        <label htmlFor="onboarding-alternate-email">E-mail Alternativo</label>
+                        <input
+                          id="onboarding-alternate-email"
+                          type="email"
+                          value={onboardingForm.alternateEmail || ''}
+                          onChange={(e) => setOnboardingField('alternateEmail', e.target.value)}
+                          placeholder="comercial@geolimites.com.br"
+                        />
+                      </div>
+                      <div className="admin-settings-field">
+                        <label htmlFor="onboarding-phone">Telefone</label>
+                        <input
+                          id="onboarding-phone"
+                          value={onboardingForm.phone || ''}
+                          onChange={(e) => setOnboardingField('phone', e.target.value)}
+                          placeholder="(00) 0000-0000"
+                        />
+                      </div>
+                    </div>
+                    <div className="admin-settings-row">
+                      <div className="admin-settings-field">
+                        <label htmlFor="onboarding-whatsapp">WhatsApp</label>
+                        <input
+                          id="onboarding-whatsapp"
+                          value={onboardingForm.whatsapp || ''}
+                          onChange={(e) => setOnboardingField('whatsapp', e.target.value)}
+                          placeholder="(00) 00000-0000"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="admin-settings-subsection">
+                  <div className="admin-settings-subsection-header">
+                    <div>
+                      <h3>Regras de Notificacao</h3>
+                      <p>Ative somente os eventos que fazem sentido para a triagem comercial e operacional.</p>
+                    </div>
+                  </div>
+                  <div className="admin-settings-form">
+                    <div className="admin-settings-checks">
+                      <label><input type="checkbox" checked={Boolean(onboardingForm.active)} onChange={(e) => setOnboardingField('active', e.target.checked)} /> Ativar notificacoes de onboarding</label>
+                      <label><input type="checkbox" checked={Boolean(onboardingForm.manualApprovalEnabled)} onChange={(e) => setOnboardingField('manualApprovalEnabled', e.target.checked)} /> Exigir aprovacao manual</label>
+                      <label><input type="checkbox" checked={Boolean(onboardingForm.notifyOnSignupCreated)} onChange={(e) => setOnboardingField('notifyOnSignupCreated', e.target.checked)} /> Avisar no cadastro criado</label>
+                      <label><input type="checkbox" checked={Boolean(onboardingForm.notifyOnEmailVerified)} onChange={(e) => setOnboardingField('notifyOnEmailVerified', e.target.checked)} /> Avisar ao confirmar e-mail</label>
+                      <label><input type="checkbox" checked={Boolean(onboardingForm.notifyOnPendingApproval)} onChange={(e) => setOnboardingField('notifyOnPendingApproval', e.target.checked)} /> Avisar ao entrar em analise</label>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="admin-settings-subsection">
+                  <div className="admin-settings-subsection-header">
+                    <div>
+                      <h3>Fila de Analise</h3>
+                      <p>Clientes que ja passaram por verificacao e ainda dependem de acao administrativa para seguir.</p>
+                    </div>
+                    <div className="admin-onboarding-filters">
+                      <button
+                        type="button"
+                        className={`admin-onboarding-filter-chip ${onboardingQueueFilter === 'all' ? 'active' : ''}`}
+                        onClick={() => setOnboardingQueueFilter('all')}
+                      >
+                        Todos ({onboardingQueueSummary.total})
+                      </button>
+                      <button
+                        type="button"
+                        className={`admin-onboarding-filter-chip ${onboardingQueueFilter === 'analysis' ? 'active' : ''}`}
+                        onClick={() => setOnboardingQueueFilter('analysis')}
+                      >
+                        Em analise ({onboardingQueueSummary.analysis})
+                      </button>
+                      <button
+                        type="button"
+                        className={`admin-onboarding-filter-chip ${onboardingQueueFilter === 'payment' ? 'active' : ''}`}
+                        onClick={() => setOnboardingQueueFilter('payment')}
+                      >
+                        Pagamento ({onboardingQueueSummary.payment})
+                      </button>
+                      <button
+                        type="button"
+                        className={`admin-onboarding-filter-chip ${onboardingQueueFilter === 'release' ? 'active' : ''}`}
+                        onClick={() => setOnboardingQueueFilter('release')}
+                      >
+                        Liberacao ({onboardingQueueSummary.release})
+                      </button>
+                      <button
+                        type="button"
+                        className={`admin-onboarding-filter-chip ${onboardingQueueFilter === 'rejected' ? 'active' : ''}`}
+                        onClick={() => setOnboardingQueueFilter('rejected')}
+                      >
+                        Rejeitados ({onboardingQueueSummary.rejected})
+                      </button>
+                      <button
+                        type="button"
+                        className={`admin-onboarding-filter-chip ${onboardingQueueFilter === 'released' ? 'active' : ''}`}
+                        onClick={() => setOnboardingQueueFilter('released')}
+                      >
+                        Liberados ({onboardingQueueSummary.released})
+                      </button>
+                    </div>
+                  </div>
+                  {filteredOnboardingQueue.length === 0 ? (
+                    <div className="admin-users-empty">
+                      <strong>Nenhum cliente encontrado neste recorte da fila.</strong>
+                      <span>Ajuste os filtros ou aguarde novos tenants entrarem no fluxo de onboarding.</span>
+                    </div>
+                  ) : (
+                    <div className="admin-users-list">
+                      {filteredOnboardingQueue.map((tenant) => {
+                        const stage = getOnboardingStage(tenant);
+                        return (
+                        <div key={tenant.tenantId} className={`admin-user-item onboarding-stage-${stage.key}`}>
+                          <div className="admin-user-row onboarding-queue-row">
+                            <div className="admin-user-cell admin-user-main">
+                              <div className="admin-user-cell-label">Cliente</div>
+                              <div className="admin-user-title">
+                                <strong>{tenant.tenantName}</strong>
+                                <span className="admin-user-chip">#{tenant.tenantCode}</span>
+                                <span className={`admin-user-state-chip ${stage.chipClassName}`}>
+                                  {stage.label}
+                                </span>
+                              </div>
+                              <div className="admin-user-identity">
+                                <span>{tenant.contactName || 'Responsavel nao informado'}</span>
+                                <span>{tenant.contactEmail || 'Sem e-mail'}</span>
+                                <span>{tenant.contactPhone || 'Sem telefone'}</span>
+                              </div>
+                            </div>
+
+                            <div className="admin-user-cell">
+                              <div className="admin-user-cell-label">Status</div>
+                              <span className={`admin-user-state-chip ${tenant.onboardingStatus === 'PENDING_APPROVAL' ? 'pending' : 'neutral'}`}>
+                                {tenant.onboardingStatus}
+                              </span>
+                              <span className={`admin-user-state-chip ${tenant.billingStatus === 'PAID' ? 'confirmed' : 'inactive'}`}>
+                                {tenant.billingStatus}
+                              </span>
+                            </div>
+
+                            <div className="admin-user-cell">
+                              <div className="admin-user-cell-label">Datas</div>
+                              <div className="admin-user-identity onboarding-queue-dates">
+                                <span>E-mail confirmado: {formatDateTime(tenant.emailVerifiedAt)}</span>
+                                <span>Em analise: {formatDateTime(tenant.pendingApprovalAt)}</span>
+                              </div>
+                            </div>
+
+                            <div className="admin-user-actions admin-user-cell">
+                              <div className="admin-user-cell-label">Acoes</div>
+                              <button
+                                className="admin-settings-button secondary"
+                                disabled={tenant.adminApproved || tenant.onboardingStatus === 'REJECTED' || saving}
+                                onClick={() => handleApproveTenant(tenant.tenantId)}
+                              >
+                                {tenant.adminApproved ? 'Aprovado' : 'Aprovar'}
+                              </button>
+                              <button
+                                className="admin-settings-button secondary"
+                                disabled={tenant.firstPaymentConfirmed || tenant.onboardingStatus === 'REJECTED' || saving}
+                                onClick={() => handleConfirmPayment(tenant.tenantId)}
+                              >
+                                {tenant.firstPaymentConfirmed ? 'Pgto OK' : 'Confirmar Pgto'}
+                              </button>
+                              <button
+                                className="admin-settings-button primary"
+                                disabled={tenant.operationalAccessReleased || tenant.onboardingStatus === 'REJECTED' || saving}
+                                onClick={() => handleReleaseAccess(tenant.tenantId)}
+                              >
+                                {tenant.operationalAccessReleased ? 'Liberado' : 'Liberar'}
+                              </button>
+                              <button
+                                className={`admin-settings-button ${tenant.onboardingStatus === 'REJECTED' ? 'secondary' : 'danger'}`}
+                                disabled={saving}
+                                onClick={() => (
+                                  tenant.onboardingStatus === 'REJECTED'
+                                    ? handleReactivateRejectedTenant(tenant.tenantId)
+                                    : handleRejectTenant(tenant.tenantId)
+                                )}
+                              >
+                                {tenant.onboardingStatus === 'REJECTED' ? 'Reativar' : 'Rejeitar'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {tenant.customerResearchNotes || tenant.releaseNotes || tenant.rejectionReason ? (
+                            <div className="admin-user-detail-panels">
+                              <div className="admin-settings-field">
+                                <label htmlFor={`research-notes-${tenant.tenantId}`}>Pesquisa previa / anotacoes internas</label>
+                                <textarea
+                                  id={`research-notes-${tenant.tenantId}`}
+                                  value={researchNotesDrafts[tenant.tenantId] || ''}
+                                  onChange={(e) => handleResearchNotesChange(tenant.tenantId, e.target.value)}
+                                  placeholder="Registre aqui o que foi apurado antes de aprovar e liberar o cliente."
+                                  rows={4}
+                                />
+                                <div className="admin-settings-actions">
+                                  <button
+                                    className="admin-settings-button secondary"
+                                    onClick={() => handleSaveResearchNotes(tenant.tenantId)}
+                                    disabled={savingResearchNotesTenantId === tenant.tenantId}
+                                  >
+                                    {savingResearchNotesTenantId === tenant.tenantId ? 'Salvando notas...' : 'Salvar Notas'}
+                                  </button>
+                                </div>
+                              </div>
+                              {tenant.rejectionReason && (
+                                <div className="admin-user-identity">
+                                  <span><strong>Motivo da rejeicao:</strong> {tenant.rejectionReason}</span>
+                                </div>
+                              )}
+                              {tenant.releaseNotes && (
+                                <div className="admin-user-identity">
+                                  <span><strong>Observacoes:</strong> {tenant.releaseNotes}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="admin-user-detail-panels">
+                              <div className="admin-settings-field">
+                                <label htmlFor={`research-notes-${tenant.tenantId}`}>Pesquisa previa / anotacoes internas</label>
+                                <textarea
+                                  id={`research-notes-${tenant.tenantId}`}
+                                  value={researchNotesDrafts[tenant.tenantId] || ''}
+                                  onChange={(e) => handleResearchNotesChange(tenant.tenantId, e.target.value)}
+                                  placeholder="Registre aqui o que foi apurado antes de aprovar e liberar o cliente."
+                                  rows={4}
+                                />
+                                <div className="admin-settings-actions">
+                                  <button
+                                    className="admin-settings-button secondary"
+                                    onClick={() => handleSaveResearchNotes(tenant.tenantId)}
+                                    disabled={savingResearchNotesTenantId === tenant.tenantId}
+                                  >
+                                    {savingResearchNotesTenantId === tenant.tenantId ? 'Salvando notas...' : 'Salvar Notas'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )})}
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              <div className="admin-settings-actions">
+                <button
+                  className="admin-settings-button primary"
+                  onClick={handleSaveOnboardingSettings}
+                  disabled={saving}
+                >
+                  {saving ? 'Salvando...' : 'Salvar Configuracoes de Onboarding'}
+                </button>
+              </div>
+            </>
           )}
         </section>
       )}
