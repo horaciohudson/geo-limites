@@ -804,7 +804,6 @@ const PropertyRegister: React.FC = () => {
               validation={{}}
               onSubmit={saveProperty}
               isSubmitting={isSaving}
-              onSaveDraft={handleSaveDraftManual}
             />
           )}
         </div>
@@ -887,3 +886,4 @@ const PropertyRegister: React.FC = () => {
 };
 
 export default PropertyRegister;
+
