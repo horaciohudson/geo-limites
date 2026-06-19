@@ -73,7 +73,8 @@ body {
 
 .drawing-content {
   width: 100%;
-  min-height: 800px; /* Altura ajustada para gráficos com escala 10x */
+  aspect-ratio: 1 / 1;
+  min-height: 420px;
 }
 
 /* Navbar */
@@ -1112,8 +1113,8 @@ body {
 .viewer-page {
   display: flex;
   flex-direction: column;
-  min-height: 2500px; /* Altura mínima aumentada para acomodar gráficos 20x maiores */
-  height: auto; /* Permitir crescimento automático */
+  min-height: 100vh;
+  height: auto;
   overflow-y: auto;
 }
 
@@ -1198,15 +1199,16 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 2500px; /* Altura mínima aumentada para acomodar gráficos 20x maiores */
+  min-height: auto;
   padding: 20px;
+  align-items: center;
 }
 
 .viewer-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 2500px; /* Altura mínima aumentada para acomodar gráficos 20x maiores */
+  min-height: auto;
   background: white;
   border-radius: 8px;
   border: 1px solid #ddd;
@@ -1264,15 +1266,21 @@ body {
 
 .drawing-content {
   padding: 0;
-  height: 800px; /* Altura ajustada para gráficos com escala 10x */
-  min-height: 800px;
+  aspect-ratio: 1 / 1;
+  min-height: 420px;
+  max-height: 900px;
   position: relative;
 }
 
 .drawing-viewer {
   width: 100%;
   height: 100%;
-  min-height: 800px;
+  min-height: 420px;
+}
+
+.main-viewer {
+  width: 100%;
+  max-width: 900px;
 }
 
 /* Report */
@@ -1971,203 +1979,4 @@ body {
   .files-table td {
     padding: 0.5rem;
   }
-}
-/* ===== MEMORIAL PROGRESS COMPONENT ===== */
-.memorial-progress-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  backdrop-filter: blur(4px);
-}
-
-.memorial-progress-modal {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  max-width: 500px;
-  width: 90%;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.progress-header {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.progress-header h3 {
-  margin: 0 0 0.5rem 0;
-  color: #2c3e50;
-  font-size: 1.5rem;
-}
-
-.progress-subtitle {
-  margin: 0;
-  color: #7f8c8d;
-  font-size: 0.9rem;
-}
-
-.progress-content {
-  margin-bottom: 1.5rem;
-}
-
-.progress-bar-container {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 8px;
-  background: #ecf0f1;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #3498db, #2ecc71);
-  border-radius: 4px;
-  transition: width 0.3s ease;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
-}
-
-.progress-percentage {
-  font-weight: bold;
-  color: #2c3e50;
-  min-width: 40px;
-}
-
-.progress-step {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 4px solid #3498db;
-}
-
-.step-icon {
-  font-size: 1.2rem;
-  animation: spin 2s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.step-text {
-  color: #2c3e50;
-  font-weight: 500;
-}
-
-.progress-info {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.time-info, .estimate-info {
-  padding: 0.5rem;
-  background: #f1f2f6;
-  border-radius: 4px;
-  text-align: center;
-  font-size: 0.85rem;
-  color: #2c3e50;
-}
-
-.progress-tips {
-  background: #e8f4fd;
-  border: 1px solid #bee5eb;
-  border-radius: 6px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-}
-
-.progress-tips p {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.85rem;
-  color: #0c5460;
-}
-
-.progress-tips p:last-child {
-  margin-bottom: 0;
-}
-
-.progress-actions {
-  text-align: center;
-  border-top: 1px solid #ecf0f1;
-  padding-top: 1rem;
-}
-
-.cancel-button {
-  background: #e74c3c;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-}
-
-.cancel-button:hover:not(:disabled) {
-  background: #c0392b;
-  transform: translateY(-1px);
-}
-
-.cancel-button:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-  transform: none;
-}
-
-@media (max-width: 768px) {
-  .memorial-progress-modal {
-    margin: 1rem;
-    padding: 1.5rem;
-  }
-  
-  .progress-info {
-    grid-template-columns: 1fr;
-  }
-}
-
-.session-info {
-  padding: 0.5rem;
-  background: #f8f9fa;
-  border-radius: 4px;
-  text-align: center;
-  font-size: 0.8rem;
-  color: #6c757d;
-  font-family: monospace;
 }

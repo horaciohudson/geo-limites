@@ -2,6 +2,7 @@ package com.momorialPro.CadMemorial.controller;
 
 import com.momorialPro.CadMemorial.dto.DxfCompareResultDTO;
 import com.momorialPro.CadMemorial.dto.DxfEntityChangeDTO;
+import com.momorialPro.CadMemorial.dto.SelectedConfrontationTextDTO;
 import com.momorialPro.CadMemorial.service.MemorialAiServiceWithCredits;
 import com.momorialPro.CadMemorial.service.MemorialService;
 import com.momorialPro.CadMemorial.util.DxfParser;
@@ -11,13 +12,23 @@ import com.momorialPro.CadMemorial.security.AuthUtils;
 import com.momorialPro.CadMemorial.service.MemorialApiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Controller responsável por geração de memorial descritivo
@@ -77,19 +88,35 @@ public class MemorialApiController {
     // ==============================================================
     @PostMapping("/generate-gpt")
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
-    public ResponseEntity<MemorialExportDTO> generateGptMemorial(@RequestBody MemorialRequestDTO request) {
+    public ResponseEntity<?> generateGptMemorial(@RequestBody MemorialRequestDTO request) {
+        String debugTraceId = UUID.randomUUID().toString();
+        // #region debug-point A:request-entry
+        debugReport("pre-fix", "A", "MemorialApiController:generate-gpt:entry", "[DEBUG] Entrada no generate-gpt", Map.of(
+                "traceId", debugTraceId,
+                "entityCount", request.entities() != null ? request.entities().size() : 0,
+                "lotCount", request.lotCount() != null ? request.lotCount() : -1,
+                "selectedLayersCount", request.selectedLayers() != null ? request.selectedLayers().size() : 0,
+                "selectedConfrontationTextsCount", request.selectedConfrontationTexts() != null ? request.selectedConfrontationTexts().size() : 0,
+                "hasPropertyId", request.propertyId() != null,
+                "hasStandardId", request.standardId() != null
+        ));
+        // #endregion
         if (request.propertyId() == null) {
             log.error("PropertyId ausente na geração do memorial com IA");
         }
         
         if (request.entities() == null || request.entities().isEmpty()) {
             log.warn("Nenhuma entidade DXF fornecida");
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Nao foi possivel iniciar a geracao porque o arquivo DXF nao trouxe entidades suficientes para analise."
+            ));
         }
         
         if (request.standardId() == null) {
             log.error("StandardId é obrigatório para gerar memorial com IA");
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Selecione uma norma antes de gerar o memorial."
+            ));
         }
 
         try {
@@ -97,7 +124,23 @@ public class MemorialApiController {
 
             // ⚡ CORREÇÃO CRÍTICA: Usar TODAS as entidades como "ADDED" (não dividir ao meio)
             // O frontend envia um único arquivo DXF, não uma comparação entre dois arquivos
-            List<DxfParser.Entity> allEntities = request.entities();
+            List<DxfParser.Entity> allEntities = filterEntitiesBySelectedLayers(request.entities(), request.selectedLayers());
+
+            if (allEntities.isEmpty()) {
+                log.warn("Nenhuma entidade permaneceu após filtro por layers; usando conjunto original");
+                allEntities = request.entities();
+            }
+            allEntities = appendSelectedConfrontationTexts(allEntities, request.selectedConfrontationTexts());
+            // #region debug-point B:post-filter
+            debugReport("pre-fix", "B", "MemorialApiController:generate-gpt:post-filter", "[DEBUG] Entidades apos filtro", Map.of(
+                    "traceId", debugTraceId,
+                    "filteredEntityCount", allEntities != null ? allEntities.size() : 0,
+                    "selectedLayers", request.selectedLayers() != null ? String.join(", ", request.selectedLayers()) : "",
+                    "selectedConfrontationTexts", request.selectedConfrontationTexts() != null ? request.selectedConfrontationTexts().stream()
+                            .map(SelectedConfrontationTextDTO::text)
+                            .collect(Collectors.joining(" | ")) : ""
+            ));
+            // #endregion
 
             // Usa nomes de arquivo da requisição
             String oldFileName = "Arquivo Base";
@@ -159,9 +202,30 @@ public class MemorialApiController {
                 compareResult, 
                 request.standardId(), 
                 userId,
-                request.propertyId()
+                request.propertyId(),
+                request.lotCount(),
+                request.billableLotCount(),
+                request.chargeCredits(),
+                request.selectedLayers(),
+                request.selectedConfrontationTexts()
             );
-            String sanitizedAiContent = sanitizeMemorialText(aiContent);
+            // #region debug-point C:service-output
+            debugReport("pre-fix", "C", "MemorialApiController:generate-gpt:service-output", "[DEBUG] Conteudo retornado pelo service", Map.of(
+                    "traceId", debugTraceId,
+                    "aiContentNull", aiContent == null,
+                    "aiContentLength", aiContent != null ? aiContent.length() : -1,
+                    "aiPreview", aiContent != null ? aiContent.substring(0, Math.min(180, aiContent.length())) : ""
+            ));
+            // #endregion
+            String sanitizedAiContent = normalizeAiMemorialForResponse(aiContent, request);
+            // #region debug-point D:normalized-output
+            debugReport("pre-fix", "D", "MemorialApiController:generate-gpt:normalized-output", "[DEBUG] Conteudo apos normalizacao", Map.of(
+                    "traceId", debugTraceId,
+                    "normalizedNull", sanitizedAiContent == null,
+                    "normalizedLength", sanitizedAiContent != null ? sanitizedAiContent.length() : -1,
+                    "normalizedPreview", sanitizedAiContent != null ? sanitizedAiContent.substring(0, Math.min(180, sanitizedAiContent.length())) : ""
+            ));
+            // #endregion
 
             // Cria resposta final
             MemorialExportDTO gptMemorial = new MemorialExportDTO();
@@ -174,8 +238,28 @@ public class MemorialApiController {
             return ResponseEntity.ok(gptMemorial);
             
         } catch (Exception e) {
+            // #region debug-point E:exception
+            debugReport("pre-fix", "E", "MemorialApiController:generate-gpt:exception", "[DEBUG] Excecao no generate-gpt", Map.of(
+                    "traceId", debugTraceId,
+                    "exceptionType", e.getClass().getName(),
+                    "message", String.valueOf(e.getMessage())
+            ));
+            // #endregion
             log.error("Erro durante geração do memorial com IA: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
+            if (isOpenAiRateLimitError(e)) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of(
+                        "message", "A OpenAI atingiu um limite temporario de requisicoes/tokens. O saldo da conta pode ainda estar disponivel. Tente novamente em alguns segundos. Os creditos desta tentativa foram estornados."
+                ));
+            }
+            if (isOpenAiQuotaError(e)) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of(
+                        "message", "A OpenAI nao aceitou esta tentativa porque a conta esta sem cota disponivel ou precisa de ajuste no faturamento. Verifique o billing/plano da OpenAI ou altere o provedor de memoriais para Claude nas configuracoes. Os creditos desta tentativa foram estornados."
+                ));
+            }
+
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", buildOperatorFriendlyErrorMessage(e)
+            ));
         }
     }
     
@@ -233,10 +317,514 @@ public class MemorialApiController {
         }
 
         return content
+                .replace("\r\n", "\n")
+                .replace("\\r\\n", "\n")
+                .replace("\\n", "\n")
                 .replace("“", "")
                 .replace("”", "")
                 .replace("\"", "")
                 .trim();
+    }
+
+    private String normalizeAiMemorialForResponse(String content, MemorialRequestDTO request) {
+        String sanitized = sanitizeMemorialText(content);
+        if (sanitized == null || sanitized.isBlank()) {
+            return sanitized;
+        }
+
+        sanitized = sanitized.replaceAll("(?is)<!--.*?-->", "");
+        boolean shouldPreserveHeader = request.lotCount() == null || request.lotCount() != 1;
+        if (!shouldPreserveHeader) {
+            sanitized = sanitized.replaceAll("(?is)^\\s*Memorial\\s+Descritivo\\s*\\n\\s*Projeto:.*?\\n\\s*Arquivo:.*?\\n\\s*Data:.*?(?:\\n|$)", "");
+        }
+        sanitized = sanitized
+                .replaceAll("(?i)\\[BAIRRO\\]", "nao informado no cadastro")
+                .replaceAll("(?i)\\[Bairro a ser confirmado\\]", "nao informado no cadastro")
+                .replaceAll("(?i)\\[N[ÚU]MERO DA MATR[IÍ]CULA\\]", "nao informada")
+                .replaceAll("(?i)\\[n[úu]mero da matr[ií]cula\\]", "nao informada")
+                .replaceAll("(?i)\\[ZONA\\]", "nao informada")
+                .replaceAll("(?i)\\[especificada\\]", "nao informada")
+                .replaceAll("(?i)\\[data\\]", "data nao informada")
+                .replaceAll("(?i)\\[[^\\]]+\\]", "nao informado");
+        sanitized = sanitized
+                .replaceAll("(?i)medida\\s+a\\s+confirmar", "medida nao identificada no DXF")
+                .replaceAll("(?i)sentido\\s+a\\s+confirmar", "sentido nao identificado no DXF")
+                .replaceAll("(?i)confrontante\\s+a\\s+confirmar(?:\\s+em\\s+confer[êe]ncia\\s+t[ée]cnica)?",
+                        "confrontante nao identificado no DXF")
+                .replaceAll("(?i)data\\s+a\\s+confirmar", "data nao informada");
+        sanitized = normalizeFallbackPhrases(sanitized);
+
+        Integer selectedLotNumber = extractSelectedLotNumber(request.selectedLayers());
+        // #region debug-point D:selected-lot-number
+        debugReport("pre-fix", "D", "MemorialApiController:normalizeAiMemorialForResponse:selected-lot-number",
+                "[DEBUG] Numero do lote extraido a partir das layers selecionadas", Map.of(
+                        "selectedLayers", request.selectedLayers() != null ? String.join(", ", request.selectedLayers()) : "",
+                        "selectedLotNumber", selectedLotNumber != null ? selectedLotNumber : -1
+                ));
+        // #endregion
+        if (request.lotCount() != null && request.lotCount() == 1) {
+            sanitized = extractLotBlockForSingleLot(sanitized, selectedLotNumber);
+            sanitized = cleanupSingleLotBoilerplate(sanitized);
+            sanitized = rewriteSingleLotIntroduction(sanitized);
+            sanitized = normalizeCoordinateFormatting(sanitized);
+        }
+
+        List<String> cleanedLines = new ArrayList<>();
+        for (String line : sanitized.split("\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isBlank()) {
+                if (cleanedLines.isEmpty() || cleanedLines.get(cleanedLines.size() - 1).isBlank()) {
+                    continue;
+                }
+                cleanedLines.add("");
+                continue;
+            }
+
+            String compact = trimmed.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+            boolean isConfrontationLine = compact.startsWith("aonorte:")
+                    || compact.startsWith("aosul:")
+                    || compact.startsWith("aoleste:")
+                    || compact.startsWith("aooeste:");
+            boolean isNumberedInvalidSection = compact.matches("^\\d+\\.(preâmbulo|preambulo|identificaçãodoterreno|identificacaodoterreno|situaçãoantes|situacaoantes|situaçãodepois|situacaodepois|declaraçãofinal|declaracaofinal).*$");
+            boolean isMetadataOnlyLine = compact.contains("geradopor")
+                    || compact.contains("aviso:estememorialestaincompleto")
+                    || compact.contains("foramgeradosapenasalgunslotes")
+                    || compact.contains("paramemorialcompleto")
+                    || (!shouldPreserveHeader && compact.startsWith("memorialdescritivo"))
+                    || (!shouldPreserveHeader && compact.startsWith("preâmbulo"))
+                    || (!shouldPreserveHeader && compact.startsWith("preambulo"))
+                    || compact.startsWith("identificaçãodoterreno")
+                    || compact.startsWith("identificacaodoterreno")
+                    || compact.startsWith("situaçãoantes")
+                    || compact.startsWith("situacaoantes")
+                    || compact.startsWith("situaçãodepois")
+                    || compact.startsWith("situacaodepois")
+                    || compact.startsWith("declaraçãofinal")
+                    || compact.startsWith("declaracaofinal")
+                    || isNumberedInvalidSection
+                    || compact.contains("0,0000m²")
+                    || compact.contains("0,0000m2")
+                    || compact.contains("0,0000m.");
+            boolean isGenericTechnicalConferenceLine = !isConfrontationLine
+                    && (compact.contains("conferênciatécnica") || compact.contains("conferenciatecnica"))
+                    && !compact.contains("naoidentificadonodxf")
+                    && !compact.contains("divisainternadoloteamento");
+            if (isMetadataOnlyLine || isGenericTechnicalConferenceLine) {
+                continue;
+            }
+
+            cleanedLines.add(trimmed);
+        }
+
+        sanitized = String.join("\n", cleanedLines)
+                .replaceAll("\n{3,}", "\n\n")
+                .trim();
+
+        if (shouldPreserveHeader) {
+            sanitized = ensureMemorialHeader(sanitized, request);
+        }
+
+        if (request.lotCount() != null && request.lotCount() == 1 && selectedLotNumber != null) {
+            sanitized = sanitized.replaceFirst("(?i)^\\s*LOTE\\s*0*\\d+\\s*:", "LOTE " + selectedLotNumber + ":");
+        }
+
+        if (request.lotCount() != null && request.lotCount() == 1
+                && !isUsefulSingleLotMemorial(sanitized, selectedLotNumber)) {
+            return "";
+        }
+
+        return sanitized;
+    }
+
+    private String ensureMemorialHeader(String content, MemorialRequestDTO request) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+
+        if (content.matches("(?is)^\\s*Memorial\\s+Descritivo.*")) {
+            return content;
+        }
+
+        StringBuilder header = new StringBuilder();
+        header.append("Memorial Descritivo\n");
+        if (request.projectName() != null && !request.projectName().isBlank()) {
+            header.append("Projeto: ").append(request.projectName().trim()).append("\n");
+        }
+        if (request.fileName() != null && !request.fileName().isBlank()) {
+            header.append("Arquivo: ").append(request.fileName().trim()).append("\n");
+        }
+        header.append("Data: ")
+                .append(java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")))
+                .append("\n\n");
+
+        return header + content;
+    }
+
+    private String normalizeFallbackPhrases(String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+
+        return content
+                .replaceAll("(?i)bairro\\s+a\\s+ser\\s+confirmado", "bairro nao informado no cadastro")
+                .replaceAll("(?i)bairro\\s+a\\s+confirmar", "bairro nao informado no cadastro")
+                .replaceAll("(?i)bairro\\s+n[aã]o\\s+especificado", "bairro nao informado no cadastro")
+                .replaceAll("(?i)bairro\\s+não\\s+especificado", "bairro nao informado no cadastro")
+                .replaceAll("(?i)zona\\s+a\\s+confirmar", "zona nao informada")
+                .replaceAll("(?i)zona\\s+especificada", "zona nao informada")
+                .replaceAll("(?i)propriedade\\s+a\\s+confirmar", "confrontante nao identificado no DXF")
+                .replaceAll("(?i)CPF\\s*\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", "CPF nao informado")
+                .replaceAll("(?i)confrontante\\s+nao\\s+identificado\\s+no\\s+dxf\\s+em\\s+confer[êe]ncia\\s+t[ée]cnica",
+                        "confrontante nao identificado no DXF")
+                .replaceAll("(?i)medida\\s+e\\s+sentido\\s+a\\s+serem\\s+determinados",
+                        "medida e sentido nao identificados no DXF")
+                .replaceAll("(?i)medindo\\s+aproximadamente\\s+nao\\s+informado\\s+metros", "com medida nao identificada no DXF")
+                .replaceAll("(?i)medindo\\s+nao\\s+informado\\s+metros", "com medida nao identificada no DXF");
+    }
+
+    private String cleanupSingleLotBoilerplate(String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+
+        return content
+                .replaceAll("(?is)\\s+O imóvel está registrado sob a matrícula.*$", "")
+                .replaceAll("(?is)\\s+Este memorial descritivo foi elaborado.*$", "")
+                .replaceAll("(?is)\\s+Este memorial descritivo est[aá] em conformidade com.*$", "")
+                .replaceAll("(?is)\\s+Este lote est[aá] devidamente identificado e descrito.*$", "")
+                .replaceAll("(?im)^\\s*\\d+\\.\\s*DECLARAÇÃO FINAL\\s*$", "")
+                .replaceAll("(?im)^\\s*\\d+\\.\\s*DECLARACAO FINAL\\s*$", "")
+                .replaceAll("(?is)\\s+Documento elaborado em.*$", "")
+                .replaceAll("(?is)\\s+Todas as medidas e confrontações foram determinadas com base.*$", "")
+                .replaceAll("(?is)\\s+Estas coordenadas foram extra[ií]das do levantamento topogr[aá]fico realizado conforme a norma.*$", "")
+                .replaceAll("(?is)\\s+Estas coordenadas est[aã]o no sistema de refer[êe]ncia.*$", "")
+                .replaceAll("(?is)\\s+O sistema de refer[êe]ncia utilizado [ée].*$", "")
+                .trim();
+    }
+
+    private String rewriteSingleLotIntroduction(String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+
+        return content
+                .replaceAll("(?i)Um\\s+im[oó]vel\\s+urbano,\\s+localizado\\s+na\\s+Rua\\s+[^,\\n]+,\\s*bairro\\s+[^,\\n]+,\\s*([^,\\n]+/[A-Z]{2}),",
+                        "Um imóvel urbano integrante da area/loteamento em $1,")
+                .replaceAll("(?i)Um\\s+im[oó]vel\\s+urbano,\\s+localizado\\s+na\\s+[^,\\n]+,\\s*bairro\\s+[^,\\n]+,\\s*([^,\\n]+/[A-Z]{2}),",
+                        "Um imóvel urbano integrante da area/loteamento em $1,");
+    }
+
+    private String normalizeCoordinateFormatting(String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+
+        return content
+                .replaceAll("(?i)As coordenadas dos v[ée]rtices do lote s[aã]o:\\s*-\\s*Ponto", "As coordenadas dos vertices do lote sao:\n- Ponto")
+                .replaceAll("(?i)Coordenadas dos v[ée]rtices:\\s*-\\s*P0?(\\d+)", "Coordenadas dos vertices:\n- P$1")
+                .replaceAll("(?i)Coordenadas dos v[ée]rtices do lote s[aã]o:\\s*-\\s*P0?(\\d+)", "Coordenadas dos vertices do lote sao:\n- P$1")
+                .replaceAll("\\)\\s*-\\s*Ponto", ")\n- Ponto")
+                .replaceAll("\\)\\s*-\\s*P0?(\\d+)", ")\n- P$1")
+                .replaceAll("(?i)As coordenadas dos v[ée]rtices do lote s[aã]o:\\s*P0?(\\d+)", "As coordenadas dos vertices do lote sao:\nP$1")
+                .replaceAll("(?i)Coordenadas dos v[ée]rtices:\\s*P0?(\\d+)", "Coordenadas dos vertices:\nP$1")
+                .replaceAll("(?i)\\)\\s*P0?(\\d+)", ")\nP$1");
+    }
+
+    private String extractLotBlockForSingleLot(String content, Integer selectedLotNumber) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+
+        if (selectedLotNumber != null) {
+            Pattern targetLotPattern = Pattern.compile(
+                    "(?ims)^LOTE\\s*0*" + selectedLotNumber + "\\s*:\\s*.*?(?=^LOTE\\s*\\d+\\s*:|\\z)"
+            );
+            Matcher targetMatcher = targetLotPattern.matcher(content);
+            if (targetMatcher.find()) {
+                return targetMatcher.group().trim();
+            }
+        }
+
+        Pattern genericLotPattern = Pattern.compile("(?ims)^LOTE\\s*\\d+\\s*:\\s*.*?(?=^LOTE\\s*\\d+\\s*:|\\z)");
+        Matcher genericMatcher = genericLotPattern.matcher(content);
+        if (genericMatcher.find()) {
+            return genericMatcher.group().trim();
+        }
+
+        return content;
+    }
+
+    private boolean isUsefulSingleLotMemorial(String content, Integer selectedLotNumber) {
+        if (content == null || content.isBlank()) {
+            return false;
+        }
+
+        String trimmed = content.trim();
+        if (selectedLotNumber != null) {
+            Pattern lotPattern = Pattern.compile("(?i)^LOTE\\s*0*" + selectedLotNumber + "\\s*:");
+            if (!lotPattern.matcher(trimmed).find()) {
+                return false;
+            }
+        } else if (!Pattern.compile("(?i)^LOTE\\s*\\d+\\s*:").matcher(trimmed).find()) {
+            return false;
+        }
+
+        if (trimmed.length() < 120) {
+            return false;
+        }
+
+        String lowered = trimmed.toLowerCase(Locale.ROOT);
+        if (lowered.contains("...") || lowered.contains("[repetir") || lowered.contains("[continuar")) {
+            return false;
+        }
+
+        return lowered.contains("ao norte:") || lowered.contains("ao sul:");
+    }
+
+    private Integer extractSelectedLotNumber(List<String> selectedLayers) {
+        if (selectedLayers == null || selectedLayers.isEmpty()) {
+            return null;
+        }
+
+        Pattern pattern = Pattern.compile("(\\d+)");
+        for (String layer : selectedLayers) {
+            if (layer == null || layer.isBlank()) {
+                continue;
+            }
+            Matcher matcher = pattern.matcher(layer);
+            if (matcher.find()) {
+                try {
+                    return Integer.parseInt(matcher.group(1));
+                } catch (NumberFormatException ignored) {
+                    // Tenta a próxima layer, se houver.
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private List<DxfParser.Entity> filterEntitiesBySelectedLayers(List<DxfParser.Entity> entities, List<String> selectedLayers) {
+        if (entities == null || entities.isEmpty() || selectedLayers == null || selectedLayers.isEmpty()) {
+            return entities;
+        }
+
+        Set<String> normalizedLayers = selectedLayers.stream()
+                .filter(Objects::nonNull)
+                .map(this::normalizeLayer)
+                .filter(layer -> !layer.isBlank())
+                .collect(Collectors.toSet());
+
+        if (normalizedLayers.isEmpty()) {
+            return entities;
+        }
+
+        return entities.stream()
+                .filter(entity -> normalizedLayers.contains(normalizeLayer(entity.layer())))
+                .collect(Collectors.toList());
+    }
+
+    private List<DxfParser.Entity> appendSelectedConfrontationTexts(
+            List<DxfParser.Entity> entities,
+            List<SelectedConfrontationTextDTO> selectedConfrontationTexts) {
+        if (selectedConfrontationTexts == null || selectedConfrontationTexts.isEmpty()) {
+            return entities;
+        }
+
+        List<DxfParser.Entity> merged = new ArrayList<>(entities != null ? entities : List.of());
+        int appended = 0;
+
+        for (SelectedConfrontationTextDTO selectedText : selectedConfrontationTexts) {
+            if (selectedText == null || selectedText.text() == null || selectedText.text().isBlank()
+                    || selectedText.x() == null || selectedText.y() == null) {
+                continue;
+            }
+
+            String entityType = selectedText.entityType() != null && !selectedText.entityType().isBlank()
+                    ? selectedText.entityType().trim().toUpperCase(Locale.ROOT)
+                    : "TEXT";
+
+            if (!"TEXT".equals(entityType) && !"MTEXT".equals(entityType)) {
+                entityType = "TEXT";
+            }
+
+            merged.add(new DxfParser.Entity(
+                    entityType,
+                    selectedText.layer() != null && !selectedText.layer().isBlank()
+                            ? selectedText.layer().trim()
+                            : "SELECAO_MANUAL_CONFRONTACAO",
+                    "manual-text-" + appended,
+                    selectedText.x(),
+                    selectedText.y(),
+                    0.0,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    selectedText.text().trim(),
+                    null,
+                    2.5,
+                    0.0,
+                    List.of()
+            ));
+            appended++;
+        }
+
+        return merged;
+    }
+
+    private String normalizeLayer(String layer) {
+        return layer == null ? "" : layer.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private void debugReport(String runId, String hypothesisId, String location, String msg, Map<String, Object> data) {
+        try {
+            String debugServerUrl = "http://127.0.0.1:7778/event";
+            String debugSessionId = "lot-selection-mismatch";
+            Path envPath = Path.of(".dbg", "lot-selection-mismatch.env");
+            if (Files.exists(envPath)) {
+                for (String line : Files.readAllLines(envPath, StandardCharsets.UTF_8)) {
+                    if (line.startsWith("DEBUG_SERVER_URL=")) {
+                        debugServerUrl = line.substring("DEBUG_SERVER_URL=".length()).trim();
+                    } else if (line.startsWith("DEBUG_SESSION_ID=")) {
+                        debugSessionId = line.substring("DEBUG_SESSION_ID=".length()).trim();
+                    }
+                }
+            }
+
+            String payload = toJson(debugSessionId, runId, hypothesisId, location, msg, data);
+            HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create(debugServerUrl))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
+                            .build(),
+                    java.net.http.HttpResponse.BodyHandlers.discarding()
+            );
+        } catch (Exception ignored) {
+            // Intencional: a instrumentacao nao pode derrubar o fluxo.
+        }
+    }
+
+    private String toJson(String sessionId, String runId, String hypothesisId, String location, String msg, Map<String, Object> data) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("{")
+                .append("\"sessionId\":\"").append(escapeJson(sessionId)).append("\",")
+                .append("\"runId\":\"").append(escapeJson(runId)).append("\",")
+                .append("\"hypothesisId\":\"").append(escapeJson(hypothesisId)).append("\",")
+                .append("\"location\":\"").append(escapeJson(location)).append("\",")
+                .append("\"msg\":\"").append(escapeJson(msg)).append("\",")
+                .append("\"ts\":").append(System.currentTimeMillis()).append(",")
+                .append("\"data\":{");
+
+        boolean first = true;
+        for (Map.Entry<String, Object> entry : data.entrySet()) {
+            if (!first) {
+                builder.append(",");
+            }
+            first = false;
+            builder.append("\"").append(escapeJson(entry.getKey())).append("\":");
+            Object value = entry.getValue();
+            if (value == null) {
+                builder.append("null");
+            } else if (value instanceof Number || value instanceof Boolean) {
+                builder.append(value);
+            } else {
+                builder.append("\"").append(escapeJson(String.valueOf(value))).append("\"");
+            }
+        }
+
+        builder.append("}}");
+        return builder.toString();
+    }
+
+    private String escapeJson(String value) {
+        return value == null ? "" : value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n");
+    }
+
+    private boolean isOpenAiRateLimitError(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String className = current.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+            if (className.contains("openairatelimitexception")) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lowered = message.toLowerCase(Locale.ROOT);
+                if (lowered.contains("rate_limit_exceeded")
+                        || lowered.contains("tokens per min")
+                        || lowered.contains("requests per min")
+                        || lowered.contains("please try again in")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+
+    private boolean isOpenAiQuotaError(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String className = current.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+            if (className.contains("openaiquotaexceededexception")) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lowered = message.toLowerCase(Locale.ROOT);
+                if (lowered.contains("insufficient_quota")
+                        || lowered.contains("you exceeded your current quota")
+                        || lowered.contains("problema de faturamento")
+                        || lowered.contains("sem cota disponivel")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+
+        return false;
+    }
+
+    private String firstNonBlankMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                return current.getMessage();
+            }
+            current = current.getCause();
+        }
+        return "sem detalhe adicional";
+    }
+
+    private String buildOperatorFriendlyErrorMessage(Throwable throwable) {
+        String detail = firstNonBlankMessage(throwable).toLowerCase(Locale.ROOT);
+
+        if (detail.contains("propertyid")) {
+            return "Selecione um imovel antes de gerar o memorial.";
+        }
+        if (detail.contains("standardid")) {
+            return "Selecione uma norma antes de gerar o memorial.";
+        }
+        if (detail.contains("coordenad")
+                || detail.contains("georreferenciada")
+                || detail.contains("sirgas")) {
+            return "Nao foi possivel confirmar coordenadas confiaveis neste arquivo. Revise o DXF e tente novamente.";
+        }
+        if (detail.contains("entity")
+                || detail.contains("entidad")
+                || detail.contains("dxf")) {
+            return "Nao foi possivel concluir a leitura deste DXF. Revise o arquivo e tente novamente.";
+        }
+
+        return "Nao foi possivel concluir a geracao deste memorial agora. Revise os dados do arquivo e tente novamente.";
     }
 }
 

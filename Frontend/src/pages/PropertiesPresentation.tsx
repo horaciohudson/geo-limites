@@ -37,6 +37,16 @@ interface Property {
   boundaries?: any[];
 }
 
+interface PropertyLandmark {
+  id?: string;
+  landmarkName?: string;
+  landmarkType?: string;
+  coordinateX?: number;
+  coordinateY?: number;
+  coordinateZ?: number;
+  description?: string;
+}
+
 const PropertiesPresentation: React.FC = () => {
   const navigate = useNavigate();
   const { isRestricted, restrictionMessage } = useTenantOperationalAccess();
@@ -156,12 +166,16 @@ const PropertiesPresentation: React.FC = () => {
   const calculateReadiness = (): number => {
     if (!selectedPropertyDetails) return 0;
     let score = 0;
+    const hasReferenceCoordinates = Array.isArray(selectedPropertyDetails.landmarks)
+      && selectedPropertyDetails.landmarks.some((landmark: PropertyLandmark) =>
+        landmark.coordinateX !== undefined && landmark.coordinateY !== undefined
+      );
     
     // 1. Dados básicos cadastrados (Número de registro + Cidade preenchidos)
     if (selectedPropertyDetails.registrationNumber && selectedPropertyDetails.city) score += 25;
     
-    // 2. Coordenadas SIRGAS reais configuradas
-    if (selectedPropertyDetails.sirgas_e && selectedPropertyDetails.sirgas_n) score += 25;
+    // 2. Coordenadas de referência configuradas
+    if (hasReferenceCoordinates || (selectedPropertyDetails.sirgas_e && selectedPropertyDetails.sirgas_n)) score += 25;
     
     // 3. Proprietário cadastrado
     if (selectedPropertyDetails.ownerName) score += 25;
@@ -438,50 +452,73 @@ const PropertiesPresentation: React.FC = () => {
             </div>
           </div>
 
-          {/* CARD 2: Coordenadas SIRGAS 2000 */}
+          {/* CARD 2: Pontos de Referencia */}
           <div className="info-card sirgas-card">
             <div className="card-header">
               <span className="card-icon">🎯</span>
-              <h3>Coordenadas SIRGAS 2000</h3>
+              <h3>Pontos e Estacas de Referencia</h3>
             </div>
             <div className="card-body">
-              {selectedPropertyDetails.sirgas_e && selectedPropertyDetails.sirgas_n ? (
+              {Array.isArray(selectedPropertyDetails.landmarks) && selectedPropertyDetails.landmarks.length > 0 ? (
                 <>
                   <div className="sirgas-badge valid">
-                    <span>✅ Coordenadas Reais Configuradas</span>
+                    <span>✅ Pontos de referencia cadastrados</span>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Coordenada E (Leste):</span>
-                    <span className="info-value coordinate">{selectedPropertyDetails.sirgas_e.toLocaleString('pt-BR')} m</span>
+                  <div style={{ overflowX: 'auto', marginTop: '12px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '640px' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Ponto</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Tipo</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Coordenada E/X</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Coordenada N/Y</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Observacao</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedPropertyDetails.landmarks.map((landmark: PropertyLandmark, index: number) => (
+                          <tr key={landmark.id || `${landmark.landmarkName || 'ponto'}-${index}`}>
+                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                              {landmark.landmarkName || `Ponto ${index + 1}`}
+                            </td>
+                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                              {landmark.landmarkType || 'Nao informado'}
+                            </td>
+                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                              {landmark.coordinateX !== undefined ? `${landmark.coordinateX.toLocaleString('pt-BR')} m` : 'Nao informado'}
+                            </td>
+                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                              {landmark.coordinateY !== undefined ? `${landmark.coordinateY.toLocaleString('pt-BR')} m` : 'Nao informado'}
+                            </td>
+                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                              {landmark.description || '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Coordenada N (Norte):</span>
-                    <span className="info-value coordinate">{selectedPropertyDetails.sirgas_n.toLocaleString('pt-BR')} m</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Fuso UTM / Datum:</span>
-                    <span className="info-value">{selectedPropertyDetails.utmZone || '24S'} / {selectedPropertyDetails.datum || 'SIRGAS 2000'}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Fonte:</span>
-                    <span className="info-value">
-                      {{
-                        'GPS_CAMPO': '📡 GPS de Campo',
-                        'MARCO_GEODESICO': '🎯 Marco Geodésico',
-                        'LEVANTAMENTO_TOPOGRAFICO': '📐 Levantamento Topográfico',
-                        'MEMORIAL_ORIGINAL': '📄 Memorial Original',
-                        'GOOGLE_EARTH': '🌍 Google Earth',
-                        'IBGE_COORDENADAS': '🏛️ Base IBGE',
-                        'OUTRO': '❓ Outro'
-                      }[selectedPropertyDetails.sirgas_source || ''] || selectedPropertyDetails.sirgas_source || 'Não informado'}
-                    </span>
-                  </div>
+                  {selectedPropertyDetails.sirgas_source && (
+                    <div className="info-row" style={{ marginTop: '12px' }}>
+                      <span className="info-label">Fonte:</span>
+                      <span className="info-value">
+                        {{
+                          'GPS_CAMPO': 'GPS de Campo',
+                          'MARCO_GEODESICO': 'Marco Geodesico',
+                          'LEVANTAMENTO_TOPOGRAFICO': 'Levantamento Topografico',
+                          'MEMORIAL_ORIGINAL': 'Memorial Original',
+                          'GOOGLE_EARTH': 'Google Earth',
+                          'IBGE_COORDENADAS': 'Base IBGE',
+                          'OUTRO': 'Outro'
+                        }[selectedPropertyDetails.sirgas_source || ''] || selectedPropertyDetails.sirgas_source}
+                      </span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="sirgas-empty-warning">
-                  <span>⚠️ Sem coordenadas reais configuradas</span>
-                  <p>Este imóvel usará coordenadas UTM genéricas (0,0) nos memoriais.</p>
-                  <p className="recommendation">Recomenda-se preencher a coordenada SIRGAS 2000 clicando em "Editar" para obter memoriais com posições reais.</p>
+                  <span>⚠️ Nenhum ponto de referencia cadastrado</span>
+                  <p>Cadastre pontos ou estacas nomeados na tela de edicao para aproveitar coordenadas reais na operacao.</p>
                 </div>
               )}
 

@@ -1,10 +1,14 @@
 package com.momorialPro.CadMemorial.service;
 
 import com.momorialPro.CadMemorial.dto.PropertyDTO;
+import com.momorialPro.CadMemorial.dto.PropertyLandmarkDTO;
+import com.momorialPro.CadMemorial.mapper.PropertyLandmarkMapper;
 import com.momorialPro.CadMemorial.dto.PropertySummaryDTO;
 import com.momorialPro.CadMemorial.mapper.PropertyMapper;
 import com.momorialPro.CadMemorial.model.Property;
+import com.momorialPro.CadMemorial.model.PropertyLandmark;
 import com.momorialPro.CadMemorial.model.User;
+import com.momorialPro.CadMemorial.repository.PropertyLandmarkRepository;
 import com.momorialPro.CadMemorial.repository.PropertyRepository;
 import com.momorialPro.CadMemorial.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -23,7 +28,9 @@ import java.util.stream.Collectors;
 public class PropertyService {
     
     private final PropertyRepository propertyRepository;
+    private final PropertyLandmarkRepository propertyLandmarkRepository;
     private final PropertyMapper propertyMapper;
+    private final PropertyLandmarkMapper propertyLandmarkMapper;
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
@@ -85,6 +92,7 @@ public class PropertyService {
 
         property.setUser(persistedUser);
         property.setTenant(persistedUser.getTenant());
+        applyLandmarks(property, propertyDTO.getLandmarks());
 
         Property savedProperty = propertyRepository.save(property);
 
@@ -101,6 +109,7 @@ public class PropertyService {
         
         // Update fields
         propertyMapper.updateEntityFromDTO(propertyDTO, existingProperty);
+        replaceLandmarks(existingProperty, propertyDTO.getLandmarks());
 
         Property updatedProperty = propertyRepository.save(existingProperty);
 
@@ -221,5 +230,27 @@ public class PropertyService {
             throw new IllegalStateException("Tenant do usuário não configurado");
         }
         return user.getTenant().getId();
+    }
+
+    private void replaceLandmarks(Property property, List<PropertyLandmarkDTO> landmarkDTOs) {
+        propertyLandmarkRepository.deleteByPropertyPropertyId(property.getPropertyId());
+        property.getLandmarks().clear();
+        applyLandmarks(property, landmarkDTOs);
+    }
+
+    private void applyLandmarks(Property property, List<PropertyLandmarkDTO> landmarkDTOs) {
+        if (landmarkDTOs == null || landmarkDTOs.isEmpty()) {
+            return;
+        }
+
+        List<PropertyLandmark> landmarks = landmarkDTOs.stream()
+                .filter(Objects::nonNull)
+                .filter(dto -> dto.getLandmarkName() != null && !dto.getLandmarkName().trim().isEmpty())
+                .filter(dto -> dto.getCoordinateX() != null && dto.getCoordinateY() != null)
+                .map(propertyLandmarkMapper::toEntity)
+                .peek(landmark -> landmark.setProperty(property))
+                .collect(Collectors.toList());
+
+        property.getLandmarks().addAll(landmarks);
     }
 }

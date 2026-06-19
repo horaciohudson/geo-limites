@@ -43,6 +43,17 @@ export interface PropertyAddress {
   };
 }
 
+export interface PropertyReferencePoint {
+  id?: string;
+  name: string;
+  type: 'REFERENCE_POINT' | 'VERTEX' | 'LANDMARK' | 'ESTACA';
+  coordinateX?: number;
+  coordinateY?: number;
+  coordinateZ?: number;
+  sequenceOrder: number;
+  description?: string;
+}
+
 export interface TechnicalData {
   totalArea: number;
   builtArea?: number;
@@ -170,6 +181,9 @@ export interface PropertyFormData {
     landUse: LandUse;
     address: PropertyAddress;
   };
+
+  // Pontos/estacas de referencia para georreferenciamento
+  landmarks: PropertyReferencePoint[];
   
   // Aba 2: Proprietários
   owners: Omit<PropertyOwner, 'id' | 'propertyId' | 'createdAt' | 'updatedAt'>[];

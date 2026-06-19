@@ -3,11 +3,13 @@ import type { PropertyFormData } from '@/types/property';
 
 interface PropertyBasicDataProps {
   data: PropertyFormData['basicData'];
+  landmarks: PropertyFormData['landmarks'];
   validation: Record<string, string>;
   onChange: (data: PropertyFormData['basicData']) => void;
+  onLandmarksChange: (landmarks: PropertyFormData['landmarks']) => void;
 }
 
-const PropertyBasicData: React.FC<PropertyBasicDataProps> = ({ data, validation, onChange }) => {
+const PropertyBasicData: React.FC<PropertyBasicDataProps> = ({ data, landmarks, validation, onChange, onLandmarksChange }) => {
   type BasicData = PropertyFormData['basicData'];
   type AddressValue =
     | string
@@ -31,6 +33,40 @@ const PropertyBasicData: React.FC<PropertyBasicDataProps> = ({ data, validation,
         [field]: value
       });
     }
+  };
+
+  const updateLandmark = (index: number, field: keyof PropertyFormData['landmarks'][number], value: string | number | undefined) => {
+    const nextLandmarks = landmarks.map((landmark, currentIndex) =>
+      currentIndex === index
+        ? { ...landmark, [field]: value }
+        : landmark
+    );
+    onLandmarksChange(nextLandmarks);
+  };
+
+  const addLandmark = () => {
+    onLandmarksChange([
+      ...landmarks,
+      {
+        name: '',
+        type: 'REFERENCE_POINT',
+        coordinateX: undefined,
+        coordinateY: undefined,
+        coordinateZ: undefined,
+        sequenceOrder: landmarks.length + 1,
+        description: ''
+      }
+    ]);
+  };
+
+  const removeLandmark = (index: number) => {
+    const nextLandmarks = landmarks
+      .filter((_, currentIndex) => currentIndex !== index)
+      .map((landmark, currentIndex) => ({
+        ...landmark,
+        sequenceOrder: currentIndex + 1
+      }));
+    onLandmarksChange(nextLandmarks);
   };
 
   return (
@@ -253,136 +289,20 @@ const PropertyBasicData: React.FC<PropertyBasicDataProps> = ({ data, validation,
       </div>
 
       <div className="form-section">
-        <h3>🌍 Coordenadas Geograficas (Opcional)</h3>
+        <h3>🎯 Origem das Coordenadas (Opcional)</h3>
         <p className="section-description">
-          Use este bloco para registrar a localizacao aproximada do imovel quando isso ajudar na conferencia.
+          Informe apenas a origem dos pontos cadastrados quando quiser registrar como essas coordenadas foram obtidas.
         </p>
-        
-        <div className="form-grid">
-          <div className="form-group">
-            <label htmlFor="latitude">
-              Latitude
-            </label>
-            <input
-              type="number"
-              id="latitude"
-              step="any"
-              value={data.address.coordinates?.latitude || ''}
-              onChange={(e) => {
-                const coords = data.address.coordinates || { latitude: 0, longitude: 0 };
-                handleChange('address.coordinates', {
-                  ...coords,
-                  latitude: parseFloat(e.target.value) || 0
-                });
-              }}
-              placeholder="-23.5505"
-            />
-          </div>
 
-          <div className="form-group">
-            <label htmlFor="longitude">
-              Longitude
-            </label>
-            <input
-              type="number"
-              id="longitude"
-              step="any"
-              value={data.address.coordinates?.longitude || ''}
-              onChange={(e) => {
-                const coords = data.address.coordinates || { latitude: 0, longitude: 0 };
-                handleChange('address.coordinates', {
-                  ...coords,
-                  longitude: parseFloat(e.target.value) || 0
-                });
-              }}
-              placeholder="-46.6333"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h3>🎯 Coordenadas SIRGAS 2000 (Para a Operacao)</h3>
-        <div className="sirgas-info-banner" style={{
-          background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
-          borderRadius: '8px',
-          padding: '16px',
-          marginBottom: '20px',
-          color: 'white'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '20px' }}>🎯</span>
-            <span style={{ fontWeight: 600, fontSize: '16px' }}>Coordenadas SIRGAS 2000</span>
-          </div>
-          <p style={{ margin: 0, fontSize: '14px', opacity: 0.9 }}>
-            Informe as coordenadas SIRGAS 2000 (UTM) para deixar o imovel pronto para memoriais com coordenadas reais em vez de genericas.
-            <br />
-            <strong>Exemplo:</strong> E 556478.64m N 9544347.43m (Ceara - Fuso 24S)
-          </p>
-        </div>
-        
-        <div className="form-grid">
-          <div className="form-group">
-            <label htmlFor="sirgas_e">
-              Coordenada E (Leste) - metros
-              <span className="field-hint">Ex: 556478.64</span>
-            </label>
-            <input
-              type="number"
-              id="sirgas_e"
-              step="0.01"
-              value={data.address.sirgas?.e || ''}
-              onChange={(e) => {
-                const sirgas = data.address.sirgas || { e: 0, n: 0, source: '', zone: '24S', datum: 'SIRGAS 2000' };
-                const newSirgas = {
-                  ...sirgas,
-                  e: parseFloat(e.target.value) || 0
-                };
-                handleChange('address.sirgas', newSirgas);
-              }}
-              placeholder="556478.64"
-              min="160000"
-              max="850000"
-            />
-            <small className="field-help">
-              Coordenada Leste (E) em metros - Faixa válida: 160.000 a 850.000m
-            </small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="sirgas_n">
-              Coordenada N (Norte) - metros
-              <span className="field-hint">Ex: 9544347.43</span>
-            </label>
-            <input
-              type="number"
-              id="sirgas_n"
-              step="0.01"
-              value={data.address.sirgas?.n || ''}
-              onChange={(e) => {
-                const sirgas = data.address.sirgas || { e: 0, n: 0, source: '', zone: '24S', datum: 'SIRGAS 2000' };
-                const newSirgas = {
-                  ...sirgas,
-                  n: parseFloat(e.target.value) || 0
-                };
-                handleChange('address.sirgas', newSirgas);
-              }}
-              placeholder="9544347.43"
-              min="750000"
-              max="10500000"
-            />
-            <small className="field-help">
-              Coordenada Norte (N) em metros - Faixa válida: 750.000 a 10.500.000m
-            </small>
-          </div>
-
-          <div className="form-group">
+        <div style={{ maxWidth: '420px' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
             <label htmlFor="sirgas_source">
               Fonte da Coordenada
               <span className="field-hint">Como foi obtida</span>
             </label>
             <select
               id="sirgas_source"
+              style={{ minHeight: '40px', paddingTop: '8px', paddingBottom: '8px' }}
               value={data.address.sirgas?.source || ''}
               onChange={(e) => {
                 const sirgas = data.address.sirgas || { e: 0, n: 0, source: '', zone: '24S', datum: 'SIRGAS 2000' };
@@ -403,70 +323,137 @@ const PropertyBasicData: React.FC<PropertyBasicDataProps> = ({ data, validation,
               <option value="OUTRO">❓ Outro</option>
             </select>
           </div>
-
-          <div className="form-group">
-            <label htmlFor="sirgas_zone">
-              Fuso UTM
-              <span className="field-hint">Zona SIRGAS 2000</span>
-            </label>
-            <select
-              id="sirgas_zone"
-              value={data.address.sirgas?.zone || '24S'}
-              onChange={(e) => {
-                const sirgas = data.address.sirgas || { e: 0, n: 0, source: '', zone: '24S', datum: 'SIRGAS 2000' };
-                const newSirgas = {
-                  ...sirgas,
-                  zone: e.target.value
-                };
-                handleChange('address.sirgas', newSirgas);
-              }}
-            >
-              <option value="22S">22S (Acre, Amazonas Oeste)</option>
-              <option value="23S">23S (Rondônia, Amazonas Centro)</option>
-              <option value="24S">24S (Ceará, RN, PB, PE, AL, SE, BA Norte)</option>
-              <option value="25S">25S (BA Sul, MG Norte, GO, DF, MT)</option>
-            </select>
-          </div>
         </div>
+      </div>
 
-        {/* Validação em tempo real */}
-        {data.address.sirgas?.e && data.address.sirgas?.n && (
-          <div className="sirgas-validation" style={{
-            marginTop: '16px',
-            padding: '12px',
-            borderRadius: '6px',
-            background: (data.address.sirgas.e >= 160000 && data.address.sirgas.e <= 850000 && 
-                        data.address.sirgas.n >= 750000 && data.address.sirgas.n <= 10500000) 
-              ? '#d4edda' : '#f8d7da',
-            border: (data.address.sirgas.e >= 160000 && data.address.sirgas.e <= 850000 && 
-                    data.address.sirgas.n >= 750000 && data.address.sirgas.n <= 10500000) 
-              ? '1px solid #c3e6cb' : '1px solid #f5c6cb',
-            color: (data.address.sirgas.e >= 160000 && data.address.sirgas.e <= 850000 && 
-                   data.address.sirgas.n >= 750000 && data.address.sirgas.n <= 10500000) 
-              ? '#155724' : '#721c24'
-          }}>
-            {(data.address.sirgas.e >= 160000 && data.address.sirgas.e <= 850000 && 
-              data.address.sirgas.n >= 750000 && data.address.sirgas.n <= 10500000) ? (
-              <>
-                <strong>✅ Coordenadas SIRGAS válidas!</strong>
-                <br />
-                <small>
-                  E {data.address.sirgas.e.toFixed(2)}m N {data.address.sirgas.n.toFixed(2)}m - {data.address.sirgas.zone || '24S'}
-                  <br />
-                  O sistema usará essas coordenadas reais nos memoriais ao invés de coordenadas genéricas.
-                </small>
-              </>
-            ) : (
-              <>
-                <strong>⚠️ Coordenadas fora da faixa SIRGAS 2000</strong>
-                <br />
-                <small>
-                  Verifique os valores: E deve estar entre 160.000-850.000m e N entre 750.000-10.500.000m
-                </small>
-              </>
-            )}
+      <div className="form-section">
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0 }}>🎯 Pontos ou Estacas de Referencia</h3>
+          <button
+            type="button"
+            onClick={addLandmark}
+            style={{
+              border: '1px solid #4f46e5',
+              background: 'white',
+              color: '#4f46e5',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            + Adicionar Ponto ou Estaca
+          </button>
+        </div>
+        <p className="section-description">
+          Informe o nome exatamente como aparece no desenho, como `P1`, `V01` ou `ESTACA 10`, junto com a coordenada real correspondente.
+          Com pelo menos dois pontos o sistema consegue alinhar melhor o DXF ao georreferenciamento real.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '940px' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>Ponto ou Estaca</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>Tipo</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>Coordenada E/X</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>Coordenada N/Y</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>Cota Z</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>Observacao</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', width: '90px' }}>Acao</th>
+                </tr>
+              </thead>
+              <tbody>
+                {landmarks.map((landmark, index) => (
+                  <tr key={landmark.id || `landmark-${index}`} style={{ background: index % 2 === 0 ? '#ffffff' : '#fcfcfd' }}>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>
+                      <input
+                        type="text"
+                        id={`landmark_name_${index}`}
+                        value={landmark.name}
+                        onChange={(e) => updateLandmark(index, 'name', e.target.value)}
+                        placeholder="Ex: P1, V01, ESTACA 12"
+                      />
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>
+                      <select
+                        id={`landmark_type_${index}`}
+                        value={landmark.type}
+                        onChange={(e) => updateLandmark(index, 'type', e.target.value as PropertyFormData['landmarks'][number]['type'])}
+                      >
+                        <option value="REFERENCE_POINT">Ponto de Referencia</option>
+                        <option value="VERTEX">Vertice</option>
+                        <option value="ESTACA">Estaca</option>
+                        <option value="LANDMARK">Marco</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>
+                      <input
+                        type="number"
+                        id={`landmark_x_${index}`}
+                        step="0.01"
+                        value={landmark.coordinateX ?? ''}
+                        onChange={(e) => updateLandmark(index, 'coordinateX', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                        placeholder="556478.64"
+                      />
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>
+                      <input
+                        type="number"
+                        id={`landmark_y_${index}`}
+                        step="0.01"
+                        value={landmark.coordinateY ?? ''}
+                        onChange={(e) => updateLandmark(index, 'coordinateY', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                        placeholder="9544347.43"
+                      />
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>
+                      <input
+                        type="number"
+                        id={`landmark_z_${index}`}
+                        step="0.01"
+                        value={landmark.coordinateZ ?? ''}
+                        onChange={(e) => updateLandmark(index, 'coordinateZ', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                        placeholder="Opcional"
+                      />
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb' }}>
+                      <input
+                        type="text"
+                        id={`landmark_description_${index}`}
+                        value={landmark.description || ''}
+                        onChange={(e) => updateLandmark(index, 'description', e.target.value)}
+                        placeholder="Observacao"
+                      />
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => removeLandmark(index)}
+                        disabled={landmarks.length <= 1}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: landmarks.length <= 1 ? '#94a3b8' : '#dc2626',
+                          cursor: landmarks.length <= 1 ? 'not-allowed' : 'pointer',
+                          fontWeight: 600
+                        }}
+                      >
+                        Remover
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+
+          <div style={{ color: '#64748b', fontSize: '14px' }}>
+            Dica: use os nomes exatamente como aparecem no desenho. Com dois pontos ou mais o alinhamento georreferenciado fica mais confiavel.
+          </div>
+
+        </div>
       </div>
     </div>
   );

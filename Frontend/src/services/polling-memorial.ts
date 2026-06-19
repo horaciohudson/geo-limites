@@ -121,9 +121,8 @@ export class PollingMemorialService {
       let pollingInterval: number | null = null;
 
       try {
-        // Iniciar geração
-        const response = await this.startGeneration(request);
-        const { sessionId } = response;
+        // Gerar um ID de sessão local para simular o processo assíncrono
+        const sessionId = `local-session-${Date.now()}`;
 
         // Simular progresso inicial
         onProgress({
@@ -184,17 +183,40 @@ export class PollingMemorialService {
                 const endpoint = selectedAIConfig.endpoint || '/memorial/generate';
 
                 // Preparar dados com parametros operacionais do motor documental
+                // O payload deve corresponder ao MemorialRequestDTO do backend
+                const reqAny = request.compareResult as any;
+
+                // Nivelar as propriedades para corresponder ao DxfParser.Entity do backend
+                const flatEntities = (request.compareResult.entities || []).map(entity => {
+                  return {
+                    type: entity.type,
+                    layer: entity.layer,
+                    x: entity.properties.x || entity.properties.centerX,
+                    y: entity.properties.y || entity.properties.centerY,
+                    z: entity.properties.z,
+                    x2: entity.properties.x2,
+                    y2: entity.properties.y2,
+                    z2: entity.properties.z2,
+                    radius: entity.properties.radius,
+                    startAngle: entity.properties.startAngle,
+                    endAngle: entity.properties.endAngle,
+                    text: entity.properties.text,
+                    textStyle: entity.properties.textStyle,
+                    textHeight: entity.properties.height || entity.properties.textHeight,
+                    textRotation: entity.properties.rotation,
+                    vertices: entity.properties.vertices || []
+                  };
+                });
+
                 const memorialData = {
-                  oldFileName: request.fileName,
-                  newFileName: request.fileName,
-                  totalOldEntities: 0,
-                  totalNewEntities: request.compareResult.entities?.length || 0,
-                  added: request.compareResult.entities || [],
-                  removed: [],
-                  modified: [],
-                  summaryByType: {},
+                  entities: flatEntities,
+                  fileName: request.fileName,
+                  projectName: reqAny.projectName || request.fileName,
+                  projectDescription: reqAny.projectDescription || 'Geração via IA',
                   standardId: request.standardId,
                   propertyId: request.compareResult.propertyData?.id || null,
+                  provider: selectedAIConfig.name.includes('GPT') ? 'openai' : 'claude',
+                  lotCount: null,
                   // Adicionar parametros especificos do motor documental
                   ...aiService.getAIParameters()
                 };
@@ -206,7 +228,11 @@ export class PollingMemorialService {
                   clearInterval(pollingInterval);
                 }
 
-                const realMemorial = memorialResponse.data;
+                const responseData = memorialResponse.data;
+                const realMemorial = typeof responseData === 'string'
+                  ? responseData
+                  : (responseData?.memorialText || responseData?.memorial || JSON.stringify(responseData, null, 2));
+
                 onProgress({
                   sessionId,
                   userId: 'current-user',

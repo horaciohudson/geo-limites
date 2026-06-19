@@ -51,6 +51,9 @@ public class PropertyMapper {
                 .datum(property.getDatum())
                 .utmZone(property.getUtmZone())
                 .centralMeridian(property.getCentralMeridian())
+                .sirgas_e(property.getSirgas_e())
+                .sirgas_n(property.getSirgas_n())
+                .sirgas_source(property.getSirgas_source())
                 
                 // TECHNICAL DATA
                 .totalArea(property.getTotalArea())
@@ -135,6 +138,9 @@ public class PropertyMapper {
                 .datum(dto.getDatum())
                 .utmZone(dto.getUtmZone())
                 .centralMeridian(dto.getCentralMeridian())
+                .sirgas_e(dto.getSirgas_e())
+                .sirgas_n(dto.getSirgas_n())
+                .sirgas_source(dto.getSirgas_source())
                 
                 // TECHNICAL DATA
                 .totalArea(dto.getTotalArea())
@@ -199,6 +205,9 @@ public class PropertyMapper {
         entity.setDatum(dto.getDatum());
         entity.setUtmZone(dto.getUtmZone());
         entity.setCentralMeridian(dto.getCentralMeridian());
+        entity.setSirgas_e(dto.getSirgas_e());
+        entity.setSirgas_n(dto.getSirgas_n());
+        entity.setSirgas_source(dto.getSirgas_source());
         
         // TECHNICAL DATA
         entity.setTotalArea(dto.getTotalArea());

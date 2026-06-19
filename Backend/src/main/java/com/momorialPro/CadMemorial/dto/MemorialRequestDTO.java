@@ -12,5 +12,9 @@ public record MemorialRequestDTO(
         UUID standardId,
         UUID propertyId,  // Complementary property data for complete memorial
         String provider,  // AI provider: 'openai' or 'claude'
-        Integer lotCount  // Manual lot count override (optional)
+        Integer lotCount,  // Manual lot count override (optional)
+        Integer billableLotCount, // Optional lot count used only for credit billing
+        Boolean chargeCredits, // Allows grouped billing in multi-request interactive generation
+        List<String> selectedLayers, // Optional subset of layers/polygons selected in frontend
+        List<SelectedConfrontationTextDTO> selectedConfrontationTexts // Optional manual text selection for confrontations
 ) {}

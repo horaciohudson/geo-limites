@@ -222,6 +222,30 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
         </div>
       </div>
 
+      <div className="summary-section">
+        <h3>🎯 Pontos de Referencia</h3>
+        {data.landmarks && data.landmarks.some((landmark) => landmark.name || landmark.coordinateX || landmark.coordinateY) ? (
+          <div className="documents-summary">
+            {data.landmarks
+              .filter((landmark) => landmark.name || landmark.coordinateX || landmark.coordinateY)
+              .map((landmark, index) => (
+                <div key={landmark.id || index} className="document-summary-item" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span className="document-type">
+                    {landmark.name || `Ponto ${index + 1}`} • {landmark.type}
+                  </span>
+                  <span className="document-number">
+                    E/X: {landmark.coordinateX?.toLocaleString('pt-BR') || 'Nao informado'} | N/Y: {landmark.coordinateY?.toLocaleString('pt-BR') || 'Nao informado'}
+                  </span>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <p className="empty-message" style={{ color: '#64748b', fontWeight: 500 }}>
+            Nenhum ponto de referencia informado ainda. Dois pontos nomeados ja ajudam bastante no georreferenciamento.
+          </p>
+        )}
+      </div>
+
       {/* Resumo dos Documentos */}
       {data.documents && data.documents.length > 0 && (
         <div className="summary-section">

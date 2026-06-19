@@ -1,5 +1,7 @@
 package com.momorialPro.CadMemorial.service;
 
+import com.momorialPro.CadMemorial.dto.PropertyDTO;
+import com.momorialPro.CadMemorial.dto.PropertyLandmarkDTO;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,6 +20,9 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class DxfGeoReferenciaExtractorService {
+    private static final Pattern REFERENCE_LABEL_PATTERN = Pattern.compile(
+            "(?i)^\\s*(?:P|PT|PONTO|V|VERTICE|VERTEX|ESTACA|E)\\s*[-_:/# ]*0*(\\d{1,4})\\s*$"
+    );
 
     /**
      * Extrai coordenadas georeferenciadas SIRGAS 2000 do DXF
@@ -386,6 +391,193 @@ public class DxfGeoReferenciaExtractorService {
                 .collect(Collectors.toList());
     }
 
+    public GeoreferencingTransform buildTransformFromLandmarks(List<Map<String, Object>> entidades, PropertyDTO property) {
+        if (property == null || property.getLandmarks() == null || property.getLandmarks().isEmpty()) {
+            return null;
+        }
+
+        Map<String, ReferenceAnchor> anchorsByLabel = extractReferenceAnchors(entidades).stream()
+                .collect(Collectors.toMap(
+                        ReferenceAnchor::canonicalLabel,
+                        anchor -> anchor,
+                        (first, second) -> first,
+                        LinkedHashMap::new
+                ));
+
+        if (anchorsByLabel.isEmpty()) {
+            return null;
+        }
+
+        List<MatchedReferencePoint> matches = property.getLandmarks().stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparingInt(landmark -> landmark.getSequenceOrder() != null ? landmark.getSequenceOrder() : Integer.MAX_VALUE))
+                .map(landmark -> matchLandmark(landmark, anchorsByLabel))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        if (matches.isEmpty()) {
+            return null;
+        }
+
+        if (matches.size() == 1) {
+            MatchedReferencePoint single = matches.get(0);
+            double translateX = single.realE() - single.localX();
+            double translateY = single.realN() - single.localY();
+            return new GeoreferencingTransform(
+                    0.0,
+                    1.0,
+                    translateX,
+                    translateY,
+                    0.0,
+                    "PROPERTY_LANDMARK_1_POINT",
+                    matches
+            );
+        }
+
+        MatchedReferencePoint first = matches.get(0);
+        MatchedReferencePoint second = matches.get(1);
+        double localDx = second.localX() - first.localX();
+        double localDy = second.localY() - first.localY();
+        double realDx = second.realE() - first.realE();
+        double realDy = second.realN() - first.realN();
+
+        double localDistance = Math.hypot(localDx, localDy);
+        double realDistance = Math.hypot(realDx, realDy);
+        if (localDistance < 0.000001d || realDistance < 0.000001d) {
+            return null;
+        }
+
+        double scale = realDistance / localDistance;
+        double rotationRadians = Math.atan2(realDy, realDx) - Math.atan2(localDy, localDx);
+        double cos = Math.cos(rotationRadians);
+        double sin = Math.sin(rotationRadians);
+
+        double translateX = first.realE() - scale * (first.localX() * cos - first.localY() * sin);
+        double translateY = first.realN() - scale * (first.localX() * sin + first.localY() * cos);
+
+        double residualSum = 0.0d;
+        for (MatchedReferencePoint match : matches) {
+            double[] projected = transform(match.localX(), match.localY(), scale, rotationRadians, translateX, translateY);
+            residualSum += Math.hypot(projected[0] - match.realE(), projected[1] - match.realN());
+        }
+
+        return new GeoreferencingTransform(
+                Math.toDegrees(rotationRadians),
+                scale,
+                translateX,
+                translateY,
+                residualSum / matches.size(),
+                "PROPERTY_LANDMARK_2_POINTS",
+                matches
+        );
+    }
+
+    public double[] transform(double x, double y, GeoreferencingTransform transform) {
+        if (transform == null) {
+            return new double[]{x, y};
+        }
+        return transform(x, y, transform.scale(), Math.toRadians(transform.rotationDegrees()), transform.translateX(), transform.translateY());
+    }
+
+    private double[] transform(double x, double y, double scale, double rotationRadians, double translateX, double translateY) {
+        double cos = Math.cos(rotationRadians);
+        double sin = Math.sin(rotationRadians);
+        double transformedX = scale * (x * cos - y * sin) + translateX;
+        double transformedY = scale * (x * sin + y * cos) + translateY;
+        return new double[]{transformedX, transformedY};
+    }
+
+    private MatchedReferencePoint matchLandmark(PropertyLandmarkDTO landmark, Map<String, ReferenceAnchor> anchorsByLabel) {
+        if (landmark.getLandmarkName() == null || landmark.getLandmarkName().isBlank()
+                || landmark.getCoordinateX() == null || landmark.getCoordinateY() == null) {
+            return null;
+        }
+
+        String canonical = canonicalizeReferenceLabel(landmark.getLandmarkName());
+        if (canonical.isBlank()) {
+            return null;
+        }
+
+        ReferenceAnchor anchor = anchorsByLabel.get(canonical);
+        if (anchor == null) {
+            return null;
+        }
+
+        return new MatchedReferencePoint(
+                landmark.getLandmarkName(),
+                anchor.rawLabel(),
+                canonical,
+                anchor.x(),
+                anchor.y(),
+                landmark.getCoordinateX().doubleValue(),
+                landmark.getCoordinateY().doubleValue(),
+                landmark.getSequenceOrder() != null ? landmark.getSequenceOrder() : Integer.MAX_VALUE
+        );
+    }
+
+    private List<ReferenceAnchor> extractReferenceAnchors(List<Map<String, Object>> entidades) {
+        List<ReferenceAnchor> anchors = new ArrayList<>();
+        if (entidades == null) {
+            return anchors;
+        }
+
+        for (Map<String, Object> entity : entidades) {
+            String type = Objects.toString(entity.get("type"), "");
+            if (!"TEXT".equals(type) && !"MTEXT".equals(type)) {
+                continue;
+            }
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> properties = (Map<String, Object>) entity.get("properties");
+            String rawText = properties != null ? Objects.toString(properties.get("text"), "").trim() : "";
+            if (rawText.isBlank()) {
+                rawText = Objects.toString(entity.get("text"), "").trim();
+            }
+
+            String canonical = canonicalizeReferenceLabel(rawText);
+            if (canonical.isBlank()) {
+                continue;
+            }
+
+            Double x = getDouble(entity, "x", null);
+            Double y = getDouble(entity, "y", null);
+            if (x == null || y == null) {
+                continue;
+            }
+
+            anchors.add(new ReferenceAnchor(rawText, canonical, x, y));
+        }
+
+        return anchors;
+    }
+
+    private String canonicalizeReferenceLabel(String rawLabel) {
+        if (rawLabel == null || rawLabel.isBlank()) {
+            return "";
+        }
+
+        String normalized = rawLabel.trim().toUpperCase(Locale.ROOT)
+                .replaceAll("\\s+", " ")
+                .replaceAll("[-_:/#]", " ")
+                .trim();
+
+        Matcher matcher = REFERENCE_LABEL_PATTERN.matcher(normalized);
+        if (matcher.matches()) {
+            int number = Integer.parseInt(matcher.group(1));
+            String prefix = normalized.replaceAll("\\d+", "").trim();
+            if (prefix.isBlank() || "P".equals(prefix) || "PT".equals(prefix) || "PONTO".equals(prefix)
+                    || "V".equals(prefix) || "VERTICE".equals(prefix) || "VERTEX".equals(prefix)) {
+                return String.format(Locale.US, "POINT:%02d", number);
+            }
+            if ("ESTACA".equals(prefix) || "E".equals(prefix)) {
+                return String.format(Locale.US, "ESTACA:%02d", number);
+            }
+            return prefix + ":" + String.format(Locale.US, "%02d", number);
+        }
+
+        return normalized;
+    }
+
     private Double getDouble(Map<?, ?> map, String key, Double defaultValue) {
         Object value = map.get(key);
         if (value instanceof Number) {
@@ -429,4 +621,32 @@ public class DxfGeoReferenciaExtractorService {
             return String.format("E %.2fm, N %.2fm (fonte: %s)", e, n, fonte);
         }
     }
+
+    public record MatchedReferencePoint(
+            String propertyLabel,
+            String dxfLabel,
+            String canonicalLabel,
+            double localX,
+            double localY,
+            double realE,
+            double realN,
+            int sequenceOrder
+    ) {}
+
+    public record GeoreferencingTransform(
+            double rotationDegrees,
+            double scale,
+            double translateX,
+            double translateY,
+            double averageResidualMeters,
+            String source,
+            List<MatchedReferencePoint> matchedPoints
+    ) {}
+
+    private record ReferenceAnchor(
+            String rawLabel,
+            String canonicalLabel,
+            double x,
+            double y
+    ) {}
 }

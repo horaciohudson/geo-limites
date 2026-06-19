@@ -11,6 +11,16 @@ import PropertySummary from '../components/property/PropertySummary';
 import type { PropertyFormData, PropertyFormValidation } from '../types/property';
 import '../styles/PropertyRegister.css';
 
+const createEmptyReferencePoint = (sequenceOrder: number) => ({
+  name: '',
+  type: 'REFERENCE_POINT' as const,
+  coordinateX: undefined,
+  coordinateY: undefined,
+  coordinateZ: undefined,
+  sequenceOrder,
+  description: ''
+});
+
 interface CachedIncompleteProperty extends PropertyFormData {
   id: string;
   lastModified: string;
@@ -129,6 +139,21 @@ const mapBackendToFormData = (backendData: any): PropertyFormData => {
         } : undefined
       }
     },
+    landmarks: Array.isArray(backendData.landmarks)
+      ? backendData.landmarks
+          .slice()
+          .sort((a: any, b: any) => (a.sequenceOrder || 0) - (b.sequenceOrder || 0))
+          .map((landmark: any, index: number) => ({
+            id: landmark.landmarkId || landmark.id,
+            name: landmark.landmarkName || '',
+            type: landmark.landmarkType || 'REFERENCE_POINT',
+            coordinateX: landmark.coordinateX,
+            coordinateY: landmark.coordinateY,
+            coordinateZ: landmark.coordinateZ,
+            sequenceOrder: landmark.sequenceOrder || index + 1,
+            description: landmark.description || ''
+          }))
+      : [],
     owners: owners,
     documents: backendData.documents || [],
     files: [
@@ -172,6 +197,7 @@ const PropertyRegister: React.FC = () => {
         zipCode: ''
       }
     },
+    landmarks: [createEmptyReferencePoint(1), createEmptyReferencePoint(2)],
     owners: [{
       ownerType: 'INDIVIDUAL',
       ownershipPercentage: 100,
@@ -499,6 +525,23 @@ const PropertyRegister: React.FC = () => {
         sirgas_e: formData.basicData.address.sirgas?.e,
         sirgas_n: formData.basicData.address.sirgas?.n,
         sirgas_source: formData.basicData.address.sirgas?.source,
+        landmarks: formData.landmarks
+          .filter(landmark =>
+            landmark.name.trim() ||
+            landmark.coordinateX !== undefined ||
+            landmark.coordinateY !== undefined ||
+            landmark.coordinateZ !== undefined
+          )
+          .map((landmark, index) => ({
+            landmarkId: landmark.id,
+            landmarkName: landmark.name.trim(),
+            landmarkType: landmark.type,
+            coordinateX: landmark.coordinateX,
+            coordinateY: landmark.coordinateY,
+            coordinateZ: landmark.coordinateZ,
+            sequenceOrder: index + 1,
+            description: landmark.description?.trim() || ''
+          })),
         
         ownerName: formData.owners.length > 0 ? 
           (formData.owners[0].ownerType === 'INDIVIDUAL' ? 
@@ -681,6 +724,7 @@ const PropertyRegister: React.FC = () => {
                             zipCode: ''
                           }
                         },
+                        landmarks: [createEmptyReferencePoint(1), createEmptyReferencePoint(2)],
                         owners: [{
                           ownerType: 'INDIVIDUAL',
                           ownershipPercentage: 100,
@@ -750,8 +794,10 @@ const PropertyRegister: React.FC = () => {
           {currentTab === 0 && (
             <PropertyBasicData
               data={formData.basicData}
+              landmarks={formData.landmarks}
               validation={validation.basicData}
               onChange={(basicData: PropertyFormData['basicData']) => setFormData(prev => ({ ...prev, basicData }))}
+              onLandmarksChange={(landmarks: PropertyFormData['landmarks']) => setFormData(prev => ({ ...prev, landmarks }))}
             />
           )}
           

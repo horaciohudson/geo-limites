@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ViewerDXF, Loading, ErrorBoundary } from '@/components';
+import type { ConfirmedLotSelection } from '@/components/ViewerDXF';
 import { useSidebarActions } from '@/App';
 import { useFileContext } from '@/contexts/FileContext';
 import api from '@/services/api';
-import type { Point2D } from '@/utils/geometry';
 import aiService from '@/services/aiService';
 import type { AsyncPropertyData } from '@/services/polling-memorial';
 import type { FileMetadata } from '@/types';
@@ -25,6 +25,31 @@ interface ErrorLike {
   };
 }
 
+interface StoredViewerSelectionState {
+  fileIds: string[];
+  currentFileIndex: number;
+}
+
+interface InteractiveLotMemorial {
+  lotNumber: number;
+  content: string;
+}
+
+interface LotMemorialParts {
+  body: string;
+  conclusion: string;
+}
+
+const VIEWER_SELECTION_STORAGE_KEY = 'viewerSelectionState';
+
+const haveSameFileIds = (left: FileMetadata[], right: FileMetadata[]): boolean => {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((file, index) => file.id === right[index]?.id);
+};
+
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (typeof error === 'object' && error !== null) {
     const errorLike = error as ErrorLike;
@@ -38,7 +63,121 @@ const normalizeMemorialText = (content: string): string =>
   content
     .replace(/“|”/g, '')
     .replace(/"/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+const stripLeadingMemorialHeader = (content: string): string =>
+  normalizeMemorialText(content)
+    .replace(
+      /^\s*Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*\n?)?/i,
+      ''
+    )
+    .trim();
+
+const deduplicateFinalMemorialHeader = (content: string): string => {
+  let headerCount = 0;
+
+  return normalizeMemorialText(content)
+    .replace(
+      /(^|\n)(Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*(?:\n|$))?)/gi,
+      (match, prefix) => {
+        headerCount += 1;
+        return headerCount === 1 ? match : prefix;
+      }
+    )
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+const splitLotMemorialParts = (content: string): LotMemorialParts => {
+  const normalized = stripLeadingMemorialHeader(content);
+  if (!normalized) {
+    return { body: '', conclusion: '' };
+  }
+
+  const declarationMatch = normalized.match(
+    /(?:\n_{5,}\n)?\s*DECLARAÇÃO(?: FINAL)?[\s\S]*$/i
+  );
+
+  if (!declarationMatch) {
+    return { body: normalized, conclusion: '' };
+  }
+
+  const body = normalized.slice(0, declarationMatch.index).trim();
+  const conclusion = declarationMatch[0]
+    .replace(/^\n+/, '')
+    .trim();
+
+  return { body, conclusion };
+};
+
+const buildInteractiveMemorial = (
+  lotMemorials: InteractiveLotMemorial[],
+  currentFile: FileMetadata,
+  propertyData: StoredPropertySelection | null,
+  conclusion: string
+): string => {
+  const projectName = propertyData?.name || currentFile.originalName.replace(/\.[^/.]+$/, '');
+  const sortedMemorials = [...lotMemorials].sort((left, right) => left.lotNumber - right.lotNumber);
+
+  const sections: string[] = [
+    'Memorial Descritivo',
+    `Projeto: ${projectName}`,
+    `Arquivo: ${currentFile.originalName}`,
+    `Data: ${new Date().toLocaleDateString('pt-BR')}`
+  ];
+
+  for (const lot of sortedMemorials) {
+    sections.push(`================ LOTE ${lot.lotNumber} ================`);
+    sections.push(lot.content);
+  }
+
+  if (conclusion) {
+    sections.push(conclusion);
+  }
+
+  return deduplicateFinalMemorialHeader(sections.join('\n\n'));
+};
+
+const isValidLotMemorial = (content: string, lotNumber: number): boolean => {
+  const normalized = normalizeMemorialText(content);
+  if (!normalized) {
+    return false;
+  }
+
+  const lotHeader = new RegExp(`^LOTE\\s+${lotNumber}\\s*:`, 'i');
+  if (!lotHeader.test(normalized)) {
+    return false;
+  }
+
+  if (normalized.length < 120) {
+    return false;
+  }
+
+  return normalized.includes('AO NORTE:') || normalized.includes('AO SUL:');
+};
+
+const DEBUG_SELECTION_URL = 'http://127.0.0.1:7778/event';
+const DEBUG_SELECTION_SESSION = 'lot-selection-mismatch';
+
+const sendSelectionDebug = (hypothesisId: string, location: string, msg: string, data: Record<string, unknown>) => {
+  // #region debug-point C:viewer-request-report
+  fetch(DEBUG_SELECTION_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: DEBUG_SELECTION_SESSION,
+      runId: 'pre-fix',
+      hypothesisId,
+      location,
+      msg,
+      data,
+      ts: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+};
 
 // Função para obter propertyId selecionado do localStorage
 function getSelectedPropertyId(): string | null {
@@ -80,6 +219,29 @@ function getSelectedPropertyData(): StoredPropertySelection | null {
   }
 }
 
+function getStoredViewerSelectionState(): StoredViewerSelectionState | null {
+  try {
+    const rawValue = localStorage.getItem(VIEWER_SELECTION_STORAGE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as StoredViewerSelectionState;
+    if (!Array.isArray(parsed.fileIds) || parsed.fileIds.length === 0) {
+      return null;
+    }
+
+    return {
+      fileIds: parsed.fileIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
+      currentFileIndex: Number.isFinite(parsed.currentFileIndex) ? parsed.currentFileIndex : 0
+    };
+  } catch (e) {
+    console.error('❌ Erro ao ler selecao persistida do viewer:', e);
+    localStorage.removeItem(VIEWER_SELECTION_STORAGE_KEY);
+    return null;
+  }
+}
+
 const Viewer: React.FC = () => {
   const [searchParams] = useSearchParams();
   const fileId = searchParams.get('fileId');
@@ -87,7 +249,8 @@ const Viewer: React.FC = () => {
   const shouldGenerateMemorial = searchParams.get('generateMemorial') === 'true';
 
   const { setViewerActions } = useSidebarActions();
-  const { selectedFiles } = useFileContext();
+  const { selectedFiles, setSelectedFiles } = useFileContext();
+  const selectedFilesKey = selectedFiles.map((selectedFile) => selectedFile.id).join('|');
 
   const [file, setFile] = useState<FileMetadata | null>(null);
   const [files, setFiles] = useState<FileMetadata[]>([]);
@@ -109,12 +272,6 @@ const Viewer: React.FC = () => {
   // Carregar metadados do arquivo ou arquivos com tratamento robusto
   useEffect(() => {
     const loadFiles = async () => {
-      if (!fileId && !fileIds) {
-        setError('Nenhum arquivo especificado');
-        setIsLoading(false);
-        return;
-      }
-
       try {
         setIsLoading(true);
         setError('');
@@ -141,9 +298,20 @@ const Viewer: React.FC = () => {
           }
         }
 
-        if (fileIds) {
+        const storedViewerSelection = getStoredViewerSelectionState();
+        const effectiveFileIds = fileIds || ((!fileId && selectedFiles.length === 0) ? storedViewerSelection?.fileIds.join(',') : null);
+        const effectiveFileId = fileId || ((!effectiveFileIds && selectedFiles.length === 1) ? selectedFiles[0]?.id : null);
+        const preferredIndex = storedViewerSelection?.currentFileIndex ?? 0;
+
+        if (!effectiveFileId && !effectiveFileIds && selectedFiles.length === 0) {
+          setError('Nenhum arquivo especificado');
+          setIsLoading(false);
+          return;
+        }
+
+        if (effectiveFileIds) {
           // Múltiplos arquivos
-          const ids = fileIds.split(',').map(id => id.trim()).filter(id => id.length > 0);
+          const ids = effectiveFileIds.split(',').map(id => id.trim()).filter(id => id.length > 0);
           const uniqueUrlIds = [...new Set(ids)];
 
           const finalIds = uniqueUrlIds;
@@ -155,8 +323,9 @@ const Viewer: React.FC = () => {
 
           if (uniqueContextFiles.length > 0) {
             setFiles(uniqueContextFiles);
-            setFile(uniqueContextFiles[0]);
-            setCurrentFileIndex(0);
+            const safeIndex = Math.min(Math.max(preferredIndex, 0), uniqueContextFiles.length - 1);
+            setFile(uniqueContextFiles[safeIndex]);
+            setCurrentFileIndex(safeIndex);
             setIsLoading(false);
             return;
           }
@@ -164,12 +333,16 @@ const Viewer: React.FC = () => {
           const filePromises = finalIds.map(id => api.get(`/dxf/${id}`));
           const responses = await Promise.all(filePromises);
           const loadedFiles = responses.map(response => response.data);
+          if (!haveSameFileIds(selectedFiles, loadedFiles)) {
+            setSelectedFiles(loadedFiles);
+          }
           setFiles(loadedFiles);
-          setFile(loadedFiles[0]);
-          setCurrentFileIndex(0);
-        } else if (fileId) {
+          const safeIndex = Math.min(Math.max(preferredIndex, 0), loadedFiles.length - 1);
+          setFile(loadedFiles[safeIndex]);
+          setCurrentFileIndex(safeIndex);
+        } else if (effectiveFileId) {
           // Arquivo único
-          const contextFile = selectedFiles.find(f => f.id === fileId);
+          const contextFile = selectedFiles.find(f => f.id === effectiveFileId);
           if (contextFile) {
             setFile(contextFile);
             setFiles([contextFile]);
@@ -177,9 +350,12 @@ const Viewer: React.FC = () => {
             return;
           }
 
-          const response = await api.get(`/dxf/${fileId}`);
+          const response = await api.get(`/dxf/${effectiveFileId}`);
           setFile(response.data);
           setFiles([response.data]);
+          if (!haveSameFileIds(selectedFiles, [response.data])) {
+            setSelectedFiles([response.data]);
+          }
         }
       } catch (err: unknown) {
         console.error('Erro ao carregar arquivo:', err);
@@ -190,7 +366,23 @@ const Viewer: React.FC = () => {
     };
 
     loadFiles();
-  }, [fileId, fileIds, selectedFiles]); // Adicionado selectedFiles como dependência
+  }, [fileId, fileIds, selectedFilesKey, setSelectedFiles]);
+
+  useEffect(() => {
+    const effectiveFiles = files.length > 0 ? files : (file ? [file] : []);
+    if (effectiveFiles.length === 0) {
+      return;
+    }
+
+    const safeIndex = Math.min(Math.max(currentFileIndex, 0), effectiveFiles.length - 1);
+    localStorage.setItem(
+      VIEWER_SELECTION_STORAGE_KEY,
+      JSON.stringify({
+        fileIds: effectiveFiles.map((item) => item.id),
+        currentFileIndex: safeIndex
+      })
+    );
+  }, [files, file, currentFileIndex]);
 
   // Verificar se deve gerar memorial automaticamente
   useEffect(() => {
@@ -276,7 +468,7 @@ const Viewer: React.FC = () => {
     setDxfData(data);
   };
 
-  const handlePolygonConfirmed = async (polygons: Point2D[][], sourceFile?: FileMetadata | null) => {
+  const handlePolygonConfirmed = async (selections: ConfirmedLotSelection[], sourceFile?: FileMetadata | null) => {
     const currentFile = sourceFile || files[currentFileIndex] || file;
     try {
       if (!currentFile) {
@@ -317,26 +509,35 @@ const Viewer: React.FC = () => {
       const propertyId = getSelectedPropertyId();
       const propertyData = getSelectedPropertyData();
       const aiConfig = aiService.getAIConfig();
-      let allMemorials = '';
+      const lotMemorials: InteractiveLotMemorial[] = [];
+      let finalConclusion = '';
 
-      for (let i = 0; i < polygons.length; i++) {
-        setMemorialCurrentStep(`Gerando memorial do Lote ${i + 1} de ${polygons.length}...`);
-        setGenerationProgress(Math.round(((i + 1) / polygons.length) * 100));
+      for (let i = 0; i < selections.length; i++) {
+        const selection = selections[i];
+        const lotNumber = selection.lotNumber ?? (i + 1);
+        setMemorialCurrentStep(`Gerando memorial do Lote ${lotNumber} de ${selections.length}...`);
+        setGenerationProgress(Math.round(((i + 1) / selections.length) * 100));
+
+        const interactiveLayer = `Seleção Interativa Lote ${lotNumber}`;
 
         // Construir uma entidade POLYLINE a partir dos vértices do polígono
         const polylineEntity = {
           type: 'POLYLINE',
-          layer: 'Seleção Interativa',
-          vertices: polygons[i]
+          layer: interactiveLayer,
+          vertices: selection.polygon
         };
 
         const request = {
           entities: [polylineEntity],
           fileName: currentFile.originalName,
           projectName: propertyData?.name || currentFile.originalName.replace(/\.[^/.]+$/, ''),
-          projectDescription: `Lote ${i + 1} - Memorial gerado a partir de seleção em lote`,
+          projectDescription: `Lote ${lotNumber} - Memorial gerado a partir de seleção em lote`,
           standardId,
           propertyId,
+          lotCount: 1,
+          billableLotCount: selections.length,
+          chargeCredits: i === 0,
+          selectedLayers: [interactiveLayer],
           propertyData: propertyData ? {
             registrationNumber: propertyData.registrationNumber,
             name: propertyData.name,
@@ -349,21 +550,75 @@ const Viewer: React.FC = () => {
             ownerDocument: propertyData.ownerDocument,
             propertyType: propertyData.propertyType
           } : null,
+          selectedConfrontationTexts: selection.selectedConfrontationTexts.map((selectedText) => ({
+            text: selectedText.text,
+            x: selectedText.x,
+            y: selectedText.y,
+            layer: selectedText.layer,
+            entityType: selectedText.entityType,
+            inferredDirection: selectedText.inferredDirection,
+            selectionMode: selectedText.selectionMode,
+            segmentStartX: selectedText.segmentStartPoint?.x,
+            segmentStartY: selectedText.segmentStartPoint?.y,
+            segmentEndX: selectedText.segmentEndPoint?.x,
+            segmentEndY: selectedText.segmentEndPoint?.y
+          })),
           ...aiService.getAIParameters()
         };
 
+        // #region debug-point C:request-payload
+        sendSelectionDebug(
+          'C',
+          'Viewer:handlePolygonConfirmed:request',
+          '[DEBUG] Payload enviado para gerar lote interativo',
+          {
+            loopIndex: i + 1,
+            requestedLotNumber: lotNumber,
+            interactiveLayer,
+            selectedLayers: request.selectedLayers,
+            projectDescription: request.projectDescription,
+            vertexCount: selection.polygon?.length || 0,
+            firstVertex: selection.polygon?.[0] || null,
+            textsInside: selection.textsInside,
+            selectedConfrontationTexts: request.selectedConfrontationTexts
+          }
+        );
+        // #endregion
+
         const response = await api.post(aiConfig.endpoint, request);
         
-        allMemorials += `================ LOTE ${i + 1} ================\n`;
         const responseData = response.data;
         const realMemorial = typeof responseData === 'string' 
           ? responseData 
           : (responseData?.memorialText || responseData?.memorial || JSON.stringify(responseData, null, 2));
-          
-        allMemorials += normalizeMemorialText(realMemorial) + '\n\n';
+
+        const normalizedLotMemorial = normalizeMemorialText(realMemorial);
+        const lotMemorialParts = splitLotMemorialParts(normalizedLotMemorial);
+        if (!isValidLotMemorial(lotMemorialParts.body, lotNumber)) {
+          sendSelectionDebug(
+            'D',
+            'Viewer:handlePolygonConfirmed:skip-invalid-lot',
+            '[DEBUG] Lote descartado no frontend apos validacao final',
+            {
+              lotNumber,
+              normalizedLength: lotMemorialParts.body.length,
+              normalizedPreview: lotMemorialParts.body.slice(0, 180)
+            }
+          );
+          continue;
+        }
+
+        if (!finalConclusion && lotMemorialParts.conclusion) {
+          finalConclusion = lotMemorialParts.conclusion;
+        }
+
+        lotMemorials.push({
+          lotNumber,
+          content: lotMemorialParts.body
+        });
       }
-      
-      setMemorial(normalizeMemorialText(allMemorials));
+
+      setMemorial(buildInteractiveMemorial(lotMemorials, currentFile, propertyData, finalConclusion));
       setGenerationProgress(100);
       setMemorialCurrentStep('Geração em lote concluída!');
     } catch (err: unknown) {

@@ -52,11 +52,21 @@ interface DrawingBounds {
 
 interface ErrorLike {
   message?: string;
+  response?: {
+    status?: number;
+    data?: {
+      message?: string;
+    };
+  };
 }
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
-  if (typeof error === 'object' && error !== null && 'message' in error) {
-    return (error as ErrorLike).message || fallback;
+  if (typeof error === 'object' && error !== null) {
+    const errorLike = error as ErrorLike;
+    if (errorLike.response?.status === 404) {
+      return 'Arquivo DXF nao encontrado no servidor.';
+    }
+    return errorLike.response?.data?.message || errorLike.message || fallback;
   }
 
   return fallback;
@@ -68,11 +78,384 @@ interface ViewerDXFProps {
   className?: string;
   onDXFDataLoaded?: (data: DXFData) => void;
   interactive?: boolean;
-  onPolygonConfirmed?: (polygons: Point2D[][]) => void;
+  onPolygonConfirmed?: (selections: ConfirmedLotSelection[]) => void;
 }
+
+export interface ConfirmedLotSelection {
+  polygon: Point2D[];
+  lotNumber: number | null;
+  textsInside: string[];
+  selectedConfrontationTexts: ConfirmedConfrontationText[];
+}
+
+export interface SelectedConfrontationText {
+  id: string;
+  text: string;
+  layer: string;
+  entityType: string;
+  x: number;
+  y: number;
+}
+
+export interface ConfirmedConfrontationText extends SelectedConfrontationText {
+  inferredDirection: string | null;
+  selectionMode: 'text' | 'segment';
+  segmentStartPoint?: Point2D;
+  segmentEndPoint?: Point2D;
+}
+
+interface SegmentConfrontationAnnotation {
+  id: string;
+  sourceTextId: string;
+  text: string;
+  layer: string;
+  entityType: string;
+  startPoint: Point2D;
+  endPoint: Point2D;
+}
+
+interface HoverConfrontationText {
+  text: string;
+  x: number;
+  y: number;
+  id: string;
+}
+
+const DEBUG_SELECTION_URL = 'http://127.0.0.1:7778/event';
+const DEBUG_SELECTION_SESSION = 'lot-selection-mismatch';
+const SHIFT_CLICK_DEDUP_MS = 300;
+const SHIFT_CLICK_DEDUP_DISTANCE = 1.5;
+
+const sendSelectionDebug = (hypothesisId: string, location: string, msg: string, data: Record<string, unknown>) => {
+  // #region debug-point A:browser-selection-report
+  fetch(DEBUG_SELECTION_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: DEBUG_SELECTION_SESSION,
+      runId: 'pre-fix',
+      hypothesisId,
+      location,
+      msg,
+      data,
+      ts: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+};
+
+const summarizePolygonTexts = (polygon: Point2D[], dxfData: DXFData | null): string[] => {
+  if (!dxfData) return [];
+  return dxfData.entities
+    .filter(e => {
+      if (e.type !== 'TEXT' && e.type !== 'MTEXT') return false;
+      const tx = e.properties.x ?? e.properties.alignmentX ?? e.properties.x1;
+      const ty = e.properties.y ?? e.properties.alignmentY ?? e.properties.y1;
+      return tx !== undefined && ty !== undefined && isPointInPolygon({ x: tx as number, y: ty as number }, polygon);
+    })
+    .map(e => String(e.properties.text || '').trim())
+    .filter(Boolean)
+    .slice(0, 6);
+};
+
+const extractLotNumberFromTexts = (texts: string[]): number | null => {
+  for (const text of texts) {
+    const match = text.match(/lote\s*(\d+)/i);
+    if (match) {
+      const value = Number.parseInt(match[1], 10);
+      if (Number.isFinite(value)) {
+        return value;
+      }
+    }
+  }
+  return null;
+};
+
+const extractTextPosition = (entity: DXFEntity): Point2D | null => {
+  const x = entity.properties.x ?? entity.properties.alignmentX ?? entity.properties.x1;
+  const y = entity.properties.y ?? entity.properties.alignmentY ?? entity.properties.y1;
+  if (typeof x !== 'number' || typeof y !== 'number') {
+    return null;
+  }
+
+  return { x, y };
+};
+
+const buildSelectedTextId = (entity: DXFEntity, position: Point2D): string => {
+  const text = String(entity.properties.text || '').trim();
+  return [entity.layer || '0', entity.type || 'TEXT', position.x.toFixed(3), position.y.toFixed(3), text].join('|');
+};
+
+const getPolygonCentroid = (polygon: Point2D[]): Point2D => {
+  if (polygon.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const total = polygon.reduce((acc, point) => ({
+    x: acc.x + point.x,
+    y: acc.y + point.y
+  }), { x: 0, y: 0 });
+
+  return {
+    x: total.x / polygon.length,
+    y: total.y / polygon.length
+  };
+};
+
+const getPolygonEdges = (polygon: Point2D[]): { start: Point2D; end: Point2D }[] => {
+  if (polygon.length < 2) {
+    return [];
+  }
+
+  return polygon.map((point, index) => ({
+    start: point,
+    end: polygon[(index + 1) % polygon.length]
+  }));
+};
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+const pointToSegmentDistance = (point: Point2D, start: Point2D, end: Point2D): number => {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const segmentLengthSquared = dx * dx + dy * dy;
+
+  if (segmentLengthSquared === 0) {
+    return calculateDistance(point, start);
+  }
+
+  const t = clamp((((point.x - start.x) * dx) + ((point.y - start.y) * dy)) / segmentLengthSquared, 0, 1);
+  const projection = {
+    x: start.x + t * dx,
+    y: start.y + t * dy
+  };
+
+  return calculateDistance(point, projection);
+};
+
+const segmentToSegmentDistance = (a1: Point2D, a2: Point2D, b1: Point2D, b2: Point2D): number =>
+  Math.min(
+    pointToSegmentDistance(a1, b1, b2),
+    pointToSegmentDistance(a2, b1, b2),
+    pointToSegmentDistance(b1, a1, a2),
+    pointToSegmentDistance(b2, a1, a2)
+  );
+
+const getSegmentLength = (start: Point2D, end: Point2D): number =>
+  calculateDistance(start, end);
+
+const getNormalizedSegmentVector = (start: Point2D, end: Point2D): Point2D | null => {
+  const length = getSegmentLength(start, end);
+  if (length === 0) {
+    return null;
+  }
+
+  return {
+    x: (end.x - start.x) / length,
+    y: (end.y - start.y) / length
+  };
+};
+
+const getAxisProjection = (point: Point2D, axis: Point2D): number =>
+  point.x * axis.x + point.y * axis.y;
+
+const getProjectedOverlapRatio = (
+  aStart: Point2D,
+  aEnd: Point2D,
+  bStart: Point2D,
+  bEnd: Point2D
+): number => {
+  const axis = getNormalizedSegmentVector(aStart, aEnd) ?? getNormalizedSegmentVector(bStart, bEnd);
+  if (!axis) {
+    return 0;
+  }
+
+  const a1 = getAxisProjection(aStart, axis);
+  const a2 = getAxisProjection(aEnd, axis);
+  const b1 = getAxisProjection(bStart, axis);
+  const b2 = getAxisProjection(bEnd, axis);
+
+  const aMin = Math.min(a1, a2);
+  const aMax = Math.max(a1, a2);
+  const bMin = Math.min(b1, b2);
+  const bMax = Math.max(b1, b2);
+
+  const overlap = Math.max(0, Math.min(aMax, bMax) - Math.max(aMin, bMin));
+  const referenceLength = Math.max(1, Math.min(Math.abs(aMax - aMin), Math.abs(bMax - bMin)));
+  return overlap / referenceLength;
+};
+
+const getParallelismScore = (
+  aStart: Point2D,
+  aEnd: Point2D,
+  bStart: Point2D,
+  bEnd: Point2D
+): number => {
+  const aVector = getNormalizedSegmentVector(aStart, aEnd);
+  const bVector = getNormalizedSegmentVector(bStart, bEnd);
+
+  if (!aVector || !bVector) {
+    return 0;
+  }
+
+  return Math.abs(aVector.x * bVector.x + aVector.y * bVector.y);
+};
+
+const getSegmentMidpoint = (start: Point2D, end: Point2D): Point2D => ({
+  x: (start.x + end.x) / 2,
+  y: (start.y + end.y) / 2
+});
+
+const inferDirectionFromPolygon = (polygon: Point2D[], textPoint: Point2D): string | null => {
+  if (polygon.length === 0) {
+    return null;
+  }
+
+  const centroid = getPolygonCentroid(polygon);
+  const dx = textPoint.x - centroid.x;
+  const dy = textPoint.y - centroid.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? 'LESTE' : 'OESTE';
+  }
+
+  return dy >= 0 ? 'NORTE' : 'SUL';
+};
+
+const inferDirectionFromSegment = (polygon: Point2D[], startPoint: Point2D, endPoint: Point2D): string | null => {
+  const centroid = getPolygonCentroid(polygon);
+  const closestEdge = getPolygonEdges(polygon)
+    .map((edge) => ({
+      edge,
+      distance: segmentToSegmentDistance(startPoint, endPoint, edge.start, edge.end)
+    }))
+    .sort((a, b) => a.distance - b.distance)[0];
+
+  if (!closestEdge) {
+    return inferDirectionFromPolygon(polygon, getSegmentMidpoint(startPoint, endPoint));
+  }
+
+  const edgeMidpoint = getSegmentMidpoint(closestEdge.edge.start, closestEdge.edge.end);
+  const dx = edgeMidpoint.x - centroid.x;
+  const dy = edgeMidpoint.y - centroid.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? 'LESTE' : 'OESTE';
+  }
+
+  return dy >= 0 ? 'NORTE' : 'SUL';
+};
+
+const polygonTouchesAnnotationSegment = (
+  polygon: Point2D[],
+  annotation: SegmentConfrontationAnnotation,
+  tolerance: number = 1.2
+): boolean => {
+  const annotationLength = getSegmentLength(annotation.startPoint, annotation.endPoint);
+  const corridorDistance = Math.max(tolerance, Math.min(20, annotationLength * 0.18));
+
+  return getPolygonEdges(polygon).some((edge) => {
+    const distance = segmentToSegmentDistance(annotation.startPoint, annotation.endPoint, edge.start, edge.end);
+    if (distance <= tolerance) {
+      return true;
+    }
+
+    const overlapRatio = getProjectedOverlapRatio(annotation.startPoint, annotation.endPoint, edge.start, edge.end);
+    const parallelism = getParallelismScore(annotation.startPoint, annotation.endPoint, edge.start, edge.end);
+
+    return parallelism >= 0.9 && overlapRatio >= 0.3 && distance <= corridorDistance;
+  });
+};
+
+const getSegmentSnapCandidates = (
+  referencePoint: Point2D,
+  polygons: Point2D[][],
+  searchRadius: number,
+  preferredPolygon?: Point2D[] | null
+): Point2D[] => {
+  const scopedPolygons = preferredPolygon && preferredPolygon.length > 0
+    ? [preferredPolygon]
+    : polygons;
+
+  const relevantPolygons = scopedPolygons.filter((polygon) =>
+    isPointInPolygon(referencePoint, polygon) ||
+    getPolygonEdges(polygon).some((edge) => pointToSegmentDistance(referencePoint, edge.start, edge.end) <= searchRadius * 1.5)
+  );
+
+  const sourcePolygons = relevantPolygons.length > 0
+    ? relevantPolygons
+    : scopedPolygons
+        .map((polygon) => ({
+          polygon,
+          distance: Math.min(
+            ...getPolygonEdges(polygon).map((edge) => pointToSegmentDistance(referencePoint, edge.start, edge.end))
+          )
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 1)
+        .map((item) => item.polygon);
+  const unique = new Map<string, Point2D>();
+
+  sourcePolygons.forEach((polygon) => {
+    polygon.forEach((point) => {
+      unique.set(`${point.x.toFixed(3)}|${point.y.toFixed(3)}`, point);
+    });
+  });
+
+  return Array.from(unique.values());
+};
+
+const buildConfirmedSelections = (
+  polygons: Point2D[][],
+  dxfData: DXFData | null,
+  selectedConfrontationTexts: SelectedConfrontationText[],
+  segmentAnnotations: SegmentConfrontationAnnotation[]
+): ConfirmedLotSelection[] =>
+  polygons.map((polygon) => {
+    const textsInside = summarizePolygonTexts(polygon, dxfData);
+    const centroid = getPolygonCentroid(polygon);
+    const segmentConfirmedTexts: ConfirmedConfrontationText[] = segmentAnnotations
+      .filter((annotation) => polygonTouchesAnnotationSegment(polygon, annotation))
+      .map((annotation) => ({
+        id: annotation.sourceTextId,
+        text: annotation.text,
+        layer: annotation.layer,
+        entityType: annotation.entityType,
+        x: getSegmentMidpoint(annotation.startPoint, annotation.endPoint).x,
+        y: getSegmentMidpoint(annotation.startPoint, annotation.endPoint).y,
+        inferredDirection: inferDirectionFromSegment(polygon, annotation.startPoint, annotation.endPoint),
+        selectionMode: 'segment',
+        segmentStartPoint: annotation.startPoint,
+        segmentEndPoint: annotation.endPoint
+      }));
+
+    const segmentedSourceIds = new Set(segmentConfirmedTexts.map((item) => item.id));
+
+    const closestConfrontationTexts = selectedConfrontationTexts
+      .filter((selectedText) => !segmentedSourceIds.has(selectedText.id))
+      .map((selectedText) => ({
+        ...selectedText,
+        distance: calculateDistance(centroid, { x: selectedText.x, y: selectedText.y })
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 8)
+      .map(({ distance: _distance, ...selectedText }) => ({
+        ...selectedText,
+        inferredDirection: inferDirectionFromPolygon(polygon, { x: selectedText.x, y: selectedText.y }),
+        selectionMode: 'text' as const
+      }));
+
+    return {
+      polygon,
+      textsInside,
+      lotNumber: extractLotNumberFromTexts(textsInside),
+      selectedConfrontationTexts: [...segmentConfirmedTexts, ...closestConfrontationTexts]
+    };
+  });
 
 const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDataLoaded, interactive, onPolygonConfirmed }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lastShiftInteractionRef = useRef<{ x: number; y: number; ts: number } | null>(null);
   const [dxfData, setDxfData] = useState<DXFData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -87,8 +470,14 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
   const [validPoints, setValidPoints] = useState<Point2D[]>([]);
   const [manualPolygon, setManualPolygon] = useState<Point2D[]>([]);
   const [selectedPolygons, setSelectedPolygons] = useState<Point2D[][]>([]);
+  const [selectedConfrontationTexts, setSelectedConfrontationTexts] = useState<SelectedConfrontationText[]>([]);
+  const [activeConfrontationTextId, setActiveConfrontationTextId] = useState<string | null>(null);
+  const [pendingConfrontationSegmentPoints, setPendingConfrontationSegmentPoints] = useState<Point2D[]>([]);
+  const [segmentAnnotations, setSegmentAnnotations] = useState<SegmentConfrontationAnnotation[]>([]);
   const [hoverPoint, setHoverPoint] = useState<Point2D | null>(null);
   const [hoverPolygon, setHoverPolygon] = useState<Point2D[] | null>(null);
+  const [hoverConfrontationText, setHoverConfrontationText] = useState<HoverConfrontationText | null>(null);
+  const [hoverSegmentTargetPoint, setHoverSegmentTargetPoint] = useState<Point2D | null>(null);
   const [detectedPolygons, setDetectedPolygons] = useState<Point2D[][]>([]);
 
   // Encontrar polígonos fechados a partir de todas as linhas do desenho
@@ -176,6 +565,22 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
     
     // Auto-seleciona todos os lotes detectados por padrão
     setSelectedPolygons(validPolys);
+
+    // #region debug-point A:detected-polygons
+    sendSelectionDebug(
+      'A',
+      'ViewerDXF:detected-polygons',
+      '[DEBUG] Poligonos detectados e pre-selecionados',
+      {
+        detectedCount: validPolys.length,
+        detectedSummaries: validPolys.slice(0, 30).map((poly, index) => ({
+          index: index + 1,
+          area: Number(calculatePolygonArea(poly).toFixed(2)),
+          textsInside: summarizePolygonTexts(poly, dxfData)
+        }))
+      }
+    );
+    // #endregion
   }, [dxfData]);
 
   // Carregar dados DXF
@@ -187,13 +592,16 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
         if (isMounted) {
           setDxfData(data);
           setError('');
+          setIsLoading(false);
         }
         return;
       }
 
       if (!fileId) {
         if (isMounted) {
+          setDxfData(null);
           setError('Nenhum arquivo especificado');
+          setIsLoading(false);
         }
         return;
       }
@@ -217,6 +625,7 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
 
       } catch (err: unknown) {
         if (isMounted) {
+          setDxfData(null);
           setError(getErrorMessage(err, 'Erro ao carregar arquivo DXF'));
           console.error('Erro ao carregar DXF:', err);
         }
@@ -242,11 +651,11 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Configurar canvas - TAMANHO AUMENTADO 20x
+    // Configurar canvas com proporcao quadrada para manter a leitura confortavel
     const container = canvas.parentElement;
     if (container) {
       canvas.width = container.clientWidth;
-      canvas.height = Math.max(container.clientHeight, 2000); // Aumentado de 600 para 2000
+      canvas.height = Math.max(container.clientHeight || container.clientWidth, 420);
     }
 
     // Limpar canvas
@@ -263,12 +672,14 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
     const allY: number[] = [];
     const points: Point2D[] = [];
     
-    const addCoord = (x: number, y: number) => {
+    const addCoord = (x: number, y: number, includeInSnap: boolean = true) => {
       // Ignorar exatamente (0,0) que frequentemente é erro de parser/origem
       if (Math.abs(x) < 0.001 && Math.abs(y) < 0.001) return;
       allX.push(x);
       allY.push(y);
-      points.push({ x, y, id: `V_${x.toFixed(3)}_${y.toFixed(3)}` });
+      if (includeInSnap) {
+        points.push({ x, y, id: `V_${x.toFixed(3)}_${y.toFixed(3)}` });
+      }
     };
 
     dxfData.entities.forEach((entity: DXFEntity) => {
@@ -281,7 +692,7 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
           break;
         case 'TEXT':
         case 'MTEXT':
-          if (props.x !== undefined && props.y !== undefined) addCoord(props.x, props.y);
+          if (props.x !== undefined && props.y !== undefined) addCoord(props.x, props.y, false);
           break;
         case 'LWPOLYLINE':
         case 'POLYLINE':
@@ -413,6 +824,16 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
         case 'TEXT':
         case 'MTEXT':
           if (props.x !== undefined && props.y !== undefined && props.text) {
+            const textPosition = extractTextPosition(entity);
+            const isConfrontationTextSelected = textPosition
+              ? selectedConfrontationTexts.some(selected => selected.id === buildSelectedTextId(entity, textPosition))
+              : false;
+            const isActiveConfrontationText = textPosition
+              ? activeConfrontationTextId === buildSelectedTextId(entity, textPosition)
+              : false;
+            const isHoverConfrontationText = textPosition
+              ? hoverConfrontationText?.id === buildSelectedTextId(entity, textPosition)
+              : false;
             // Salvar o estado atual do contexto
             ctx.save();
             
@@ -445,7 +866,9 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
             ctx.font = `${fontSize}px Arial`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'alphabetic';
-            ctx.fillStyle = '#212529';
+            ctx.fillStyle = isActiveConfrontationText
+              ? '#7b1fa2'
+              : (isHoverConfrontationText ? '#c2185b' : (isConfrontationTextSelected ? '#d63384' : '#212529'));
             ctx.fillText(props.text, 0, 0);
             
             ctx.restore();
@@ -508,6 +931,76 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
       ctx.restore();
     }
 
+    if (interactive && selectedConfrontationTexts.length > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(214, 51, 132, 0.18)';
+      ctx.strokeStyle = '#d63384';
+      ctx.lineWidth = 2 / scale;
+
+      selectedConfrontationTexts.forEach((selectedText) => {
+        ctx.beginPath();
+        ctx.arc(selectedText.x, selectedText.y, 10 / scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      ctx.restore();
+    }
+
+    if (interactive && segmentAnnotations.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#7b1fa2';
+      ctx.lineWidth = 3 / scale;
+
+      segmentAnnotations.forEach((annotation) => {
+        ctx.beginPath();
+        ctx.moveTo(annotation.startPoint.x, annotation.startPoint.y);
+        ctx.lineTo(annotation.endPoint.x, annotation.endPoint.y);
+        ctx.stroke();
+
+        [annotation.startPoint, annotation.endPoint].forEach((point) => {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 7 / scale, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(123, 31, 162, 0.25)';
+          ctx.fill();
+          ctx.strokeStyle = '#7b1fa2';
+          ctx.stroke();
+        });
+      });
+
+      ctx.restore();
+    }
+
+    if (interactive && pendingConfrontationSegmentPoints.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#9c27b0';
+      ctx.lineWidth = 2 / scale;
+      ctx.setLineDash([8 / scale, 6 / scale]);
+
+      if (pendingConfrontationSegmentPoints.length === 2) {
+        ctx.beginPath();
+        ctx.moveTo(pendingConfrontationSegmentPoints[0].x, pendingConfrontationSegmentPoints[0].y);
+        ctx.lineTo(pendingConfrontationSegmentPoints[1].x, pendingConfrontationSegmentPoints[1].y);
+        ctx.stroke();
+      } else if (pendingConfrontationSegmentPoints.length === 1 && hoverSegmentTargetPoint) {
+        ctx.beginPath();
+        ctx.moveTo(pendingConfrontationSegmentPoints[0].x, pendingConfrontationSegmentPoints[0].y);
+        ctx.lineTo(hoverSegmentTargetPoint.x, hoverSegmentTargetPoint.y);
+        ctx.stroke();
+      }
+
+      pendingConfrontationSegmentPoints.forEach((point, index) => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 8 / scale, 0, Math.PI * 2);
+        ctx.fillStyle = index === 0 ? 'rgba(156, 39, 176, 0.30)' : 'rgba(123, 31, 162, 0.30)';
+        ctx.fill();
+        ctx.strokeStyle = '#7b1fa2';
+        ctx.stroke();
+      });
+
+      ctx.restore();
+    }
+
     // Desenhar polígono manual em andamento
     if (interactive && manualPolygon.length > 0) {
        ctx.save();
@@ -530,7 +1023,57 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
        ctx.restore();
     }
 
-    if (interactive && hoverPoint) {
+    if (interactive && hoverSegmentTargetPoint) {
+       ctx.beginPath();
+       ctx.arc(hoverSegmentTargetPoint.x, hoverSegmentTargetPoint.y, 10 / scale, 0, 2 * Math.PI);
+       ctx.fillStyle = 'rgba(123, 31, 162, 0.75)';
+       ctx.fill();
+       ctx.strokeStyle = '#7b1fa2';
+       ctx.lineWidth = 2 / scale;
+       ctx.stroke();
+
+       ctx.save();
+       ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+       const canvasCenterX = canvasRef.current!.width / 2 + pan.x;
+       const canvasCenterY = canvasRef.current!.height / 2 + pan.y;
+       const screenX = canvasCenterX + (hoverSegmentTargetPoint.x - (drawingBounds?.centerX || 0)) * scale;
+       const screenY = canvasCenterY - (hoverSegmentTargetPoint.y - (drawingBounds?.centerY || 0)) * scale;
+
+       ctx.fillStyle = 'rgba(49, 27, 146, 0.85)';
+       ctx.fillRect(screenX + 15, screenY - 45, 200, 42);
+       ctx.fillStyle = 'white';
+       ctx.font = '12px Arial';
+       ctx.textAlign = 'left';
+       ctx.fillText('Ponto do trecho', screenX + 20, screenY - 28);
+       ctx.fillText(`E: ${hoverSegmentTargetPoint.x.toFixed(3)} N: ${hoverSegmentTargetPoint.y.toFixed(3)}`, screenX + 20, screenY - 12);
+       ctx.restore();
+    } else if (interactive && hoverConfrontationText) {
+       ctx.beginPath();
+       ctx.arc(hoverConfrontationText.x, hoverConfrontationText.y, 12 / scale, 0, 2 * Math.PI);
+       ctx.fillStyle = 'rgba(194, 24, 91, 0.18)';
+       ctx.fill();
+       ctx.strokeStyle = '#c2185b';
+       ctx.lineWidth = 2 / scale;
+       ctx.stroke();
+
+       ctx.save();
+       ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+       const canvasCenterX = canvasRef.current!.width / 2 + pan.x;
+       const canvasCenterY = canvasRef.current!.height / 2 + pan.y;
+       const screenX = canvasCenterX + (hoverConfrontationText.x - (drawingBounds?.centerX || 0)) * scale;
+       const screenY = canvasCenterY - (hoverConfrontationText.y - (drawingBounds?.centerY || 0)) * scale;
+
+       ctx.fillStyle = 'rgba(136, 14, 79, 0.88)';
+       ctx.fillRect(screenX + 15, screenY - 45, 260, 42);
+       ctx.fillStyle = 'white';
+       ctx.font = '12px Arial';
+       ctx.textAlign = 'left';
+       ctx.fillText('Texto de confrontacao', screenX + 20, screenY - 28);
+       ctx.fillText(hoverConfrontationText.text.slice(0, 34), screenX + 20, screenY - 12);
+       ctx.restore();
+    } else if (interactive && hoverPoint) {
        ctx.beginPath();
        ctx.arc(hoverPoint.x, hoverPoint.y, 10 / scale, 0, 2 * Math.PI);
        ctx.fillStyle = 'rgba(255, 193, 7, 0.8)';
@@ -573,7 +1116,7 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
       ctx.fillText(`Tamanho: ${drawingBounds.drawingWidth.toFixed(1)} x ${drawingBounds.drawingHeight.toFixed(1)}`, 10, 50);
     }
 
-  }, [dxfData, pan, zoom, selectedPolygons, manualPolygon, hoverPoint, hoverPolygon, interactive, scale]);
+  }, [dxfData, pan, zoom, selectedPolygons, selectedConfrontationTexts, activeConfrontationTextId, pendingConfrontationSegmentPoints, segmentAnnotations, manualPolygon, hoverPoint, hoverPolygon, hoverConfrontationText, hoverSegmentTargetPoint, interactive, scale]);
 
   // Handlers de mouse para Pan
   
@@ -591,8 +1134,128 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const isShiftTextSelection = e.shiftKey && !e.ctrlKey;
+    const isShiftSegmentSelection = e.shiftKey && e.ctrlKey;
+
+    if (e.button === 0 && interactive && isShiftTextSelection && dxfData) {
+      const dxfCoords = getDxfCoords(e.clientX, e.clientY);
+      if (!dxfCoords) {
+        return;
+      }
+
+      const now = Date.now();
+      const lastShiftInteraction = lastShiftInteractionRef.current;
+      if (
+        lastShiftInteraction &&
+        now - lastShiftInteraction.ts <= SHIFT_CLICK_DEDUP_MS &&
+        calculateDistance(dxfCoords, { x: lastShiftInteraction.x, y: lastShiftInteraction.y }) <= SHIFT_CLICK_DEDUP_DISTANCE
+      ) {
+        return;
+      }
+      lastShiftInteractionRef.current = { x: dxfCoords.x, y: dxfCoords.y, ts: now };
+
+      const nearestText = dxfData.entities
+        .filter(entity => entity.type === 'TEXT' || entity.type === 'MTEXT')
+        .map((entity) => {
+          const position = extractTextPosition(entity);
+          const text = String(entity.properties.text || '').trim();
+          if (!position || !text) {
+            return null;
+          }
+
+          return {
+            entity,
+            position,
+            text,
+            distance: calculateDistance(dxfCoords, position)
+          };
+        })
+        .filter((candidate): candidate is { entity: DXFEntity; position: Point2D; text: string; distance: number } => candidate !== null)
+        .sort((a, b) => a.distance - b.distance)[0];
+
+      if (nearestText && nearestText.distance <= 25 / scale) {
+        const selectedText: SelectedConfrontationText = {
+          id: buildSelectedTextId(nearestText.entity, nearestText.position),
+          text: nearestText.text,
+          layer: nearestText.entity.layer,
+          entityType: nearestText.entity.type,
+          x: nearestText.position.x,
+          y: nearestText.position.y
+        };
+
+        setSelectedConfrontationTexts((prev) => {
+          const isAlreadySelected = prev.some(item => item.id === selectedText.id);
+          if (isAlreadySelected) {
+            setSegmentAnnotations((annotations) => annotations.filter(item => item.sourceTextId !== selectedText.id));
+            setPendingConfrontationSegmentPoints([]);
+            setActiveConfrontationTextId((current) => current === selectedText.id ? null : current);
+            return prev.filter(item => item.id !== selectedText.id);
+          }
+          setActiveConfrontationTextId(selectedText.id);
+          return [...prev, selectedText];
+        });
+        return;
+      }
+      return;
+    }
+
+    if (e.button === 0 && interactive && isShiftSegmentSelection && dxfData) {
+      const dxfCoords = getDxfCoords(e.clientX, e.clientY);
+      if (!dxfCoords) {
+        return;
+      }
+
+      const now = Date.now();
+      const lastShiftInteraction = lastShiftInteractionRef.current;
+      if (
+        lastShiftInteraction &&
+        now - lastShiftInteraction.ts <= SHIFT_CLICK_DEDUP_MS &&
+        calculateDistance(dxfCoords, { x: lastShiftInteraction.x, y: lastShiftInteraction.y }) <= SHIFT_CLICK_DEDUP_DISTANCE
+      ) {
+        return;
+      }
+      lastShiftInteractionRef.current = { x: dxfCoords.x, y: dxfCoords.y, ts: now };
+
+      const activeText = selectedConfrontationTexts.find((item) => item.id === activeConfrontationTextId);
+      if (!activeText) {
+        return;
+      }
+
+      const pickedPoint = hoverSegmentTargetPoint ?? dxfCoords;
+
+      setPendingConfrontationSegmentPoints((prev) => {
+        if (prev.length === 0) {
+          return [pickedPoint];
+        }
+
+        const startPoint = prev[0];
+        if (calculateDistance(startPoint, pickedPoint) < 0.001) {
+          return prev;
+        }
+
+        const annotation: SegmentConfrontationAnnotation = {
+          id: `${activeText.id}|${startPoint.x.toFixed(3)}|${startPoint.y.toFixed(3)}|${pickedPoint.x.toFixed(3)}|${pickedPoint.y.toFixed(3)}`,
+          sourceTextId: activeText.id,
+          text: activeText.text,
+          layer: activeText.layer,
+          entityType: activeText.entityType,
+          startPoint,
+          endPoint: pickedPoint
+        };
+
+        setSegmentAnnotations((annotations) => [
+          ...annotations.filter((item) => item.sourceTextId !== activeText.id),
+          annotation
+        ]);
+        setActiveConfrontationTextId(null);
+
+        return [];
+      });
+      return;
+    }
+
     // Requer a tecla Ctrl pressionada para desenhar ou selecionar lote
-    if (e.button === 0 && interactive && e.ctrlKey) {
+    if (e.button === 0 && interactive && e.ctrlKey && !e.shiftKey) {
        const dxfCoords = getDxfCoords(e.clientX, e.clientY);
        
        // Se clicou num polígono detectado, adiciona ou remove da seleção
@@ -658,11 +1321,63 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
        const dxfCoords = getDxfCoords(e.clientX, e.clientY);
        if (dxfCoords) {
           const snapDist = 20 / scale;
-          const nearest = findNearestPoint(dxfCoords, validPoints, snapDist);
-          setHoverPoint(nearest);
+          const isShiftPressed = e.shiftKey;
+          const isCtrlPressed = e.ctrlKey;
+          const shiftSegmentMode = isShiftPressed && isCtrlPressed && !!activeConfrontationTextId;
+          const shiftTextHoverMode = isShiftPressed && !isCtrlPressed;
+          const containingPolys = detectedPolygons.filter(p => isPointInPolygon(dxfCoords, p));
+          const preferredPolygon = containingPolys.length > 0
+            ? [...containingPolys].sort((a, b) => calculatePolygonArea(a) - calculatePolygonArea(b))[0]
+            : hoverPolygon;
+
+          if (shiftSegmentMode) {
+            const segmentSnapCandidates = getSegmentSnapCandidates(dxfCoords, detectedPolygons, snapDist, preferredPolygon);
+            const nearestSegmentPoint = findNearestPoint(dxfCoords, segmentSnapCandidates, snapDist);
+            setHoverSegmentTargetPoint(nearestSegmentPoint ?? dxfCoords);
+            setHoverConfrontationText(null);
+            setHoverPoint(null);
+          } else if (shiftTextHoverMode) {
+            setHoverPoint(null);
+            setHoverSegmentTargetPoint(null);
+
+            const nearestText = (dxfData?.entities ?? [])
+              .filter(entity => entity.type === 'TEXT' || entity.type === 'MTEXT')
+              .map((entity) => {
+                const position = extractTextPosition(entity);
+                const text = String(entity.properties.text || '').trim();
+                if (!position || !text) {
+                  return null;
+                }
+
+                return {
+                  id: buildSelectedTextId(entity, position),
+                  text,
+                  x: position.x,
+                  y: position.y,
+                  distance: calculateDistance(dxfCoords, position)
+                };
+              })
+              .filter((candidate): candidate is HoverConfrontationText & { distance: number } => candidate !== null)
+              .sort((a, b) => a.distance - b.distance)[0];
+
+            if (nearestText && nearestText.distance <= 25 / scale) {
+              const { distance: _distance, ...hoverText } = nearestText;
+              setHoverConfrontationText(hoverText);
+            } else {
+              setHoverConfrontationText(null);
+            }
+          } else if (isShiftPressed && isCtrlPressed) {
+            setHoverPoint(null);
+            setHoverSegmentTargetPoint(null);
+            setHoverConfrontationText(null);
+          } else {
+            const nearest = findNearestPoint(dxfCoords, validPoints, snapDist);
+            setHoverPoint(nearest);
+            setHoverSegmentTargetPoint(null);
+            setHoverConfrontationText(null);
+          }
           
           // Detectar lote para hover (somente visual)
-          const containingPolys = detectedPolygons.filter(p => isPointInPolygon(dxfCoords, p));
           if (containingPolys.length > 0) {
             containingPolys.sort((a, b) => calculatePolygonArea(a) - calculatePolygonArea(b));
             setHoverPolygon(containingPolys[0]);
@@ -677,6 +1392,24 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
     if (interactive && manualPolygon.length > 0) {
       e.preventDefault();
       setManualPolygon(prev => prev.slice(0, -1));
+    } else if (interactive && pendingConfrontationSegmentPoints.length > 0) {
+      e.preventDefault();
+      setPendingConfrontationSegmentPoints(prev => prev.slice(0, -1));
+    } else if (interactive && segmentAnnotations.length > 0) {
+      e.preventDefault();
+      setSegmentAnnotations(prev => prev.slice(0, -1));
+    } else if (interactive && selectedConfrontationTexts.length > 0) {
+      e.preventDefault();
+      setSelectedConfrontationTexts(prev => {
+        const next = prev.slice(0, -1);
+        const removed = prev[prev.length - 1];
+        if (removed) {
+          setSegmentAnnotations((annotations) => annotations.filter((item) => item.sourceTextId !== removed.id));
+          setPendingConfrontationSegmentPoints([]);
+          setActiveConfrontationTextId((current) => current === removed.id ? null : current);
+        }
+        return next;
+      });
     } else if (interactive && selectedPolygons.length > 0) {
       e.preventDefault();
       // Se não há traçado manual, remove o último lote selecionado
@@ -733,23 +1466,71 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
             <div style={{ fontSize: '14px' }}>
               <strong>Modo de Lotes em Massa:</strong> Todos os lotes detectados são <strong>pré-selecionados (azul)</strong>.<br/>
               Use <strong>Ctrl + Clique</strong> num lote para <strong>adicionar/remover</strong> ele da seleção.<br/>
+              Use <strong>Shift + Clique</strong> em um texto para ativar a via e depois <strong>Ctrl + Shift + Clique</strong> em dois pontos/snap para marcar o trecho da confrontação.<br/>
               Para traçar manualmente, faça <strong>Ctrl + Clique</strong> nos vértices e clique no primeiro vértice para fechar e adicionar o lote.
               <br/>
               <span style={{ color: '#007bff', fontWeight: 'bold', marginTop: '5px', display: 'inline-block' }}>
                 Lotes Prontos para Gerar: {selectedPolygons.length} 
               </span>
+              {selectedConfrontationTexts.length > 0 && (
+                <span style={{ color: '#d63384', fontWeight: 'bold', marginLeft: '10px' }}>
+                  | Textos de Confrontação: {selectedConfrontationTexts.length}
+                </span>
+              )}
+              {segmentAnnotations.length > 0 && (
+                <span style={{ color: '#7b1fa2', fontWeight: 'bold', marginLeft: '10px' }}>
+                  | Trechos Anotados: {segmentAnnotations.length}
+                </span>
+              )}
+              {activeConfrontationTextId && (
+                <span style={{ color: '#7b1fa2', marginLeft: '10px' }}>
+                  | Via ativa: {selectedConfrontationTexts.find((item) => item.id === activeConfrontationTextId)?.text || 'selecionada'}
+                </span>
+              )}
+              {pendingConfrontationSegmentPoints.length > 0 && (
+                <span style={{ color: '#9c27b0', marginLeft: '10px' }}>
+                  | Marcando trecho: {pendingConfrontationSegmentPoints.length}/2 pontos
+                </span>
+              )}
               {manualPolygon.length > 0 && <span style={{ color: '#ffc107', marginLeft: '10px' }}>| Traçando manual: {manualPolygon.length} pontos</span>}
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button 
-                onClick={() => { setSelectedPolygons([]); setManualPolygon([]); }}
+                onClick={() => {
+                  setSelectedPolygons([]);
+                  setManualPolygon([]);
+                  setSelectedConfrontationTexts([]);
+                  setActiveConfrontationTextId(null);
+                  setPendingConfrontationSegmentPoints([]);
+                  setSegmentAnnotations([]);
+                }}
                 style={{ padding: '6px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                disabled={selectedPolygons.length === 0 && manualPolygon.length === 0}
+                disabled={selectedPolygons.length === 0 && manualPolygon.length === 0 && selectedConfrontationTexts.length === 0 && segmentAnnotations.length === 0 && pendingConfrontationSegmentPoints.length === 0}
               >
                 Limpar Seleção
               </button>
               <button 
-                onClick={() => onPolygonConfirmed && onPolygonConfirmed(selectedPolygons)}
+                onClick={() => {
+                  // #region debug-point B:confirmed-selection
+                  const confirmedSelections = buildConfirmedSelections(selectedPolygons, dxfData, selectedConfrontationTexts, segmentAnnotations);
+                  sendSelectionDebug(
+                    'B',
+                    'ViewerDXF:confirmed-selection',
+                    '[DEBUG] Selecao confirmada pelo usuario',
+                    {
+                      selectedCount: confirmedSelections.length,
+                      selectedSummaries: confirmedSelections.map((selection, index) => ({
+                        index: index + 1,
+                        lotNumber: selection.lotNumber,
+                        area: Number(calculatePolygonArea(selection.polygon).toFixed(2)),
+                        textsInside: selection.textsInside,
+                        selectedConfrontationTexts: selection.selectedConfrontationTexts
+                      }))
+                    }
+                  );
+                  // #endregion
+                  onPolygonConfirmed && onPolygonConfirmed(confirmedSelections);
+                }}
                 style={{ padding: '6px 12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                 disabled={selectedPolygons.length === 0}
               >
@@ -797,7 +1578,17 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
         </div>
       </div>
 
-      <div style={{ flex: 1, position: 'relative', minHeight: '2000px' }}>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '900px',
+          margin: '0 auto',
+          position: 'relative',
+          aspectRatio: '1 / 1',
+          minHeight: '420px',
+          maxHeight: '85vh'
+        }}
+      >
         <canvas
           ref={canvasRef}
           onMouseDown={handleMouseDown}
@@ -807,7 +1598,7 @@ const ViewerDXF: React.FC<ViewerDXFProps> = ({ fileId, data, className, onDXFDat
           onWheel={handleWheel}
           style={{
             width: '100%',
-            height: '2000px',
+            height: '100%',
             border: '1px solid #dee2e6',
             display: 'block',
             cursor: isDragging ? 'grabbing' : 'grab'
