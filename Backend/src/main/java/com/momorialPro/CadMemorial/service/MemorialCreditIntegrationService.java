@@ -23,19 +23,24 @@ public class MemorialCreditIntegrationService {
      * Calcula créditos necessários baseado no número de lotes detectados
      */
     public int calculateRequiredCredits(DxfCompareResultDTO dxfData) {
-        // Estima número de lotes baseado nas entidades DXF
-        int estimatedLots = estimateLotCount(dxfData);
+        return calculateRequiredCredits(dxfData, null);
+    }
 
-        // Aplica regras de negócio
-        int requiredCredits = creditService.calculateRequiredCredits(estimatedLots);
-        return requiredCredits;
+    public int calculateRequiredCredits(DxfCompareResultDTO dxfData, Integer explicitLotCount) {
+        int estimatedLots = resolveLotCount(dxfData, explicitLotCount);
+        return creditService.calculateRequiredCredits(estimatedLots);
     }
 
     /**
      * Valida e consome créditos antes da geração do memorial
      */
     public void validateAndConsumeCredits(UUID userId, DxfCompareResultDTO dxfData) {
-        int requiredCredits = calculateRequiredCredits(dxfData);
+        validateAndConsumeCredits(userId, dxfData, null);
+    }
+
+    public void validateAndConsumeCredits(UUID userId, DxfCompareResultDTO dxfData, Integer explicitLotCount) {
+        int requiredCredits = calculateRequiredCredits(dxfData, explicitLotCount);
+        int estimatedLots = resolveLotCount(dxfData, explicitLotCount);
 
         // Verifica se tem créditos suficientes
         if (!creditService.hasEnoughCredits(userId, requiredCredits)) {
@@ -45,9 +50,8 @@ public class MemorialCreditIntegrationService {
         }
         
         // Consome os créditos
-        String description = String.format("Geração de memorial - %d lotes estimados", 
-                                         estimateLotCount(dxfData));
-        creditService.consumeCredits(userId, requiredCredits);
+        String description = String.format("Geração de memorial - %d lotes estimados", estimatedLots);
+        creditService.consumeCredits(userId, requiredCredits, description);
     }
 
     /**
@@ -75,8 +79,12 @@ public class MemorialCreditIntegrationService {
      * Reembolsa créditos em caso de erro na geração
      */
     public void refundCreditsOnError(UUID userId, DxfCompareResultDTO dxfData, String errorReason) {
+        refundCreditsOnError(userId, dxfData, null, errorReason);
+    }
+
+    public void refundCreditsOnError(UUID userId, DxfCompareResultDTO dxfData, Integer explicitLotCount, String errorReason) {
         try {
-            int refundAmount = calculateRequiredCredits(dxfData);
+            int refundAmount = calculateRequiredCredits(dxfData, explicitLotCount);
             String description = String.format("Reembolso por erro na geração: %s", errorReason);
             
             creditService.addCredits(userId, refundAmount, description);
@@ -89,9 +97,13 @@ public class MemorialCreditIntegrationService {
      * Obtém informações de créditos para logs/métricas
      */
     public CreditUsageInfo getCreditUsageInfo(UUID userId, DxfCompareResultDTO dxfData) {
+        return getCreditUsageInfo(userId, dxfData, null);
+    }
+
+    public CreditUsageInfo getCreditUsageInfo(UUID userId, DxfCompareResultDTO dxfData, Integer explicitLotCount) {
         int currentBalance = creditService.getCurrentBalance(userId);
-        int requiredCredits = calculateRequiredCredits(dxfData);
-        int estimatedLots = estimateLotCount(dxfData);
+        int requiredCredits = calculateRequiredCredits(dxfData, explicitLotCount);
+        int estimatedLots = resolveLotCount(dxfData, explicitLotCount);
         
         return new CreditUsageInfo(
             currentBalance,
@@ -99,6 +111,14 @@ public class MemorialCreditIntegrationService {
             estimatedLots,
             currentBalance >= requiredCredits
         );
+    }
+
+    private int resolveLotCount(DxfCompareResultDTO dxfData, Integer explicitLotCount) {
+        if (explicitLotCount != null && explicitLotCount > 0) {
+            return explicitLotCount;
+        }
+
+        return estimateLotCount(dxfData);
     }
 
     /**
