@@ -1,12 +1,16 @@
 package com.momorialPro.CadMemorial.service;
 
 import com.momorialPro.CadMemorial.dto.DxfCompareResultDTO;
+import com.momorialPro.CadMemorial.dto.SelectedConfrontationTextDTO;
 import com.momorialPro.CadMemorial.exception.NotEnoughCreditsException;
+import com.momorialPro.CadMemorial.exception.OpenAiQuotaExceededException;
+import com.momorialPro.CadMemorial.exception.OpenAiRateLimitException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -27,34 +31,57 @@ public class MemorialAiServiceWithCredits {
     /**
      * Método principal que integra créditos com geração de memorial
      */
-    public String generateMemorialWithCredits(DxfCompareResultDTO r, UUID standardId, UUID userId, UUID propertyId) {
+    public String generateMemorialWithCredits(DxfCompareResultDTO r, UUID standardId, UUID userId, UUID propertyId,
+                                              Integer lotCountOverride, Integer billableLotCount, Boolean chargeCredits,
+                                              List<String> selectedLayers, List<SelectedConfrontationTextDTO> selectedConfrontationTexts) {
         long startTime = System.currentTimeMillis();
+        boolean chargedCredits = false;
         
         try {
-            // ===== ETAPA 1: VALIDAÇÃO E CONSUMO DE CRÉDITOS =====
-            // ⚠️ TEMPORÁRIO: Validação de créditos desabilitada para desenvolvimento
-            // TODO: Reabilitar em produção
-            creditIntegrationService.getCreditUsageInfo(userId, r);
-            
-            // Valida e consome créditos ANTES de chamar a IA
-            // creditIntegrationService.validateAndConsumeCredits(userId, r);
+            if (!Boolean.FALSE.equals(chargeCredits)) {
+                var creditInfo = creditIntegrationService.getCreditUsageInfo(userId, r, billableLotCount);
+                log.info("💳 Consumo previsto de créditos - userId: {}, saldoAtual: {}, necessario: {}, lotesEstimados: {}",
+                        userId, creditInfo.currentBalance(), creditInfo.requiredCredits(), creditInfo.estimatedLots());
+
+                creditIntegrationService.validateAndConsumeCredits(userId, r, billableLotCount);
+                chargedCredits = true;
+            } else {
+                log.info("💳 Requisicao sem nova cobranca de creditos - userId: {}, lotesCobraveis: {}",
+                        userId, billableLotCount);
+            }
             
             // ===== ETAPA 2: GERAÇÃO DO MEMORIAL =====
             // Chama o serviço original para gerar o memorial
-            String memorial = originalMemorialService.generate(r, standardId, userId, propertyId);
+            String memorial = originalMemorialService.generate(
+                    r,
+                    standardId,
+                    userId,
+                    propertyId,
+                    lotCountOverride,
+                    selectedLayers,
+                    selectedConfrontationTexts
+            );
 
-            // Registra uso bem-sucedido de créditos (desabilitado)
             return memorial;
             
         } catch (NotEnoughCreditsException e) {
-            // Erro de créditos insuficientes - não deve acontecer com validação desabilitada
             log.error("Creditos insuficientes. Saldo atual: {}, necessario: {}, faltam: {}",
                     e.getCurrentCredits(), e.getRequiredCredits(), e.getMissingCredits());
             
             throw e; // Repassa a exceção
+
+        } catch (OpenAiRateLimitException | OpenAiQuotaExceededException e) {
+            if (chargedCredits) {
+                creditIntegrationService.refundCreditsOnError(userId, r, billableLotCount, e.getMessage());
+                log.warn("Falha do provedor OpenAI com estorno de creditos: {}", e.getMessage());
+            }
+
+            throw e;
             
         } catch (Exception e) {
-            // Erro na geração - NÃO reembolsa créditos (pois não foram consumidos)
+            if (chargedCredits) {
+                creditIntegrationService.refundCreditsOnError(userId, r, billableLotCount, e.getMessage());
+            }
             log.error("Erro na geração do memorial: {}", e.getMessage(), e);
             
             throw new RuntimeException("Erro na geração do memorial: " + e.getMessage(), e);
