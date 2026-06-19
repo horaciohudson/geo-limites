@@ -49,6 +49,14 @@ public class CreditService {
      */
     @Transactional
     public void consumeCredits(UUID userId, int amount) {
+        consumeCredits(userId, amount, "Créditos consumidos pelo sistema");
+    }
+
+    /**
+     * 2b. Consome créditos do usuário com descrição customizada
+     */
+    @Transactional
+    public void consumeCredits(UUID userId, int amount, String description) {
         UserCredits userCredits = findOrCreateUserCredits(userId);
         
         // Valida saldo antes de consumir
@@ -65,7 +73,7 @@ public class CreditService {
             userId, 
             CreditTransactionType.USE, 
             amount, 
-            "Créditos consumidos pelo sistema"
+            description
         );
         transactionRepository.save(transaction);
     }
