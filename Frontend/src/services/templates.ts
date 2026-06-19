@@ -87,8 +87,8 @@ export const templatesService = {
     return response.data;
   },
 
-  // Gerar template com base no fluxo documental da plataforma
-  generateTemplate: async (file: File, request: Omit<TemplateGenerationRequest, 'exampleFileId' | 'targetFolderPath'>): Promise<TemplateGenerationResponse> => {
+  // Mantem compatibilidade com o fluxo antigo de pasta de templates.
+  generateTemplate: async (file: File, request: Omit<TemplateGenerationRequest, 'exampleFileId'>): Promise<TemplateGenerationResponse> => {
     try {
       const token = getStoredToken();
       
@@ -100,6 +100,7 @@ export const templatesService = {
       if (request.municipality) formData.append('municipality', request.municipality);
       if (request.abntNorm) formData.append('abntNorm', request.abntNorm);
       if (request.memorialStandardId) formData.append('memorialStandardId', request.memorialStandardId);
+      if (request.targetFolderPath) formData.append('targetFolderPath', request.targetFolderPath);
 
       // Usar apenas o endpoint correto com proxy configurado
       const response = await api.post('/api/templates/generate', formData, {
