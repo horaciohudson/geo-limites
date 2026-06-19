@@ -197,17 +197,17 @@ public class DxfTextExtractorService {
                         areas.put(loteName, area);
                     } else {
                         areasRejeitadas++;
-                        log.warn("⚠️ Área rejeitada (muito pequena): {:.2f}m²", area != null ? area : 0.0);
+                        log.warn("Area desconsiderada por estar muito pequena ou inconsistente: {} m2", area != null ? area : 0.0);
                     }
                 } else {
-                    log.warn("⚠️ Polyline {} sem propriedades", polylinesEncontradas);
+                    log.warn("Polyline {} sem propriedades suficientes para calcular a area", polylinesEncontradas);
                 }
             }
         }
         
         if (areas.isEmpty() && polylinesEncontradas > 0) {
-            log.error("❌ ERRO: Encontradas {} polylines mas nenhuma área foi calculada!", polylinesEncontradas);
-            log.error("💡 Verifique se calculatePolygonArea() está funcionando corretamente");
+            log.warn("Foram encontradas {} polylines, mas nao foi possivel confirmar areas confiaveis nesta leitura do DXF", polylinesEncontradas);
+            log.info("Revise os poligonos e vertices do arquivo se a area for indispensavel para o memorial");
         }
         
         return areas;
@@ -313,19 +313,16 @@ public class DxfTextExtractorService {
                 if (properties != null) {
                     Double area = calculatePolygonArea(properties);
                     if (area != null && area > 0) {
-                        double adjustedArea = Math.max(130.0, area);
-                        lotAreas.put("LOTE_" + String.format("%02d", lotCount), adjustedArea);
+                        lotAreas.put("LOTE_" + String.format("%02d", lotCount), area);
                         lotCount++;
                     }
                 }
             }
         }
 
-        // NÃO gera áreas padrão - indica erro se não encontrou dados reais
         if (lotAreas.isEmpty()) {
-            log.error("❌ ERRO: Nenhuma área real foi calculada dos polígonos DXF!");
-            log.error("🚫 BLOQUEADO: Geração de áreas fictícias para evitar confusão");
-            log.error("💡 SOLUÇÃO: Verificar se o DXF contém polígonos válidos com coordenadas reais");
+            log.warn("Nenhuma area confiavel foi identificada nos poligonos do DXF");
+            log.info("O memorial seguira sem preencher area calculada automaticamente para evitar dado ficticio");
         }
 
         return lotAreas;
@@ -348,20 +345,16 @@ public class DxfTextExtractorService {
                 if (properties != null) {
                     Double perimeter = calculatePolylinePerimeter(properties);
                     if (perimeter != null && perimeter > 0) {
-                        // Perímetro típico de lote residencial: 60.40m (baseado no memorial original)
-                        double adjustedPerimeter = Math.max(60.40, perimeter);
-                        lotPerimeters.put("LOTE_" + String.format("%02d", lotCount), adjustedPerimeter);
+                        lotPerimeters.put("LOTE_" + String.format("%02d", lotCount), perimeter);
                         lotCount++;
                     }
                 }
             }
         }
 
-        // NÃO gera perímetros padrão - indica erro se não encontrou dados reais
         if (lotPerimeters.isEmpty()) {
-            log.error("❌ ERRO: Nenhum perímetro real foi calculado dos polígonos DXF!");
-            log.error("🚫 BLOQUEADO: Geração de perímetros fictícios para evitar confusão");
-            log.error("💡 SOLUÇÃO: Verificar se o DXF contém polígonos válidos com vértices corretos");
+            log.warn("Nenhum perimetro confiavel foi identificado nos poligonos do DXF");
+            log.info("O memorial seguira sem preencher perimetro calculado automaticamente para evitar dado ficticio");
         }
         return lotPerimeters;
     }
@@ -405,24 +398,11 @@ public class DxfTextExtractorService {
     }
 
     /**
-     * Gera medidas detalhadas para cada lado dos lotes
+     * Mantido apenas por compatibilidade. Nao fabrica medidas quando o DXF nao fornece dados confiaveis.
      */
     public Map<String, Map<String, Double>> generateLotMeasurements(int lotCount) {
-        Map<String, Map<String, Double>> lotMeasurements = new HashMap<>();
-
-        for (int i = 1; i <= lotCount; i++) {
-            Map<String, Double> measurements = new HashMap<>();
-
-            // Baseado no memorial original: lote 5.20m x 25.00m
-            measurements.put("FRENTE", 5.20); // Sul (frente para rua)
-            measurements.put("FUNDOS", 5.20); // Norte (fundos)
-            measurements.put("LATERAL_ESQUERDA", 25.00); // Leste
-            measurements.put("LATERAL_DIREITA", 25.00); // Oeste
-
-            String loteKey = "LOTE_" + String.format("%02d", i);
-            lotMeasurements.put(loteKey, measurements);
-        }
-        return lotMeasurements;
+        log.info("Medidas padrao por lote nao sao mais geradas automaticamente para evitar informacao nao confirmada");
+        return new HashMap<>();
     }
 
     // Métodos auxiliares privados
