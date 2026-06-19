@@ -162,20 +162,6 @@ const Sidebar: React.FC<SidebarProps> = ({ viewerActions: _viewerActions }) => {
                 <span className={styles.sidebarLabel}>Normas e Exemplos</span>
               </NavLink>
             </li>
-
-
-
-            <li>
-              <NavLink
-                to="/configure-templates"
-                className={({ isActive }) =>
-                  `${styles.sidebarActionBtn} ${isActive ? styles.active : ''}`
-                }
-              >
-                <span className={styles.sidebarIcon}>📁</span>
-                <span className={styles.sidebarLabel}>Pasta de Templates</span>
-              </NavLink>
-            </li>
           </ul>
         </div>
 
