@@ -56,7 +56,7 @@ Dentro deles, as entradas visiveis sao:
 
 ## Observacao importante
 
-O produto nao depende mais de uma tela de **Pasta de Templates** para salvar arquivos no servidor. Quando um modelo base e gerado no fluxo atual, o arquivo e salvo localmente pelo navegador do usuario ou baixado por fallback.
+No comportamento atual do produto, a **Pasta de Templates** ainda participa do fluxo de configuracao dos modelos base. A tela administrativa usa esse caminho para tentar salvar o resultado no banco e em disco, deixando navegador e `localStorage` como apoio ou fallback.
 
 Para leitura consistente do manual:
 

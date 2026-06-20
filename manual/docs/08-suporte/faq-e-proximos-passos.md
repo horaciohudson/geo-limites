@@ -18,7 +18,7 @@ Na tela **Normas e Exemplos** (`/manage-standards`), dentro da secao **Configura
 `Normas e Templates` e a tela operacional onde o usuario escolhe a norma e o modelo da sessao atual. `Normas e Exemplos` e a tela administrativa onde a equipe cadastra, importa e mantem a base documental disponivel para o restante do sistema.
 
 ### Ainda existe configuracao de Pasta de Templates?
-Nao como fluxo principal do produto. O modelo atual salva o arquivo localmente pelo navegador ou faz o download classico quando necessario.
+Sim. No comportamento atual da tela de configuracao, a `Pasta de Templates` ainda precisa estar configurada para importar ou gerar modelos base com gravacao em disco. O sistema tenta salvar no banco e em disco primeiro, deixando navegador e `localStorage` como apoio ou fallback.
 
 ### Todo usuario ve a area Administracao?
 Nao. Ela e reservada a usuarios com permissao administrativa.
@@ -34,7 +34,7 @@ Na area **Conta**.
 1. Adicionar capturas de tela reais do fluxo atual.
 2. Documentar com mais detalhe a selecao de norma e modelo em **Normas e Templates**.
 3. Expandir o capitulo do **Visualizador** com exemplos de geracao, copia e exportacao do memorial.
-4. Incluir um passo a passo sobre geracao local de modelos base pelo navegador.
+4. Incluir um passo a passo da `Pasta de Templates` e do fluxo real de gravacao de modelos base.
 5. Criar um guia administrativo com SMTP, usuarios e perfis de acesso.
 6. Revisar periodicamente rotas legadas citadas por compatibilidade na ajuda contextual.
 

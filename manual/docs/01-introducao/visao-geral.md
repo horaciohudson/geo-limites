@@ -19,7 +19,7 @@ O operador trabalha com a selecao de imoveis, normas e arquivos tecnicos, visual
 O operador complementa o cadastro de imoveis quando necessario, com suporte a rascunhos locais, salvamento da base principal e cadastro de pontos ou estacas de referencia para apoiar o georreferenciamento.
 
 ### Configuracao
-Perfis com maior responsabilidade gerenciam normas e modelos base em **Normas e Exemplos**, incluindo importacao de PDF e geracao de modelos com apoio de IA. A secao administrativa tambem pode exibir **Pasta de Templates** por compatibilidade operacional.
+Perfis com maior responsabilidade gerenciam normas e modelos base em **Normas e Exemplos**, incluindo importacao de PDF e geracao de modelos com apoio de IA. No comportamento atual, a **Pasta de Templates** ainda participa do fluxo de modelos base, porque a tela usa esse caminho para gravacao em disco.
 
 Para evitar confusao de nomenclatura:
 

@@ -2,12 +2,27 @@
 
 ## Onde ficam essas configuracoes
 
-Na secao **Configuracao** do menu lateral, a tela visivel hoje e **Normas e Exemplos**. Em alguns contextos administrativos, a area de **Pasta de Templates** tambem pode aparecer por compatibilidade operacional. O centro do fluxo documental, porem, continua em **Normas e Exemplos**.
+Na secao **Configuracao** do menu lateral, a tela visivel hoje e **Normas e Exemplos**. Na interface atual, ela se apresenta como uma area de **Normas e Templates Base**, reunindo duas frentes na mesma pagina:
+
+- cadastro e manutencao de **Normas Base**
+- geracao, importacao e exclusao de **Modelos Base**
 
 Essa nomenclatura e diferente da tela operacional **Normas e Templates**:
 
 - **Normas e Exemplos**: cria, importa e mantem a base documental
 - **Normas e Templates**: seleciona a norma e o modelo que serao usados na operacao atual
+
+## Relacao com Pasta de Templates
+
+Ao contrario do que um fluxo futuro mais simplificado poderia sugerir, a **Pasta de Templates** ainda participa do comportamento real da configuracao atual.
+
+Hoje, para importar ou gerar modelos base pela tela administrativa, o sistema ainda depende de uma pasta configurada no frontend para enviar o caminho ao backend e gravar os arquivos em disco.
+
+Na pratica:
+
+- sem `Pasta de Templates` configurada, a tela bloqueia a importacao e a geracao de modelos base
+- com a pasta configurada, o sistema tenta salvar o resultado no banco e em disco
+- o navegador e o `localStorage` funcionam mais como apoio temporario ou fallback, nao como fluxo principal idealizado
 
 ## O que e feito em Normas e Exemplos
 
@@ -17,6 +32,12 @@ Essa tela e usada por perfis responsaveis pela padronizacao do trabalho. Nela a 
 - gerar modelos base com apoio de IA a partir de arquivos PDF ou TXT
 - importar modelos base prontos em JSON
 - excluir normas e modelos que nao devem mais ser usados
+
+No estado atual da interface:
+
+- o cadastro manual completo de norma nao e a entrada principal da tela
+- o caminho mais visivel para normas e o botao `Carregar Norma PDF`
+- o caminho mais visivel para modelos e o botao `Gerar/Importar Modelo (JSON/PDF/TXT)`
 
 ## Normas base
 
@@ -38,17 +59,18 @@ No fluxo atual, os modelos podem nascer de tres formas:
 - **Geracao por IA a partir de PDF**: quando existe um memorial de exemplo em PDF
 - **Geracao por IA a partir de TXT**: quando existe um exemplo textual simples
 
-## Como o salvamento funciona hoje
+Antes de usar esses fluxos, confirme se a `Pasta de Templates` esta configurada, porque a tela atual exige esse caminho para enviar o destino de gravacao ao backend.
 
-O GeoLimites nao depende da **Pasta de Templates** como fluxo principal para gerar modelos base.
+## Como o salvamento funciona hoje
 
 Quando um modelo base e gerado:
 
-- o navegador tenta abrir a janela nativa para o usuario escolher onde salvar o arquivo `.json`
-- se o navegador nao suportar essa integracao, o sistema faz o download classico do arquivo
-- alem disso, o modelo pode permanecer no navegador para uso imediato na sessao atual
+- o frontend envia o arquivo de exemplo e o `targetFolderPath` para o backend
+- o backend tenta salvar o resultado no banco de dados e gravar em disco no caminho configurado
+- se houver falha parcial, o navegador ainda pode manter copia temporaria em `localStorage`
+- a tela recarrega a lista combinando itens persistidos e eventuais apoios locais
 
-Isso evita depender de um caminho fisico configurado manualmente no backend para a geracao do modelo base, mesmo que a area de `Pasta de Templates` continue visivel por compatibilidade ou organizacao administrativa.
+Por isso, a documentacao operacional atual deve considerar a `Pasta de Templates` como parte ativa do processo, e nao apenas como detalhe legado de compatibilidade.
 
 ## Quando usar um modelo diferente
 
@@ -73,3 +95,4 @@ No fluxo mais recente, vale lembrar:
 - a base documental orienta a redacao
 - a geometria e a ordem tecnica ficam sustentadas pelo backend
 - quando a IA falha temporariamente, o sistema pode recorrer ao fallback tecnico para manter a operacao
+- a geracao de modelos base ainda depende de `Pasta de Templates` configurada para gravacao em disco
