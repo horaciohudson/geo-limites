@@ -75,7 +75,7 @@ const Login: React.FC = () => {
             </div>
 
             <div className="input-field">
-              <label htmlFor="tenantCode">Identificador da Empresa</label>
+              <label htmlFor="tenantCode">Identificacao da Empresa</label>
               <input
                 id="tenantCode"
                 type="text"
@@ -87,7 +87,7 @@ const Login: React.FC = () => {
                 className={loginError && !tenantCode ? 'error' : ''}
               />
               {loginError && !tenantCode && (
-                <span className="field-error">Identificador da empresa e obrigatorio</span>
+                <span className="field-error">Identificacao da empresa e obrigatoria</span>
               )}
             </div>
 

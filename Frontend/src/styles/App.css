@@ -352,6 +352,50 @@ body {
   font-size: 0.9rem;
 }
 
+.field-label-with-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.field-help-button {
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.field-help-button:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+
+.field-help-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.field-help-text {
+  font-size: 0.8rem;
+  color: #475569;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  line-height: 1.4;
+}
+
 .password-header {
   display: flex;
   justify-content: space-between;

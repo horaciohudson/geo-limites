@@ -76,6 +76,7 @@ const Register: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [generatedTenantCode, setGeneratedTenantCode] = useState('');
   const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
+  const [showIdentifierHelp, setShowIdentifierHelp] = useState(false);
 
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -95,11 +96,11 @@ const Register: React.FC = () => {
       newValidation.email = 'E-mail deve ter um formato válido';
     }
 
-    // Validar nome completo
+    // Validar identificacao da empresa
     if (!formData.fullName) {
-      newValidation.fullName = 'Nome completo é obrigatório';
+      newValidation.fullName = 'Identificacao da empresa e obrigatoria';
     } else if (formData.fullName.length < 2) {
-      newValidation.fullName = 'Nome deve ter pelo menos 2 caracteres';
+      newValidation.fullName = 'Identificacao da empresa deve ter pelo menos 2 caracteres';
     }
 
     // Validar senha
@@ -199,17 +200,34 @@ const Register: React.FC = () => {
             <div className="form-header">
               <h2>Criar sua conta</h2>
               <p>Preencha os dados para comecar a usar a plataforma</p>
-              <p>O identificador da empresa sera gerado automaticamente no primeiro cadastro.</p>
+              <p>Informe uma identificacao da empresa. Ela sera usada como base para o codigo da empresa no primeiro cadastro.</p>
             </div>
 
             <div className="input-field">
-              <label htmlFor="fullName">Nome Completo</label>
+              <div className="field-label-with-help">
+                <label htmlFor="fullName">Identificacao da Empresa</label>
+                <button
+                  type="button"
+                  className="field-help-button"
+                  aria-label="Ajuda sobre a identificacao da empresa"
+                  aria-expanded={showIdentifierHelp}
+                  onClick={() => setShowIdentifierHelp((prev) => !prev)}
+                >
+                  ?
+                </button>
+              </div>
+              {showIdentifierHelp && (
+                <div className="field-help-text">
+                  Use uma identificacao curta da empresa, como se fosse um codigo de identificacao.
+                  Ela servira para identificar todas as contas vinculadas a essa empresa.
+                </div>
+              )}
               <input
                 id="fullName"
                 type="text"
                 value={formData.fullName}
                 onChange={(e) => handleInputChange('fullName', e.target.value)}
-                placeholder="Digite seu nome completo"
+                placeholder="Ex: TERRA NOBRE"
                 autoComplete="name"
                 required
                 className={validation.fullName ? 'error' : ''}
@@ -275,7 +293,7 @@ const Register: React.FC = () => {
                 <span className="alert-icon">✅</span>
                 <div>
                   <div>{successMessage}</div>
-                  {generatedTenantCode && <div>Identificador da empresa: {generatedTenantCode}</div>}
+                  {generatedTenantCode && <div>Identificacao da empresa: {generatedTenantCode}</div>}
                   {verificationUrl && (
                     <div style={{ marginTop: '0.75rem' }}>
                       <a href={verificationUrl} target="_blank" rel="noreferrer" className="auth-link">
