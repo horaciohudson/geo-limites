@@ -78,6 +78,35 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+const normalizeMemorialText = (content: string): string =>
+  content
+    .replace(/“|”/g, '')
+    .replace(/"/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const deduplicateLeadingMemorialHeaders = (content: string): string => {
+  const normalized = normalizeMemorialText(content);
+  const headerPattern =
+    /(^|\n)(Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*\n)?(?:Metodo:.*(?:\n|$))?)/gi;
+  const headers = Array.from(normalized.matchAll(headerPattern), (match) => match[2]?.trim()).filter(Boolean);
+
+  if (headers.length <= 1) {
+    return normalized;
+  }
+
+  const preferredHeader = headers[headers.length - 1];
+  const contentWithoutHeaders = normalized
+    .replace(headerPattern, (_, prefix) => prefix || '')
+    .replace(/^\s+/, '');
+
+  return [preferredHeader, contentWithoutHeaders]
+    .join('\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
 const Memorial: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -163,7 +192,7 @@ const Memorial: React.FC = () => {
   // Atualizar memorial quando a geração assíncrona completar
   useEffect(() => {
     if (asyncState.memorial) {
-      setMemorial(asyncState.memorial);
+      setMemorial(deduplicateLeadingMemorialHeaders(asyncState.memorial));
       setMemorialError('');
     } else if (asyncState.error) {
       setMemorialError(asyncState.error);
@@ -442,7 +471,7 @@ const Memorial: React.FC = () => {
       const requestData = {
         entities: allEntities,
         fileName: files.map(f => f.originalName).join(', '),
-        projectName: projectName || propertyData?.name || 'Memorial Descritivo',
+        projectName: propertyData?.registrationNumber || projectName || propertyData?.name || 'Memorial Descritivo',
         projectDescription: projectDescription || `Memorial descritivo da propriedade ${propertyData?.registrationNumber || 'não identificada'}`,
         standardId: standardIdToUse,
         // Dados da propriedade para preenchimento automático
@@ -484,36 +513,38 @@ const Memorial: React.FC = () => {
     const pageWidth = pdf.internal.pageSize.getWidth();
     const margin = 20;
     const maxWidth = pageWidth - 2 * margin;
+    const hasDocumentHeader = /^\s*Memorial Descritivo\b/i.test(memorial);
+    let yPosition = 20;
 
-    // Cabeçalho
-    pdf.setFontSize(16);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('MEMORIAL DESCRITIVO', pageWidth / 2, 30, { align: 'center' });
-
-    // Informações do projeto
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'normal');
-    let yPosition = 50;
-
-    if (projectName) {
+    if (!hasDocumentHeader) {
+      pdf.setFontSize(16);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Projeto:', margin, yPosition);
+      pdf.text('MEMORIAL DESCRITIVO', pageWidth / 2, 30, { align: 'center' });
+
+      pdf.setFontSize(12);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(projectName, margin + 25, yPosition);
+      yPosition = 50;
+
+      if (projectName) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Projeto:', margin, yPosition);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(projectName, margin + 25, yPosition);
+        yPosition += 10;
+      }
+
+      if (files.length > 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Arquivos:', margin, yPosition);
+        pdf.setFont('helvetica', 'normal');
+        const fileNames = files.map(f => f.originalName).join(', ');
+        const fileLines = pdf.splitTextToSize(fileNames, maxWidth - 25);
+        pdf.text(fileLines, margin + 25, yPosition);
+        yPosition += fileLines.length * 5 + 5;
+      }
+
       yPosition += 10;
     }
-
-    if (files.length > 0) {
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Arquivos:', margin, yPosition);
-      pdf.setFont('helvetica', 'normal');
-      const fileNames = files.map(f => f.originalName).join(', ');
-      const fileLines = pdf.splitTextToSize(fileNames, maxWidth - 25);
-      pdf.text(fileLines, margin + 25, yPosition);
-      yPosition += fileLines.length * 5 + 5;
-    }
-
-    yPosition += 10;
 
     // Conteúdo do memorial
     pdf.setFont('helvetica', 'normal');

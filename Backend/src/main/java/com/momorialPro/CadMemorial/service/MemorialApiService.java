@@ -1730,25 +1730,43 @@ public class MemorialApiService {
      * Adiciona metadados ao memorial
      */
     private String addMetadata(String memorial, PropertyDTO property, DxfCompareResultDTO r, int totalLots, String method) {
-        String projectName = property != null && property.getName() != null ? property.getName() : "Projeto sem nome";
-        String fileName = r.getNewFileName() != null ? r.getNewFileName() : "Arquivo DXF";
-
-        String metadataBlock = String.format("Projeto: %s\nArquivo: %s\nData: %s\nMetodo: %s (%d lotes)\n",
-                projectName,
-                fileName,
-                java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")),
-                method,
-                totalLots);
-
-        if (memorial != null && memorial.matches("(?is)^\\s*memorial\\s+descritivo.*")) {
-            return memorial.replaceFirst(
-                    "(?is)^\\s*memorial\\s+descritivo\\s*\\n+",
-                    "MEMORIAL DESCRITIVO\n" + Matcher.quoteReplacement(metadataBlock) + "\n"
-            );
+        if (memorial == null) {
+            return "";
         }
 
-        return "MEMORIAL DESCRITIVO\n" + metadataBlock + "\n" + (memorial != null ? memorial : "");
+        String projectName = "Projeto sem nome";
+        if (property != null) {
+            if (property.getRegistrationNumber() != null && !property.getRegistrationNumber().isBlank()) {
+                projectName = property.getRegistrationNumber().trim();
+            } else if (property.getName() != null && !property.getName().isBlank()) {
+                projectName = property.getName().trim();
+            }
+        }
+
+        String fileName = r != null && r.getNewFileName() != null && !r.getNewFileName().isBlank()
+                ? r.getNewFileName().trim()
+                : "Arquivo DXF";
+
+        String metadataBlock = String.format(
+                "Memorial Descritivo\nProjeto: %s\nArquivo: %s\nData: %s\n",
+                projectName,
+                fileName,
+                java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+        );
+
+        String normalized = memorial.replace("\r\n", "\n").trim();
+        Pattern leadingHeaderPattern = Pattern.compile(
+                "(?ims)^(?:\\s*Memorial\\s+Descritivo\\s*\\n(?:\\s*Projeto:.*\\n)?(?:\\s*Arquivo:.*\\n)?(?:\\s*Data:.*\\n)?(?:\\s*Metodo:.*\\n)?\\s*)+"
+        );
+        String contentWithoutHeader = leadingHeaderPattern.matcher(normalized)
+                .replaceFirst("")
+                .replaceFirst("^\\s+", "");
+
+        return (metadataBlock + "\n" + contentWithoutHeader)
+                .replaceAll("\n{3,}", "\n\n")
+                .trim();
     }
+
 
     /**
      * Extrai conteúdo da resposta do Claude

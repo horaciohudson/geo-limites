@@ -7,6 +7,7 @@ import adminSettingsService, {
   type OnboardingNotificationSettings,
   type SmtpOperationResult,
   type SmtpSettings,
+  type TestCreditTopupResponse,
   type UpdateOnboardingNotificationSettingsRequest,
   type UpdateCreditPricingSettingsRequest,
   type UpdateSmtpSettingsRequest,
@@ -40,9 +41,9 @@ const defaultPasswordResetForm: AdminUserPasswordResetRequest & { confirmPasswor
 const defaultCreditPricingForm: UpdateCreditPricingSettingsRequest = {
   welcomeCredits: 25,
   singleLotCreditCost: 1,
-  smallProjectMaxLots: 5,
-  smallProjectCreditCost: 3,
-  largeProjectCreditCost: 10,
+  smallProjectMaxLots: 10,
+  smallProjectCreditCost: 2,
+  largeProjectCreditCost: 3,
   customPricePerCredit: 2.5,
   packages: [
     { id: 'starter', name: 'Starter', baseCredits: 10, bonusCredits: 0, price: 25, popular: false },
@@ -112,6 +113,8 @@ const AdminSettings: React.FC = () => {
   const [creditPricingForm, setCreditPricingForm] = useState<UpdateCreditPricingSettingsRequest>(defaultCreditPricingForm);
   const [currentCreditPricing, setCurrentCreditPricing] = useState<CreditPricingSettings | null>(null);
   const [loadingCreditPricing, setLoadingCreditPricing] = useState(true);
+  const [testTopupCredits, setTestTopupCredits] = useState(25);
+  const [toppingUpCredits, setToppingUpCredits] = useState(false);
   const [lastOperation, setLastOperation] = useState<SmtpOperationResult | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -690,6 +693,29 @@ const AdminSettings: React.FC = () => {
       showError(error, 'Nao foi possivel salvar a tabela de creditos.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleApplyRecommendedCreditPricing = () => {
+    setCreditPricingForm((prev) => ({
+      ...prev,
+      singleLotCreditCost: 1,
+      smallProjectMaxLots: 10,
+      smallProjectCreditCost: 2,
+      largeProjectCreditCost: 3,
+    }));
+    showSuccess('Faixa recomendada aplicada ao formulario. Salve para publicar a nova cobranca.');
+  };
+
+  const handleAddTestCredits = async () => {
+    try {
+      setToppingUpCredits(true);
+      const response: TestCreditTopupResponse = await adminSettingsService.addTestCredits({ credits: testTopupCredits });
+      showSuccess(`${response.message} Saldo atual: ${response.currentBalance} creditos.`);
+    } catch (error: unknown) {
+      showError(error, 'Nao foi possivel adicionar creditos de teste.');
+    } finally {
+      setToppingUpCredits(false);
     }
   };
 
@@ -1584,12 +1610,55 @@ const AdminSettings: React.FC = () => {
 
               <div className="admin-settings-actions">
                 <button
+                  className="admin-settings-button secondary"
+                  type="button"
+                  onClick={handleApplyRecommendedCreditPricing}
+                  disabled={saving}
+                >
+                  Aplicar Faixa Equilibrada
+                </button>
+                <button
                   className="admin-settings-button primary"
                   onClick={handleSaveCreditPricingSettings}
                   disabled={saving}
                 >
                   {saving ? 'Salvando...' : 'Salvar Tabela de Creditos'}
                 </button>
+              </div>
+
+              <div className="admin-settings-subsections" style={{ marginTop: '1.5rem' }}>
+                <section className="admin-settings-subsection">
+                  <div className="admin-settings-subsection-header">
+                    <div>
+                      <h3>Recarga de Teste</h3>
+                      <p>Adicione creditos na sua propria conta sem compra real enquanto validamos o fluxo.</p>
+                    </div>
+                  </div>
+                  <div className="admin-settings-form">
+                    <div className="admin-settings-row">
+                      <div className="admin-settings-field">
+                        <label htmlFor="test-topup-credits">Creditos para Teste</label>
+                        <input
+                          id="test-topup-credits"
+                          type="number"
+                          min={1}
+                          value={testTopupCredits}
+                          onChange={(e) => setTestTopupCredits(Number(e.target.value) || 1)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="admin-settings-actions">
+                    <button
+                      className="admin-settings-button secondary"
+                      type="button"
+                      onClick={handleAddTestCredits}
+                      disabled={toppingUpCredits || testTopupCredits < 1}
+                    >
+                      {toppingUpCredits ? 'Abastecendo...' : 'Adicionar Creditos de Teste'}
+                    </button>
+                  </div>
+                </section>
               </div>
             </>
           )}

@@ -60,6 +60,30 @@ public interface CreditTransactionRepository extends JpaRepository<CreditTransac
     Integer sumUsedCreditsByUserId(@Param("userId") UUID userId);
 
     /**
+     * Conta quantas geracoes de memorial ja foram cobradas para o usuario.
+     */
+    @Query("SELECT COUNT(ct) FROM CreditTransaction ct " +
+           "WHERE ct.userId = :userId AND ct.type = 'USE' " +
+           "AND (ct.description LIKE 'Geração de memorial%' OR ct.description LIKE 'Geracao de memorial%')")
+    long countMemorialGenerationsByUserId(@Param("userId") UUID userId);
+
+    /**
+     * Soma os creditos consumidos em geracoes de memorial para o usuario.
+     */
+    @Query("SELECT COALESCE(SUM(ct.amount), 0) FROM CreditTransaction ct " +
+           "WHERE ct.userId = :userId AND ct.type = 'USE' " +
+           "AND (ct.description LIKE 'Geração de memorial%' OR ct.description LIKE 'Geracao de memorial%')")
+    Integer sumMemorialCreditsUsedByUserId(@Param("userId") UUID userId);
+
+    /**
+     * Data da ultima geracao de memorial cobrada para o usuario.
+     */
+    @Query("SELECT MAX(ct.createdAt) FROM CreditTransaction ct " +
+           "WHERE ct.userId = :userId AND ct.type = 'USE' " +
+           "AND (ct.description LIKE 'Geração de memorial%' OR ct.description LIKE 'Geracao de memorial%')")
+    LocalDateTime findLastMemorialGenerationAtByUserId(@Param("userId") UUID userId);
+
+    /**
      * Busca as últimas N transações de um usuário
      */
     List<CreditTransaction> findTop10ByUserIdOrderByCreatedAtDesc(UUID userId);

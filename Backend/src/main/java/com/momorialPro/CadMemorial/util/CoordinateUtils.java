@@ -277,7 +277,7 @@ public class CoordinateUtils {
      */
     public static String validateCoordinateQuality(List<Point> points) {
         if (points == null || points.isEmpty()) {
-            return "CRÍTICO: Nenhuma coordenada válida identificada";
+            return "Nenhuma coordenada valida identificada";
         }
         
         int validPoints = 0;

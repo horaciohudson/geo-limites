@@ -20,12 +20,9 @@ public class LegalTemplateService {
     public String generateLegalPreamble(PropertyDTO property, MemorialStandardDTO standard) {
         StringBuilder preamble = new StringBuilder();
         
-        // Cabeçalho oficial
-        preamble.append("MEMORIAL DESCRITIVO\n");
-        preamble.append("Documento assinado no Assinador Registro de Imóveis.\n\n");
-        
-        // Dados básicos
+        // Dados básicos (sem cabeçalho - a IA gera o cabeçalho)
         preamble.append("Terreno: Urbano\n");
+
         
         if (property != null) {
             if (property.getOwnerName() != null) {

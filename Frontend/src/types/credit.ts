@@ -31,9 +31,17 @@ export interface CreditPurchaseResponse {
   message: string;
 }
 
+export interface MemorialUsageSummary {
+  memorialsCreated: number;
+  creditsUsedForMemorials: number;
+  averageCreditsPerMemorial: number;
+  lastMemorialGenerationAt: string | null;
+}
+
 export interface CreditSummary {
   balance: CreditBalance;
   recentTransactions: CreditTransaction[];
+  memorialUsage: MemorialUsageSummary;
 }
 
 export interface CreditUsageInfo {

@@ -333,6 +333,7 @@ public class MemorialApiController {
         }
 
         sanitized = sanitized.replaceAll("(?is)<!--.*?-->", "");
+        sanitized = removeDuplicateMemorialHeaders(sanitized);
         boolean shouldPreserveHeader = request.lotCount() == null || request.lotCount() != 1;
         if (!shouldPreserveHeader) {
             sanitized = sanitized.replaceAll("(?is)^\\s*Memorial\\s+Descritivo\\s*\\n\\s*Projeto:.*?\\n\\s*Arquivo:.*?\\n\\s*Data:.*?(?:\\n|$)", "");
@@ -420,9 +421,8 @@ public class MemorialApiController {
                 .replaceAll("\n{3,}", "\n\n")
                 .trim();
 
-        if (shouldPreserveHeader) {
-            sanitized = ensureMemorialHeader(sanitized, request);
-        }
+        // O cabeçalho é gerado pela IA. O backend apenas remove duplicatas
+        // caso a IA acidentalmente gere mais de um.
 
         if (request.lotCount() != null && request.lotCount() == 1 && selectedLotNumber != null) {
             sanitized = sanitized.replaceFirst("(?i)^\\s*LOTE\\s*0*\\d+\\s*:", "LOTE " + selectedLotNumber + ":");
@@ -434,6 +434,39 @@ public class MemorialApiController {
         }
 
         return sanitized;
+    }
+
+    private String removeDuplicateMemorialHeaders(String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+
+        // Se a IA gerar apenas 1 cabeçalho, mantém sem alterar.
+        // Se gerar 2+, mantém o último (o mais completo/correto) e remove os demais.
+        String normalized = content.replace("\r\n", "\n");
+        java.util.regex.Pattern headerPattern = java.util.regex.Pattern.compile(
+                "(?ims)^\\s*Memorial\\s+Descritivo\\s*\\n(?:\\s*Projeto:.*\\n)?(?:\\s*Arquivo:.*\\n)?(?:\\s*Data:.*\\n)?(?:\\s*Metodo:.*\\n)?"
+        );
+        java.util.regex.Matcher matcher = headerPattern.matcher(normalized);
+        List<String> headers = new ArrayList<>();
+
+        while (matcher.find()) {
+            headers.add(matcher.group().trim());
+        }
+
+        if (headers.size() <= 1) {
+            return content; // Nenhuma duplicata — mantém o cabeçalho da IA intacto
+        }
+
+        // 2+ cabeçalhos: mantém o último (geralmente o mais completo)
+        String preferredHeader = headers.get(headers.size() - 1);
+        String contentWithoutHeaders = headerPattern.matcher(normalized)
+                .replaceAll("")
+                .replaceFirst("^\\s+", "");
+
+        return (preferredHeader + "\n\n" + contentWithoutHeaders)
+                .replaceAll("\n{3,}", "\n\n")
+                .trim();
     }
 
     private String ensureMemorialHeader(String content, MemorialRequestDTO request) {

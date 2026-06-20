@@ -36,6 +36,7 @@ As entradas principais visiveis hoje no menu sao:
 - **Normas e Exemplos**
 - **Conta**
 - **Administracao**, quando o perfil possuir permissao
+- **Sair**
 
 ## Boas praticas iniciais
 
@@ -55,3 +56,7 @@ Verifique, nesta ordem:
 ## Atalho funcional
 
 A rota raiz do sistema redireciona para **Imoveis**, entao essa e a tela inicial de trabalho apos a autenticacao.
+
+## Encerrar sessao
+
+Ao usar a opcao **Sair**, o sistema encerra a sessao atual e remove o acesso daquela conta no navegador ate um novo login.

@@ -34,6 +34,7 @@ public class ClaudePromptCacheService {
      */
     public List<Map<String, Object>> buildCachedSystemPrompt(MemorialStandardDTO standard) {
         List<Map<String, Object>> systemMessages = new ArrayList<>();
+        String generalInstructions = buildGeneralInstructions();
         
         if (!cacheEnabled) {
             // Se cache desabilitado, retorna apenas texto simples
@@ -54,7 +55,7 @@ public class ClaudePromptCacheService {
         // Parte 2: Instruções gerais (sempre igual - CACHE)
         systemMessages.add(Map.of(
             "type", "text",
-            "text", buildGeneralInstructions(),
+            "text", generalInstructions,
             "cache_control", Map.of("type", "ephemeral")
         ));
         
@@ -155,11 +156,10 @@ public class ClaudePromptCacheService {
                - Data e assinatura do responsável técnico
             
             FORMATAÇÃO:
-            - Use markdown para estruturação
-            - Títulos em negrito (##)
-            - Listas numeradas para vértices
-            - Tabelas para resumo de áreas (quando apropriado)
-            - Linguagem técnica e formal
+            - NÃO USE MARKDOWN (sem asteriscos **, sem hashtags ##).
+            - Escreva o texto em texto corrido (parágrafos), sem usar aspas (" ") nas indicações.
+            - NUNCA use marcadores de lista (-) para as confrontações. Escreva de forma contínua, ex: AO NORTE: (fundos), medindo... AO SUL: (frente)...
+            - Linguagem técnica, formal e jurídica, idêntica a um documento de cartório.
             
             VALIDAÇÃO FINAL:
             - Todas as coordenadas são reais (6+ dígitos E, 7+ dígitos N)
@@ -173,7 +173,7 @@ public class ClaudePromptCacheService {
     /**
      * Constrói system prompt completo (sem cache - fallback).
      */
-    private String buildCompleteSystemPrompt(MemorialStandardDTO standard) {
+    public String buildCompleteSystemPrompt(MemorialStandardDTO standard) {
         StringBuilder prompt = new StringBuilder();
         prompt.append(buildABNTNorms()).append("\n\n");
         prompt.append(buildGeneralInstructions()).append("\n\n");

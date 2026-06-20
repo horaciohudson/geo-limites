@@ -1,4 +1,5 @@
 import React from 'react';
+import '../styles/GenerationProgress.css';
 
 interface GenerationProgressProps {
   isGenerating: boolean;
@@ -7,6 +8,9 @@ interface GenerationProgressProps {
   timeElapsed: number;
   sessionId?: string;
   onCancel?: () => void;
+  title?: string;
+  subtitle?: string;
+  tips?: React.ReactNode;
 }
 
 const GenerationProgress: React.FC<GenerationProgressProps> = ({
@@ -15,7 +19,10 @@ const GenerationProgress: React.FC<GenerationProgressProps> = ({
   currentStep,
   timeElapsed,
   sessionId,
-  onCancel
+  onCancel,
+  title = "Gerando Memorial Descritivo",
+  subtitle = "Processando dados tecnicos do memorial - aguarde...",
+  tips
 }) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -31,8 +38,8 @@ const GenerationProgress: React.FC<GenerationProgressProps> = ({
     <div className="memorial-progress-overlay">
       <div className="memorial-progress-modal">
         <div className="progress-header">
-          <h3>Gerando Memorial Descritivo</h3>
-          <p className="progress-subtitle">Processando dados tecnicos do memorial - aguarde...</p>
+          <h3>{title}</h3>
+          <p className="progress-subtitle">{subtitle}</p>
         </div>
 
         <div className="progress-content">
@@ -66,8 +73,12 @@ const GenerationProgress: React.FC<GenerationProgressProps> = ({
           </div>
 
           <div className="progress-tips">
-            <p>💡 <strong>Dica:</strong> Memoriais com muitos lotes podem demorar mais para processar.</p>
-            <p>🔄 O sistema fará até 3 tentativas em caso de timeout.</p>
+            {tips || (
+              <>
+                <p>💡 <strong>Dica:</strong> Memoriais com muitos lotes podem demorar mais para processar.</p>
+                <p>🔄 O sistema fará até 3 tentativas em caso de timeout.</p>
+              </>
+            )}
           </div>
         </div>
 

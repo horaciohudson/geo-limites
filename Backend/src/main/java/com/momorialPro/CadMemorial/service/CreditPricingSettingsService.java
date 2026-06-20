@@ -24,6 +24,12 @@ public class CreditPricingSettingsService {
 
     private static final Short SINGLETON_ID = 1;
     private static final List<String> PACKAGE_ORDER = List.of("starter", "basic", "professional", "enterprise");
+    private static final int LEGACY_SMALL_PROJECT_MAX_LOTS = 5;
+    private static final int LEGACY_SMALL_PROJECT_CREDIT_COST = 3;
+    private static final int LEGACY_LARGE_PROJECT_CREDIT_COST = 10;
+    private static final int RECOMMENDED_SMALL_PROJECT_MAX_LOTS = 10;
+    private static final int RECOMMENDED_SMALL_PROJECT_CREDIT_COST = 2;
+    private static final int RECOMMENDED_LARGE_PROJECT_CREDIT_COST = 3;
 
     private final CreditPricingSettingsRepository repository;
 
@@ -62,9 +68,10 @@ public class CreditPricingSettingsService {
         return toDTO(entity);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CreditPricingSettings getOrCreateEntity() {
         return repository.findById(SINGLETON_ID)
+                .map(this::upgradeLegacyPricingIfNeeded)
                 .orElseGet(() -> repository.save(CreditPricingSettings.builder().id(SINGLETON_ID).build()));
     }
 
@@ -113,6 +120,24 @@ public class CreditPricingSettingsService {
             }
             default -> throw new IllegalArgumentException("Pacote de credito invalido: " + packageId);
         }
+    }
+
+    private CreditPricingSettings upgradeLegacyPricingIfNeeded(CreditPricingSettings entity) {
+        if (entity.getSingleLotCreditCost() != null
+                && entity.getSingleLotCreditCost() == 1
+                && entity.getSmallProjectMaxLots() != null
+                && entity.getSmallProjectMaxLots() == LEGACY_SMALL_PROJECT_MAX_LOTS
+                && entity.getSmallProjectCreditCost() != null
+                && entity.getSmallProjectCreditCost() == LEGACY_SMALL_PROJECT_CREDIT_COST
+                && entity.getLargeProjectCreditCost() != null
+                && entity.getLargeProjectCreditCost() == LEGACY_LARGE_PROJECT_CREDIT_COST) {
+            entity.setSmallProjectMaxLots(RECOMMENDED_SMALL_PROJECT_MAX_LOTS);
+            entity.setSmallProjectCreditCost(RECOMMENDED_SMALL_PROJECT_CREDIT_COST);
+            entity.setLargeProjectCreditCost(RECOMMENDED_LARGE_PROJECT_CREDIT_COST);
+            return repository.save(entity);
+        }
+
+        return entity;
     }
 
     private CreditPricingSettingsDTO toDTO(CreditPricingSettings entity) {

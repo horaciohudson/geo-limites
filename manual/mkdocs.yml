@@ -46,20 +46,22 @@ markdown_extensions:
 
 nav:
   - Inicio: index.md
-  - 01 Introducao:
+  - Introducao:
       - Visao Geral: 01-introducao/visao-geral.md
-  - 02 Primeiros Passos:
       - Primeiro Acesso e Login: 02-primeiros-passos/primeiro-acesso-e-login.md
-  - 03 Fluxo Operacional:
-      - Imoveis e Arquivos Tecnicos: 03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md
-  - 04 Memorial:
-      - Visualizador, Normas e Geracao: 04-memorial/visualizador-normas-e-geracao.md
-  - 05 Templates e Normas:
-      - Templates e Normas: 05-modelos-e-normas/modelos-documentais-e-normas.md
-  - 06 Conta:
-      - Conta, Creditos e Seguranca: 06-conta/conta-creditos-e-seguranca.md
-  - 07 Administracao:
-      - Empresa, SMTP e Usuarios: 07-administracao/empresa-smtp-e-usuarios.md
-  - 08 Suporte:
+  - Operacao:
+      - Imoveis: 03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md
+      - Normas e Templates: 04-memorial/visualizador-normas-e-geracao.md
+      - Arquivos DXF: 03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md
+      - Visualizador: 04-memorial/visualizador-normas-e-geracao.md
+  - Preparacao:
+      - Cadastrar Imovel: 03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md
+  - Configuracao:
+      - Normas e Exemplos: 05-modelos-e-normas/modelos-documentais-e-normas.md
+  - Conta e Acesso:
+      - Conta: 06-conta/conta-creditos-e-seguranca.md
+      - Administracao: 07-administracao/empresa-smtp-e-usuarios.md
+      - Sair: 02-primeiros-passos/primeiro-acesso-e-login.md
+  - Suporte:
       - Ajuda Contextual e F1: 08-suporte/ajuda-contextual-e-f1.md
       - FAQ e Proximos Passos: 08-suporte/faq-e-proximos-passos.md

@@ -52,6 +52,7 @@ Dentro deles, as entradas visiveis sao:
 ### Conta e Acesso
 - **Conta**: dados do usuario, creditos e operacoes relacionadas ao perfil.
 - **Administracao**: configuracao de SMTP, dados do tenant e gestao de usuarios, quando o perfil tem permissao.
+- **Sair**: encerra a sessao atual com seguranca.
 
 ## Observacao importante
 

@@ -5,17 +5,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TemplateGenerationResponseDTO {
-    private UUID id;
-    private String name;
-    private String templateContent;
-    private String fileUrl;
-    private String filePath;
+public class TestCreditTopupResponseDTO {
     private String message;
+    private Integer creditsAdded;
+    private Integer currentBalance;
 }

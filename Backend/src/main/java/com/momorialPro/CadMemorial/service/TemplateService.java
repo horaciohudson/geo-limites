@@ -40,6 +40,7 @@ public class TemplateService {
     private final TemplateRepository templateRepository;
     private final UserRepository userRepository;
     private final ApiSettingsService apiSettingsService;
+    private final MemorialExampleSanitizer memorialExampleSanitizer;
 
     @Value("${OPENAI_API_KEY:}")
     private String openaiApiKey;
@@ -192,24 +193,8 @@ public class TemplateService {
             }
             
             String targetFileName = baseName + ".json";
-            
-            // Validar diretório de destino (obrigatório configurar pasta local)
-            if (request.getTargetFolderPath() == null || request.getTargetFolderPath().trim().isEmpty()) {
-                throw new IllegalArgumentException("A pasta de destino dos templates não está configurada.");
-            }
-            String templatesDir = request.getTargetFolderPath().trim();
-            Path templatePath = Paths.get(templatesDir, targetFileName);
+            // Sem validação de pasta ou gravação em disco, pois o frontend que lida com o arquivo agora
 
-            if (request.getName() != null && existsByName(request.getName(), ownerId)) {
-                throw new IllegalArgumentException("Já existe um template com este nome para este usuário");
-            }
-
-            if (Files.exists(templatePath)) {
-                throw new IllegalArgumentException("Já existe um arquivo de template com este nome na pasta de destino.");
-            }
-            
-            // Criar diretório se não existir
-            Files.createDirectories(templatePath.getParent());
 
             // Processamento do arquivo: extrair texto e chamar Claude se necessário
             String extractedText = "";
@@ -242,6 +227,10 @@ public class TemplateService {
                 extractedText = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
             }
 
+            if (!isJson) {
+                extractedText = memorialExampleSanitizer.sanitize(extractedText);
+            }
+
             String jsonContent;
             if (isJson) {
                 // Validar se é JSON estruturalmente válido
@@ -254,31 +243,13 @@ public class TemplateService {
             } else {
                 jsonContent = generateTemplateWithAi(extractedText, request.getName(), request.getAbntNorm());
             }
-
-            // Gravar o conteúdo JSON no arquivo de destino
-            Files.writeString(templatePath, jsonContent, java.nio.charset.StandardCharsets.UTF_8);
-            log.info("Template gravado com sucesso em: {}", templatePath);
+            log.info("Template processado com sucesso e retornado ao frontend.");
             
-            // Criar template no banco
-            TemplateCreateDTO createDTO = TemplateCreateDTO.builder()
-                    .name(request.getName())
-                    .description(request.getDescription())
-                    .fileUrl("/templates/" + targetFileName)
-                    .filePath(templatePath.toString())
-                    .memorialStandardId(request.getMemorialStandardId())
-                    .municipality(request.getMunicipality())
-                    .abntNorm(request.getAbntNorm())
-                    .status(Template.TemplateStatus.ACTIVE)
-                    .build();
-            
-            TemplateDTO created = create(createDTO, ownerId);
-
             return TemplateGenerationResponseDTO.builder()
-                    .id(created.getId())
-                    .name(created.getName())
-                    .fileUrl(created.getFileUrl())
-                    .filePath(created.getFilePath())
-                    .message("Template gerado com sucesso!")
+                    .id(UUID.randomUUID())
+                    .name(request.getName() != null ? request.getName() : baseName)
+                    .templateContent(jsonContent)
+                    .message("Template processado com sucesso!")
                     .build();
                     
         } catch (IOException e) {
@@ -415,6 +386,10 @@ public class TemplateService {
     private String buildTemplateSystemPrompt() {
         return "Você é um assistente especializado em estruturar templates de memoriais descritivos topográficos e cartoriais.\n" +
                 "Seu objetivo é analisar o texto de um memorial descritivo de exemplo e convertê-lo em um template JSON com placeholders configuráveis no formato exato solicitado pelo usuário.\n" +
+                "Você deve consolidar o resultado em um único schema canônico, sem criar versões alternativas para o mesmo memorial.\n" +
+                "Em memoriais de desmembramento, preserve a lógica: cabeçalho, situação antes, situação depois e declaração final.\n" +
+                "Quando houver repetição de lotes, represente a repetição com um placeholder estrutural, como {{lotes_resultantes}}, em vez de gerar schemas paralelos.\n" +
+                "Nunca inclua ruídos de PDF assinado, como links de validação, manifesto de assinaturas, signatários ou avisos de assinatura.\n" +
                 "Retorne APENAS o JSON válido correspondente, sem explicações adicionais e sem blocos de código markdown (como ```json).";
     }
 
@@ -445,7 +420,14 @@ public class TemplateService {
                 "    \"Observações importantes sobre regras de formatação, direções e preenchimento deste template\"\n" +
                 "  ]\n" +
                 "}\n\n" +
+                "Modelo canônico preferencial para desmembramento:\n" +
+                "- cabecalho: dados iniciais do memorial\n" +
+                "- situacao_antes: descrição do terreno original\n" +
+                "- situacao_depois: bloco único com {{lotes_resultantes}} para os lotes derivados\n" +
+                "- declaracao_final: fechamento técnico/jurídico\n\n" +
                 "Identifique todos os trechos variáveis do exemplo (proprietário, áreas, perímetros, logradouro, confrontantes, direções, limites, etc.) e substitua-os por placeholders adequados.\n" +
+                "Não crie múltiplos estilos concorrentes dentro do mesmo JSON.\n" +
+                "Não copie qualquer ruído de extração de PDF, assinaturas eletrônicas ou links de validação para o template.\n" +
                 "Lembre-se de retornar APENAS o JSON puro. Não envolva o JSON em tags markdown ```json.";
     }
 

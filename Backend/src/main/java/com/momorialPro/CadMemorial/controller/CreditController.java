@@ -213,16 +213,45 @@ public class CreditController {
 
             UserCredits userCredits = creditService.getBalance(userId);
             List<CreditTransaction> recentTransactions = creditService.getRecentTransactions(userId);
+            CreditService.MemorialUsageSummary memorialUsage = creditService.getMemorialUsageSummary(userId);
             
             CreditSummaryDTO summary = new CreditSummaryDTO(
                 creditMapper.toBalanceDTO(userCredits),
-                creditMapper.toTransactionDTOList(recentTransactions)
+                creditMapper.toTransactionDTOList(recentTransactions),
+                new MemorialUsageSummaryDTO(
+                    memorialUsage.memorialsCreated(),
+                    memorialUsage.creditsUsedForMemorials(),
+                    memorialUsage.averageCreditsPerMemorial(),
+                    memorialUsage.lastMemorialGenerationAt()
+                )
             );
 
             return ResponseEntity.ok(summary);
             
         } catch (Exception e) {
             log.error("❌ Erro ao consultar resumo: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * GET /api/credits/memorial-usage
+     * Retorna a quantidade de memoriais cobrados para a conta do usuario logado.
+     */
+    @GetMapping("/memorial-usage")
+    public ResponseEntity<MemorialUsageSummaryDTO> getMemorialUsage() {
+        try {
+            UUID userId = AuthUtils.getCurrentUserId();
+            CreditService.MemorialUsageSummary summary = creditService.getMemorialUsageSummary(userId);
+
+            return ResponseEntity.ok(new MemorialUsageSummaryDTO(
+                summary.memorialsCreated(),
+                summary.creditsUsedForMemorials(),
+                summary.averageCreditsPerMemorial(),
+                summary.lastMemorialGenerationAt()
+            ));
+        } catch (Exception e) {
+            log.error("❌ Erro ao consultar uso de memoriais: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -253,6 +282,14 @@ public class CreditController {
      */
     public record CreditSummaryDTO(
         CreditBalanceDTO balance,
-        List<CreditTransactionDTO> recentTransactions
+        List<CreditTransactionDTO> recentTransactions,
+        MemorialUsageSummaryDTO memorialUsage
+    ) {}
+
+    public record MemorialUsageSummaryDTO(
+        long memorialsCreated,
+        int creditsUsedForMemorials,
+        double averageCreditsPerMemorial,
+        java.time.LocalDateTime lastMemorialGenerationAt
     ) {}
 }

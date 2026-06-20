@@ -2,3 +2,7 @@
 !.env.docker.example
 
 docker-compose.override.yml
+
+# Local task handoffs and scratch notes
+HANDOFF_NOVA_TASK.md
+HANDOFF_*.local.md

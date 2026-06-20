@@ -4,7 +4,8 @@ import type {
   CreditBalance, 
   CreditTransaction, 
   CreditPurchaseResponse,
-  CreditStatistics 
+  CreditStatistics,
+  MemorialUsageSummary
 } from '../types/credit';
 
 interface ErrorLike {
@@ -27,6 +28,7 @@ export const useCredits = () => {
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [purchases, setPurchases] = useState<CreditPurchaseResponse[]>([]);
   const [statistics, setStatistics] = useState<CreditStatistics | null>(null);
+  const [memorialUsage, setMemorialUsage] = useState<MemorialUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +80,17 @@ export const useCredits = () => {
     }
   }, []);
 
+  const loadMemorialUsage = useCallback(async () => {
+    try {
+      const memorialUsageData = await creditService.getMemorialUsage();
+      setMemorialUsage(memorialUsageData);
+      return memorialUsageData;
+    } catch (error: unknown) {
+      console.error('❌ Erro ao carregar uso de memoriais:', error);
+      throw error;
+    }
+  }, []);
+
   // Carregar todos os dados
   const loadAllData = useCallback(async () => {
     setLoading(true);
@@ -88,14 +101,15 @@ export const useCredits = () => {
         loadBalance(),
         loadTransactions(),
         loadPurchases(),
-        loadStatistics()
+        loadStatistics(),
+        loadMemorialUsage()
       ]);
     } catch (error: unknown) {
       setError(getErrorMessage(error, 'Erro ao carregar dados'));
     } finally {
       setLoading(false);
     }
-  }, [loadBalance, loadTransactions, loadPurchases, loadStatistics]);
+  }, [loadBalance, loadTransactions, loadPurchases, loadStatistics, loadMemorialUsage]);
 
   // Atualizar dados
   const refresh = useCallback(() => {
@@ -123,6 +137,7 @@ export const useCredits = () => {
     transactions,
     purchases,
     statistics,
+    memorialUsage,
     loading,
     error,
     
@@ -132,6 +147,7 @@ export const useCredits = () => {
     loadTransactions,
     loadPurchases,
     loadStatistics,
+    loadMemorialUsage,
     
     // Utilitários
     hasEnoughCredits,

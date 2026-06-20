@@ -17,6 +17,7 @@ public class TemplateDTO {
     private UUID id;
     private String name;
     private String description;
+    private String templateContent;
     private String fileUrl;
     private String filePath;
     private UUID memorialStandardId;

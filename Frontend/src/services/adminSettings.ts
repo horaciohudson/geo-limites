@@ -131,6 +131,16 @@ export interface UpdateCreditPricingSettingsRequest {
   packages: UpdateCreditPackageRequest[];
 }
 
+export interface TestCreditTopupRequest {
+  credits: number;
+}
+
+export interface TestCreditTopupResponse {
+  message: string;
+  creditsAdded: number;
+  currentBalance: number;
+}
+
 export interface MessageResponse {
   message: string;
   emailSent?: boolean | null;
@@ -199,6 +209,11 @@ const adminSettingsService = {
 
   async updateCreditPricingSettings(payload: UpdateCreditPricingSettingsRequest): Promise<CreditPricingSettings> {
     const response = await api.patch('/admin/settings/credits', payload);
+    return response.data;
+  },
+
+  async addTestCredits(payload: TestCreditTopupRequest): Promise<TestCreditTopupResponse> {
+    const response = await api.post('/admin/settings/credits/test-topup', payload);
     return response.data;
   },
 

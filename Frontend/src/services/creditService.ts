@@ -8,7 +8,8 @@ import type {
   CreditSummary,
   CreditTransactionFilter,
   CreditPurchaseFilter,
-  CreditStatistics
+  CreditStatistics,
+  MemorialUsageSummary
 } from '../types/credit';
 
 interface ApiErrorLike {
@@ -271,14 +272,66 @@ class CreditService {
       if (isMockableCreditError(error)) {
         const balance = await this.getBalance();
         const transactions = await this.getTransactions({ limit: 5 });
+        const memorialTransactions = transactions.filter(
+          transaction =>
+            transaction.type === 'USE' &&
+            transaction.description.toLowerCase().includes('memorial')
+        );
+        const creditsUsedForMemorials = memorialTransactions.reduce(
+          (sum, transaction) => sum + transaction.amount,
+          0
+        );
         
         return {
           balance,
-          recentTransactions: transactions
+          recentTransactions: transactions,
+          memorialUsage: {
+            memorialsCreated: memorialTransactions.length,
+            creditsUsedForMemorials,
+            averageCreditsPerMemorial:
+              memorialTransactions.length > 0
+                ? creditsUsedForMemorials / memorialTransactions.length
+                : 0,
+            lastMemorialGenerationAt: memorialTransactions[0]?.createdAt || null
+          }
         };
       }
       
       throw new Error('Erro ao consultar resumo de créditos');
+    }
+  }
+
+  async getMemorialUsage(): Promise<MemorialUsageSummary> {
+    try {
+      const response = await api.get<MemorialUsageSummary>('/credits/memorial-usage');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao consultar uso de memoriais:', error);
+
+      if (isMockableCreditError(error)) {
+        const transactions = await this.getTransactions();
+        const memorialTransactions = transactions.filter(
+          transaction =>
+            transaction.type === 'USE' &&
+            transaction.description.toLowerCase().includes('memorial')
+        );
+        const creditsUsedForMemorials = memorialTransactions.reduce(
+          (sum, transaction) => sum + transaction.amount,
+          0
+        );
+
+        return {
+          memorialsCreated: memorialTransactions.length,
+          creditsUsedForMemorials,
+          averageCreditsPerMemorial:
+            memorialTransactions.length > 0
+              ? creditsUsedForMemorials / memorialTransactions.length
+              : 0,
+          lastMemorialGenerationAt: memorialTransactions[0]?.createdAt || null
+        };
+      }
+
+      throw new Error('Erro ao consultar uso de memoriais');
     }
   }
 

@@ -88,7 +88,8 @@ public class SecurityConfig {
                                 "/api/debug/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
-                                "/templates/**").permitAll()
+                                "/templates/**",
+                                "/error").permitAll()
 
                         // Endpoints de auth que precisam de autenticação
                         .requestMatchers("/api/auth/me").authenticated()

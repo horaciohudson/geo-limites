@@ -4,15 +4,19 @@ import com.momorialPro.CadMemorial.dto.SmtpOperationResultDTO;
 import com.momorialPro.CadMemorial.dto.SmtpSettingsDTO;
 import com.momorialPro.CadMemorial.dto.SmtpTestEmailRequest;
 import com.momorialPro.CadMemorial.dto.TenantSettingsDTO;
+import com.momorialPro.CadMemorial.dto.TestCreditTopupRequest;
+import com.momorialPro.CadMemorial.dto.TestCreditTopupResponseDTO;
 import com.momorialPro.CadMemorial.dto.UpdateSmtpSettingsRequest;
 import com.momorialPro.CadMemorial.dto.UpdateTenantSettingsRequest;
 import com.momorialPro.CadMemorial.dto.ApiSettingsDTO;
+import com.momorialPro.CadMemorial.security.AuthUtils;
 import com.momorialPro.CadMemorial.dto.CreditPricingSettingsDTO;
 import com.momorialPro.CadMemorial.dto.OnboardingNotificationSettingsDTO;
 import com.momorialPro.CadMemorial.dto.UpdateApiSettingsRequest;
 import com.momorialPro.CadMemorial.dto.UpdateCreditPricingSettingsRequest;
 import com.momorialPro.CadMemorial.dto.UpdateOnboardingNotificationSettingsRequest;
 import com.momorialPro.CadMemorial.service.ApiSettingsService;
+import com.momorialPro.CadMemorial.service.CreditService;
 import com.momorialPro.CadMemorial.service.CreditPricingSettingsService;
 import com.momorialPro.CadMemorial.service.OnboardingNotificationSettingsService;
 import com.momorialPro.CadMemorial.service.SmtpMailService;
@@ -42,6 +46,7 @@ public class AdminSettingsController {
     private final SmtpMailService smtpMailService;
     private final TenantSettingsService tenantSettingsService;
     private final ApiSettingsService apiSettingsService;
+    private final CreditService creditService;
     private final CreditPricingSettingsService creditPricingSettingsService;
     private final OnboardingNotificationSettingsService onboardingNotificationSettingsService;
 
@@ -63,6 +68,19 @@ public class AdminSettingsController {
     @PatchMapping("/credits")
     public ResponseEntity<CreditPricingSettingsDTO> updateCreditPricingSettings(@Valid @RequestBody UpdateCreditPricingSettingsRequest request) {
         return ResponseEntity.ok(creditPricingSettingsService.updateSettings(request));
+    }
+
+    @PostMapping("/credits/test-topup")
+    public ResponseEntity<TestCreditTopupResponseDTO> addTestCredits(@Valid @RequestBody TestCreditTopupRequest request) {
+        var userId = AuthUtils.getCurrentUserId();
+        creditService.addCredits(userId, request.getCredits(), "Recarga manual de teste");
+
+        int currentBalance = creditService.getCurrentBalance(userId);
+        return ResponseEntity.ok(TestCreditTopupResponseDTO.builder()
+                .message("Creditos de teste adicionados com sucesso.")
+                .creditsAdded(request.getCredits())
+                .currentBalance(currentBalance)
+                .build());
     }
 
     @GetMapping("/onboarding")

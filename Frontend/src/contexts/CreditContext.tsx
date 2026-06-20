@@ -5,7 +5,8 @@ import type {
   CreditBalance, 
   CreditTransaction, 
   CreditPurchaseResponse,
-  CreditStatistics 
+  CreditStatistics,
+  MemorialUsageSummary
 } from '../types/credit';
 
 interface CreditContextType {
@@ -14,6 +15,7 @@ interface CreditContextType {
   transactions: CreditTransaction[];
   purchases: CreditPurchaseResponse[];
   statistics: CreditStatistics | null;
+  memorialUsage: MemorialUsageSummary | null;
   loading: boolean;
   error: string | null;
   
@@ -23,6 +25,7 @@ interface CreditContextType {
   loadTransactions: () => Promise<CreditTransaction[]>;
   loadPurchases: () => Promise<CreditPurchaseResponse[]>;
   loadStatistics: () => Promise<CreditStatistics>;
+  loadMemorialUsage: () => Promise<MemorialUsageSummary>;
   
   // Utilitários
   hasEnoughCredits: (requiredCredits: number) => boolean;

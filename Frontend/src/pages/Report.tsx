@@ -218,26 +218,31 @@ const Report: React.FC = () => {
     if (!selectedFile) return;
 
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Memorial Descritivo', 20, 20);
-    doc.setFontSize(12);
-    doc.text(
-      `Projeto: ${projectName || selectedFile.originalName.replace(/\.[^/.]+$/, '')}`,
-      20,
-      40
-    );
-    doc.text(`Arquivo: ${selectedFile.originalName}`, 20, 50);
-    doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 20, 60);
+    const hasDocumentHeader = /^\s*Memorial Descritivo\b/i.test(memorial);
+    let yPosition = 20;
 
-    if (projectDescription) {
-      doc.text(`Descrição: ${projectDescription}`, 20, 70);
+    if (!hasDocumentHeader) {
+      doc.setFontSize(16);
+      doc.text('Memorial Descritivo', 20, 20);
+      doc.setFontSize(12);
+      doc.text(
+        `Projeto: ${projectName || selectedFile.originalName.replace(/\.[^/.]+$/, '')}`,
+        20,
+        40
+      );
+      doc.text(`Arquivo: ${selectedFile.originalName}`, 20, 50);
+      doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 20, 60);
+
+      if (projectDescription) {
+        doc.text(`Descrição: ${projectDescription}`, 20, 70);
+      }
+
+      doc.line(20, 80, 190, 80);
+      yPosition = 90;
     }
-
-    doc.line(20, 80, 190, 80);
 
     doc.setFontSize(10);
     const lines = memorial.split('\n');
-    let yPosition = 90;
 
     lines.forEach(line => {
       if (yPosition > 280) {

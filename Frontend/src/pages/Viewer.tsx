@@ -36,6 +36,7 @@ interface InteractiveLotMemorial {
 }
 
 interface LotMemorialParts {
+  header: string;
   body: string;
   conclusion: string;
 }
@@ -67,66 +68,100 @@ const normalizeMemorialText = (content: string): string =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+const LEADING_MEMORIAL_HEADER_PATTERN =
+  /^\s*(Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*\n)?(?:Metodo:.*\n?)?)/i;
+
+const extractLeadingMemorialHeader = (content: string): string => {
+  const normalized = normalizeMemorialText(content);
+  const match = normalized.match(LEADING_MEMORIAL_HEADER_PATTERN);
+  return match?.[1]?.trim() || '';
+};
+
 const stripLeadingMemorialHeader = (content: string): string =>
   normalizeMemorialText(content)
-    .replace(
-      /^\s*Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*\n?)?/i,
-      ''
-    )
+    .replace(LEADING_MEMORIAL_HEADER_PATTERN, '')
     .trim();
 
-const deduplicateFinalMemorialHeader = (content: string): string => {
-  let headerCount = 0;
+const resolveMemorialProjectName = (
+  currentFile: FileMetadata,
+  propertyData: StoredPropertySelection | null
+): string =>
+  propertyData?.registrationNumber ||
+  propertyData?.name ||
+  currentFile.originalName.replace(/\.[^/.]+$/, '');
 
-  return normalizeMemorialText(content)
-    .replace(
-      /(^|\n)(Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*(?:\n|$))?)/gi,
-      (match, prefix) => {
-        headerCount += 1;
-        return headerCount === 1 ? match : prefix;
-      }
-    )
+const buildFallbackMemorialHeader = (
+  currentFile: FileMetadata,
+  propertyData: StoredPropertySelection | null
+): string => {
+  const projectName = resolveMemorialProjectName(currentFile, propertyData);
+  return [
+    'Memorial Descritivo',
+    `Projeto: ${projectName}`,
+    `Arquivo: ${currentFile.originalName}`,
+    `Data: ${new Date().toLocaleDateString('pt-BR')}`
+  ].join('\n');
+};
+
+const deduplicateFinalMemorialHeader = (content: string): string => {
+  const normalized = normalizeMemorialText(content);
+  const headerPattern =
+    /(^|\n)(Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*\n)?(?:Metodo:.*(?:\n|$))?)/gi;
+  const headers = Array.from(normalized.matchAll(headerPattern), (match) => match[2]?.trim()).filter(Boolean);
+
+  if (headers.length <= 1) {
+    return normalized
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  // Quando surgem dois cabecalhos, o ultimo costuma ser o bloco mais completo vindo do backend.
+  const preferredHeader = headers[headers.length - 1];
+  const contentWithoutHeaders = normalized
+    .replace(headerPattern, (_, prefix) => prefix || '')
+    .replace(/^\s+/, '');
+
+  return [preferredHeader, contentWithoutHeaders]
+    .join('\n\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 };
 
 const splitLotMemorialParts = (content: string): LotMemorialParts => {
-  const normalized = stripLeadingMemorialHeader(content);
-  if (!normalized) {
-    return { body: '', conclusion: '' };
+  const normalized = normalizeMemorialText(content);
+  const header = extractLeadingMemorialHeader(normalized);
+  const contentWithoutHeader = stripLeadingMemorialHeader(normalized);
+  if (!contentWithoutHeader) {
+    return { header, body: '', conclusion: '' };
   }
 
-  const declarationMatch = normalized.match(
+  const declarationMatch = contentWithoutHeader.match(
     /(?:\n_{5,}\n)?\s*DECLARAÇÃO(?: FINAL)?[\s\S]*$/i
   );
 
   if (!declarationMatch) {
-    return { body: normalized, conclusion: '' };
+    return { header, body: contentWithoutHeader, conclusion: '' };
   }
 
-  const body = normalized.slice(0, declarationMatch.index).trim();
+  const body = contentWithoutHeader.slice(0, declarationMatch.index).trim();
   const conclusion = declarationMatch[0]
     .replace(/^\n+/, '')
     .trim();
 
-  return { body, conclusion };
+  return { header, body, conclusion };
 };
 
 const buildInteractiveMemorial = (
   lotMemorials: InteractiveLotMemorial[],
   currentFile: FileMetadata,
   propertyData: StoredPropertySelection | null,
-  conclusion: string
+  conclusion: string,
+  backendHeader: string
 ): string => {
-  const projectName = propertyData?.name || currentFile.originalName.replace(/\.[^/.]+$/, '');
   const sortedMemorials = [...lotMemorials].sort((left, right) => left.lotNumber - right.lotNumber);
+  const memorialHeader = backendHeader || buildFallbackMemorialHeader(currentFile, propertyData);
 
-  const sections: string[] = [
-    'Memorial Descritivo',
-    `Projeto: ${projectName}`,
-    `Arquivo: ${currentFile.originalName}`,
-    `Data: ${new Date().toLocaleDateString('pt-BR')}`
-  ];
+  const sections: string[] = [memorialHeader];
 
   for (const lot of sortedMemorials) {
     sections.push(`================ LOTE ${lot.lotNumber} ================`);
@@ -511,6 +546,7 @@ const Viewer: React.FC = () => {
       const aiConfig = aiService.getAIConfig();
       const lotMemorials: InteractiveLotMemorial[] = [];
       let finalConclusion = '';
+      let finalHeader = '';
 
       for (let i = 0; i < selections.length; i++) {
         const selection = selections[i];
@@ -530,7 +566,7 @@ const Viewer: React.FC = () => {
         const request = {
           entities: [polylineEntity],
           fileName: currentFile.originalName,
-          projectName: propertyData?.name || currentFile.originalName.replace(/\.[^/.]+$/, ''),
+          projectName: resolveMemorialProjectName(currentFile, propertyData),
           projectDescription: `Lote ${lotNumber} - Memorial gerado a partir de seleção em lote`,
           standardId,
           propertyId,
@@ -608,6 +644,10 @@ const Viewer: React.FC = () => {
           continue;
         }
 
+        if (!finalHeader && lotMemorialParts.header) {
+          finalHeader = lotMemorialParts.header;
+        }
+
         if (!finalConclusion && lotMemorialParts.conclusion) {
           finalConclusion = lotMemorialParts.conclusion;
         }
@@ -618,7 +658,7 @@ const Viewer: React.FC = () => {
         });
       }
 
-      setMemorial(buildInteractiveMemorial(lotMemorials, currentFile, propertyData, finalConclusion));
+      setMemorial(buildInteractiveMemorial(lotMemorials, currentFile, propertyData, finalConclusion, finalHeader));
       setGenerationProgress(100);
       setMemorialCurrentStep('Geração em lote concluída!');
     } catch (err: unknown) {
@@ -704,7 +744,7 @@ const Viewer: React.FC = () => {
           };
         }),
         fileName: currentFile.originalName,
-        projectName: propertyData?.name || currentFile.originalName.replace(/\.[^/.]+$/, ''),
+        projectName: resolveMemorialProjectName(currentFile, propertyData),
         projectDescription: propertyData ?
           `Memorial descritivo da propriedade ${propertyData.registrationNumber}` :
           `Análise técnica do arquivo ${currentFile.originalName}`,
@@ -777,17 +817,22 @@ const Viewer: React.FC = () => {
     if (!memorial || !currentFile) return;
 
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Memorial Descritivo', 20, 20);
-    doc.setFontSize(12);
-    doc.text(`Projeto: ${currentFile.originalName.replace(/\.[^/.]+$/, '')}`, 20, 40);
-    doc.text(`Arquivo: ${currentFile.originalName}`, 20, 50);
-    doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 20, 60);
-    doc.line(20, 70, 190, 70);
+    const hasDocumentHeader = /^\s*Memorial Descritivo\b/i.test(memorial);
+    let yPosition = 20;
+
+    if (!hasDocumentHeader) {
+      doc.setFontSize(16);
+      doc.text('Memorial Descritivo', 20, 20);
+      doc.setFontSize(12);
+      doc.text(`Projeto: ${currentFile.originalName.replace(/\.[^/.]+$/, '')}`, 20, 40);
+      doc.text(`Arquivo: ${currentFile.originalName}`, 20, 50);
+      doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 20, 60);
+      doc.line(20, 70, 190, 70);
+      yPosition = 80;
+    }
 
     doc.setFontSize(10);
     const lines = memorial.split('\n');
-    let yPosition = 80;
 
     lines.forEach((line) => {
       if (yPosition > 280) {

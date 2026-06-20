@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCreditContext } from '../../contexts/CreditContext';
-import { formatCurrency, formatNumber, formatRelativeDate } from '../../utils/formatters';
+import { formatCurrency, formatDateTime, formatNumber, formatRelativeDate } from '../../utils/formatters';
 import LoadingSpinner from './LoadingSpinner';
 
 interface CreditDashboardProps {
@@ -8,7 +8,7 @@ interface CreditDashboardProps {
 }
 
 const CreditDashboard: React.FC<CreditDashboardProps> = ({ className = '' }) => {
-  const { balance, statistics, transactions, loading, error } = useCreditContext();
+  const { balance, statistics, transactions, memorialUsage, loading, error } = useCreditContext();
 
   if (loading) {
     return <LoadingSpinner message="Carregando dashboard..." />;
@@ -28,6 +28,10 @@ const CreditDashboard: React.FC<CreditDashboardProps> = ({ className = '' }) => 
   const totalSpent = statistics?.totalSpent || 0;
   const totalPurchased = statistics?.totalPurchased || 0;
   const lastTransaction = transactions?.[0];
+  const memorialsCreated = memorialUsage?.memorialsCreated || 0;
+  const memorialCreditsUsed = memorialUsage?.creditsUsedForMemorials || 0;
+  const averageCreditsPerMemorial = memorialUsage?.averageCreditsPerMemorial || 0;
+  const lastMemorialGeneration = memorialUsage?.lastMemorialGenerationAt;
 
   const stats = [
     {
@@ -52,11 +56,39 @@ const CreditDashboard: React.FC<CreditDashboardProps> = ({ className = '' }) => 
       color: '#2563eb'
     },
     {
+      title: 'Memoriais Gerados',
+      value: formatNumber(memorialsCreated),
+      unit: 'memoriais',
+      icon: '📄',
+      color: '#0f766e'
+    },
+    {
+      title: 'Créditos em Memoriais',
+      value: formatNumber(memorialCreditsUsed),
+      unit: 'créditos',
+      icon: '🧮',
+      color: '#b45309'
+    },
+    {
+      title: 'Média por Memorial',
+      value: averageCreditsPerMemorial.toFixed(1),
+      unit: 'créditos',
+      icon: '⚖️',
+      color: '#7c3aed'
+    },
+    {
       title: 'Última Atividade',
       value: lastTransaction ? formatRelativeDate(lastTransaction.createdAt) : 'Nenhuma',
       unit: '',
       icon: '🕒',
       color: '#7c3aed'
+    },
+    {
+      title: 'Último Memorial',
+      value: lastMemorialGeneration ? formatDateTime(lastMemorialGeneration) : 'Nenhum',
+      unit: '',
+      icon: '🗂️',
+      color: '#1d4ed8'
     }
   ];
 

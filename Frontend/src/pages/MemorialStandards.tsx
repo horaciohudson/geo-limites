@@ -15,6 +15,13 @@ interface SelectedNormReference {
   id: string;
 }
 
+interface MemorialSelectionDraft {
+  selectedStandards: string[];
+  selectedTemplate: string | null;
+}
+
+const MEMORIAL_SELECTION_DRAFT_KEY = 'memorialSelectionDraft';
+
 const parseStoredTemplates = (rawValue: string | null): StoredTemplateData[] => {
   if (!rawValue) {
     return [];
@@ -29,6 +36,14 @@ const parseSelectedNorms = (rawValue: string | null): SelectedNormReference[] =>
   }
 
   return JSON.parse(rawValue) as SelectedNormReference[];
+};
+
+const parseSelectionDraft = (rawValue: string | null): MemorialSelectionDraft | null => {
+  if (!rawValue) {
+    return null;
+  }
+
+  return JSON.parse(rawValue) as MemorialSelectionDraft;
 };
 
 const MemorialStandards: React.FC = () => {
@@ -97,6 +112,7 @@ const MemorialStandards: React.FC = () => {
       
       let savedNorms: SelectedNormReference[] = [];
       let savedTemplate: StoredTemplateData | null = null;
+      let savedDraft: MemorialSelectionDraft | null = null;
       
       // Parse savedNorms com tratamento de erro
       try {
@@ -121,15 +137,30 @@ const MemorialStandards: React.FC = () => {
         localStorage.removeItem('selectedTemplate');
         savedTemplate = null;
       }
+
+      try {
+        const savedDraftRaw = localStorage.getItem(MEMORIAL_SELECTION_DRAFT_KEY);
+        if (savedDraftRaw) {
+          savedDraft = parseSelectionDraft(savedDraftRaw);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao parsear memorialSelectionDraft:', error);
+        localStorage.removeItem(MEMORIAL_SELECTION_DRAFT_KEY);
+        savedDraft = null;
+      }
       
       // Restaurar seleções
       if (savedNorms.length > 0) {
         const savedNormIds = savedNorms.map((norm) => norm.id);
         setSelectedStandards(savedNormIds);
+      } else if (savedDraft?.selectedStandards?.length) {
+        setSelectedStandards(savedDraft.selectedStandards);
       }
       
       if (savedTemplate && savedTemplate.template_id) {
         setSelectedTemplate(savedTemplate.template_id);
+      } else if (savedDraft?.selectedTemplate) {
+        setSelectedTemplate(savedDraft.selectedTemplate);
       }
       
     } catch (error) {
@@ -148,6 +179,16 @@ const MemorialStandards: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      MEMORIAL_SELECTION_DRAFT_KEY,
+      JSON.stringify({
+        selectedStandards,
+        selectedTemplate
+      })
+    );
+  }, [selectedStandards, selectedTemplate]);
 
 
 
@@ -174,6 +215,13 @@ const MemorialStandards: React.FC = () => {
     // Salvar seleção no localStorage
     localStorage.setItem('selectedMemorialNorms', JSON.stringify(selectedNorms));
     localStorage.setItem('selectedTemplate', JSON.stringify(selectedTemplateData));
+    localStorage.setItem(
+      MEMORIAL_SELECTION_DRAFT_KEY,
+      JSON.stringify({
+        selectedStandards,
+        selectedTemplate
+      })
+    );
     
     if (showSuccessAlert) {
       alert(`✅ Seleção aplicada!\n\n📋 Norma: ${selectedNorms[0]?.id ? selectedNorms[0].name : 'Nenhuma'}\n📄 Template: ${selectedTemplateData.template_id}\n\n💡 Essas escolhas passam a valer para o memorial atual.`);
@@ -193,6 +241,7 @@ const MemorialStandards: React.FC = () => {
     setSelectedTemplate(null);
     localStorage.removeItem('selectedMemorialNorms');
     localStorage.removeItem('selectedTemplate');
+    localStorage.removeItem(MEMORIAL_SELECTION_DRAFT_KEY);
     alert('🗑️ As escolhas do memorial atual foram limpas.');
   };
 

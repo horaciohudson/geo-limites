@@ -1,696 +1,213 @@
-# Handoff Para Nova Task
+# HANDOFF - NOVA TASK
 
-Este arquivo resume o estado atual do projeto `geo-limites` para continuidade em uma nova task, sem depender do historico completo da conversa.
+## Estado Atual
 
-Data de referencia desta anotacao: `2026-06-14`.
+O projeto `geo-limites` avancou bastante em quatro frentes que ficaram conectadas:
 
-## 0. Atualizacao mais recente antes da nova task
+1. memorial descritivo mais deterministico
+2. georreferenciamento por pontos nomeados cadastrados no imovel
+3. consolidacao do memorial interativo no visualizador
+4. reorganizacao visual do cadastro e da pagina de imoveis
 
-Este handoff foi atualizado novamente para refletir o estado real encontrado no workspace local, no GitHub e na branch usada para publicacao.
+A diretriz consolidada desta etapa foi:
 
-### Branch publicada identificada
+- backend como fonte da verdade geometrica
+- IA apenas como redatora
+- fallback tecnico quando a IA falhar ou a OpenAI devolver `429`
+- uso de pontos/estacas reais cadastrados para aproximar o desenho de coordenadas reais
 
-O arquivo abaixo registra explicitamente a branch que vinha sendo usada na linha de publicacao:
+## Atualizacao De Publicacao - 2026-06-19
 
-- `Backend/BranchPublicada.md` -> `publish/vps-sync-20260612`
+Esta frente foi isolada, commitada, publicada no GitHub e aplicada na VPS pela branch:
 
-### Estado atual encontrado no Git
+- `publish-vps-sync-20260619-memorial-landmarks`
 
-No momento desta atualizacao:
+### Commits principais desta rodada
 
-- branch aberta localmente: `publish/vps-sync-20260612`
-- commit local atual dessa branch: `f2c659e`
-- branch `main` no GitHub: `884bce7`
-- branch `publish/vps-sync-20260612` no GitHub: `f2c659e`
-- branch `main` local: `52f4c4e`
+- `b1fdaab` `feat: consolida memorial interativo e georreferenciamento por landmarks`
+- `1390c1f` `fix: alinhar service de creditos com memorial interativo`
+- `0ec117c` `fix: restaura compatibilidade da pasta de templates`
+- `f94729c` `fix: permite rolagem na sidebar de configuracoes`
+- `7e8244b` `fix: compatibiliza creditos com contagem explicita de lotes`
+- `7b844e7` `fix: adiciona descricao customizada ao consumo de creditos`
 
-Conclusao importante:
+### Status de producao
 
-- o workspace local esta em uma branch de publicacao, nao na `main`
-- a `main` local diverge do GitHub
-- existem muitas alteracoes nao commitadas por cima da branch publicada
-- a VPS provavelmente esta mais proxima da `publish/vps-sync-20260612` do que da `main`
+- frontend publicado com sucesso na VPS
+- backend publicado com sucesso na VPS
+- swagger respondendo `HTTP 200` em `http://127.0.0.1:9010/swagger-ui/index.html`
+- area de `Configuracao` recomposta com `Normas e Exemplos` e `Pasta de Templates`
+- memorial com creditos recompilado e implantado apos alinhar `MemorialCreditIntegrationService` e `CreditService`
 
-### Diferenca entre `main` local e branch publicada
+### O que ficou fora desta publicacao
 
-Commits que estao em `publish/vps-sync-20260612` e nao estao em `main` local:
+- mudancas paralelas de `Conta`, `admin`, `docs`, `templates` fora do escopo fechado
+- uploads e temporarios locais
+- varias alteracoes ainda existentes no working tree local e no repo da VPS
 
-- `9004121` `fix: destrava build do frontend para deploy`
-- `66f8a0d` `fix: publica configuracao de ia no backend`
-- `bca6714` `fix: permite avancar no cadastro de imovel`
-- `da7a7b4` `fix: evita alerta antecipado em proprietarios`
-- `5c44e2d` `fix: implementa alteracao de senha`
-- `28fb66e` `fix: corrige troca de senha sem tenant`
-- `586d939` `feat: add persistent admin credit pricing settings`
-- `f2c659e` `fix: remove merge markers from admin settings`
+### Riscos residuais
 
-Commits que estao em `main` local e nao estao na branch publicada:
+- ainda ha um erro de shutdown do Logback no encerramento da instancia anterior (`NoClassDefFoundError: ch/qos/logback/classic/spi/ThrowableProxy`), mas isso nao bloqueou o deploy nem a subida da nova versao
+- a VPS segue com arquivos modificados localmente em `Backend/mvnw`, `deploy/scripts/deploy-backend.sh` e `deploy/scripts/deploy-frontend.sh`
+- ainda vale uma validacao funcional final completa do fluxo de memorial e creditos em producao
 
-- `b609a28` `fix: publica configuracao de api no backend`
-- `52f4c4e` `feat: add persistent admin credit pricing settings`
+## O Que Foi Entregue
 
-### Arquivos locais com trabalho real em andamento
+### Memorial e backend tecnico
 
-As frentes com mais indicio de trabalho real neste momento sao:
+- Ordenacao e consolidacao do memorial foram endurecidas para reduzir mistura de lotes e duplicacoes.
+- O backend passou a sustentar melhor o fallback deterministico quando a OpenAI falha por `429`.
+- O resumo tecnico por lote foi fortalecido para servir de base a uma redacao mais controlada.
+- O georreferenciamento por pontos nomeados foi integrado ao fluxo tecnico dos lotes.
+- Os vertices tecnicos dos lotes agora podem nascer com coordenadas projetadas quando houver amarracao suficiente.
 
-- `Frontend/src/components/Sidebar.tsx`
-- `Frontend/src/pages/ManageStandards.tsx`
-- `Frontend/src/pages/ConfigureTemplates.tsx`
-- `Frontend/src/pages/Files.tsx`
-- `Frontend/src/services/templates.ts`
-- `Frontend/src/pages/Viewer.tsx`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/TemplateService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/TemplateController.java`
+### Georreferenciamento
+
+- O cadastro do imovel passou a aceitar varios pontos/estacas nomeados.
+- O matching entre cadastro e desenho foi implementado no backend.
+- Com 1 ponto conhecido: ha translacao.
+- Com 2 ou mais pontos conhecidos: ha translacao, rotacao e escala.
+- O sistema registra correspondencias e residuo medio da transformacao.
+
+### Viewer e memorial interativo
+
+- O memorial interativo deixou de repetir `DECLARACAO` por lote.
+- A montagem final passou a ordenar melhor os blocos e concentrar o fechamento no final.
+- O `ViewerDXF` foi reduzido para uma area quadrada, evitando o canvas excessivamente alto.
+- A consolidacao no frontend ficou mais previsivel, embora ainda mereca uma rodada final de validacao apos novo teste completo.
+
+### Cadastro e pagina de imoveis
+
+- `Pontos ou Estacas de Referencia` agora aparecem em tabela no cadastro.
+- O botao `+ Adicionar Ponto ou Estaca` foi movido para o cabecalho da secao.
+- A antiga secao visual de `Coordenadas Este/Norte` foi removida.
+- A area `Origem das Coordenadas` foi simplificada e compactada.
+- A pagina `Imoveis` passou a mostrar os pontos/estacas cadastrados em vez de depender so de SIRGAS isolado.
+
+## Arquivos Principais Desta Frente
+
+### Backend
+
 - `Backend/src/main/java/com/momorialPro/CadMemorial/service/MemorialApiService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/ApiSettingsService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/AdminSettingsController.java`
-
-### Arquivos que parecem temporarios ou de apoio local
-
-Estes arquivos existem no workspace e nao devem ser assumidos como parte obrigatoria do produto sem revisao:
-
-- `Backend/TestPath.java`
-- `Backend/TestPath.class`
-- `debug-template-pdf-error.md`
-- `stash.diff`
-- `stash_diff.txt`
-- `temp_TemplateService.txt`
-- `Frontend/dummy.pdf`
-- `.trae-publish-temp/`
-
-### Inconsistencias funcionais ja encontradas
-
-#### Sidebar
-
-Hoje a interface esta com nomes diferentes em areas proximas:
-
-- em `Operacao` aparece `Normas e Templates`
-- em `Configuracao` aparece `Normas e Exemplos`
-- ainda existe `Pasta de Templates`
-
-Arquivo principal:
-
-- `Frontend/src/components/Sidebar.tsx`
-
-#### Backend de configuracao da IA
-
-Ja existe base administrativa para configuracao de provedores:
-
-- `GET /api/admin/settings/api`
-- `PATCH /api/admin/settings/api`
-
-Arquivos principais:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/AdminSettingsController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/ApiSettingsService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/ApiSettingsDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/UpdateApiSettingsRequest.java`
-
-Mas a area de templates ainda parece parcialmente acoplada a implementacao anterior:
-
-- `TemplateService` ainda contem referencias diretas a `OPENAI_API_KEY`
-- ha indicio de logica fixa de provedor no fluxo de templates
-
-Arquivo principal desta tensao:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/TemplateService.java`
-
-#### Normas, Templates e Exemplos
-
-O nome da funcionalidade foi alterado parcialmente, mas ainda nao consolidado em todo o sistema:
-
-- a tela `ManageStandards` ainda fala em `Normas e Templates Base`
-- o menu lateral mistura `Normas e Templates` com `Normas e Exemplos`
-- a ajuda/manual ainda esta em `Templates e Normas`
-
-Arquivos principais:
-
-- `Frontend/src/pages/ManageStandards.tsx`
-- `Frontend/src/components/Sidebar.tsx`
-- `manual/mkdocs.yml`
-- `manual/docs/index.md`
-- `manual/docs/05-modelos-e-normas/modelos-documentais-e-normas.md`
-
-### Orientacao de seguranca para a proxima task
-
-Antes de qualquer publicacao ou consolidacao:
-
-- nao assumir que a `main` seja a referencia mais segura
-- considerar `publish/vps-sync-20260612` como referencia operacional mais proxima do que foi publicado
-- nao usar `git add .`
-- nao fazer `checkout`, `reset`, `clean` ou merge amplo sem revisar os arquivos um a um
-- tratar mudancas locais como potencialmente vindas do usuario, do Trae ou do Antigravity
-
-## 1. Situacao geral atual
-
-Esta anotacao substitui o handoff antigo de deploy generico. O foco mais recente do trabalho foi:
-
-- estabilizacao do deploy e diagnostico na VPS
-- publicacao do backend faltante de configuracoes administrativas
-- correcao do cadastro de imovel na nuvem
-- implementacao e correcao da troca de senha
-- revisao do sistema de custos e creditos
-- criacao de configuracao persistente de precificacao de creditos dentro de `Administracao`
-
-Ponto importante:
-
-- o workspace local continua com muitas alteracoes e artefatos de outras frentes
-- ha arquivos modificados que nao pertencem apenas a esta frente de creditos
-- nao assumir que tudo no `git status` deva entrar no mesmo commit
-- evitar revert de mudancas nao relacionadas
-
-## 2. O que foi resolvido antes desta nova fase
-
-### VPS e deploy
-
-Ja foi identificado e contornado ao longo das tasks anteriores:
-
-- frontend antigo na VPS por build/publicacao incompletos
-- cache de navegador exigindo `Ctrl + F5` apos deploy
-- divergencia entre workspace local e branch publicada
-- necessidade de publicacao mais segura usando branch limpa de deploy
-
-Branch remota de deploy usada nesta linha de trabalho:
-
-- `publish/vps-sync-20260612`
-
-### Configuracao da IA
-
-Foi resolvido o erro:
-
-- `No static resource api/admin/settings/api`
-
-Com isso:
-
-- a tabela `tab_api_settings` passou a existir na nuvem
-- os endpoints de API settings foram publicados
-- a tela administrativa de configuracao da IA voltou a funcionar
-
-Arquivos centrais desta parte:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/AdminSettingsController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/ApiSettingsService.java`
-- `Backend/src/main/resources/db/migration/V10__api_provider_settings.sql`
-
-### Cadastro de imovel na nuvem
-
-Foi corrigido o problema da mensagem antecipada em `Proprietarios`, que cobrava dados antes da hora.
-
-Resultado:
-
-- navegacao entre abas sem cobranca antecipada
-- mensagem vermelha prematura removida
-
-Arquivos principais:
-
-- `Frontend/src/pages/PropertyRegister.tsx`
-- `Frontend/src/components/property/PropertyOwners.tsx`
-
-### Troca de senha
-
-Foi resolvido primeiro localmente e depois na nuvem:
-
-- antes nao existia a rota `/api/auth/change-password`
-- depois havia `500` por forma de localizar o usuario atual
-- por fim ficou funcional na nuvem
-
-Arquivos principais:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/AuthController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/AuthService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/ChangePasswordRequestDTO.java`
-
-## 3. Fase atual: precificacao persistente de creditos
-
-O pedido mais recente do usuario foi tirar os precos hardcoded e criar uma pagina dentro de `Administracao` para definir os valores oficiais de creditos.
-
-Diagnostico encontrado antes da implementacao:
-
-- havia mais de uma fonte hardcoded de precos no frontend
-- o frontend podia enviar `credits` e `amountReais` e isso era tratado como verdade
-- os creditos de boas-vindas estavam hardcoded
-- a regra de consumo por lote estava hardcoded
-- a compra customizada nao estava ancorada numa tabela oficial do backend
-
-## 4. O que foi implementado nesta fase
-
-### Backend
-
-Foi criada a configuracao persistente singleton de precificacao:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/model/CreditPricingSettings.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/repository/CreditPricingSettingsRepository.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditPricingSettingsService.java`
-- `Backend/src/main/resources/db/migration/V11__credit_pricing_settings.sql`
-
-DTOs novos:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/CreditPackageDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/CreditPricingSettingsDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/UpdateCreditPackageRequest.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/UpdateCreditPricingSettingsRequest.java`
-
-Endpoints novos:
-
-- `GET /api/admin/settings/credits`
-- `PATCH /api/admin/settings/credits`
-- `GET /api/credits/settings`
-
-Arquivos principais:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/AdminSettingsController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/CreditController.java`
-
-### Backend adaptado para usar a tabela oficial
-
-Foram adaptados:
-
-- `CreditService` para usar `welcomeCredits` persistido
-- calculo oficial de consumo por faixa de lotes
-- compra por pacote oficial via `packageId`
-- compra customizada validando `customPricePerCredit` oficial
-
-Arquivo central:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditService.java`
-
-### Frontend administrativo
-
-Foi criada a nova aba `Creditos` dentro de `Administracao` com:
-
-- regras gerais
-- creditos de boas-vindas
-- custo por faixa de lotes
-- preco avulso por credito
-- edicao dos pacotes publicados
-
-Arquivos principais:
-
-- `Frontend/src/pages/AdminSettings.tsx`
-- `Frontend/src/services/adminSettings.ts`
-
-### Frontend de compra e exibicao
-
-Foi adaptado para ler a tabela oficial do backend:
-
-- `Frontend/src/components/financial/CreditPurchaseForm.tsx`
-- `Frontend/src/services/creditService.ts`
-- `Frontend/src/types/credit.ts`
-
-Tambem foram alinhados os textos de regra operacional exibidos ao usuario, para nao ficarem mais fixos:
-
-- `Frontend/src/components/financial/CreditBalance.tsx`
-- `Frontend/src/pages/Financial.tsx`
-- `Frontend/src/pages/MyAccount.tsx`
-
-## 5. Regra de cobranca atual
-
-O sistema nao cobra por quantidade de caracteres.
-
-O calculo encontrado hoje e:
-
-- baseado em quantidade estimada de lotes
-- com faixas configuraveis em `Administracao`
-- usando:
-  - `singleLotCreditCost`
-  - `smallProjectMaxLots`
-  - `smallProjectCreditCost`
-  - `largeProjectCreditCost`
-
-Arquivos de referencia:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/MemorialCreditIntegrationService.java`
-
-Observacao importante:
-
-- a formula de cobranca esta pronta
-- mas o consumo automatico no fluxo principal ainda aparece desabilitado na integracao de memorial
-
-Arquivo que mostra isso:
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/MemorialAiServiceWithCredits.java`
-
-## 6. O que foi validado agora
-
-Nesta retomada recente foi validado:
-
-### Backend
-
-Comando executado com sucesso:
-
-```bash
-cd Backend
-.\mvnw.cmd -q -DskipTests compile
-```
+- `Backend/src/main/java/com/momorialPro/CadMemorial/service/DxfGeoReferenciaExtractorService.java`
+- `Backend/src/main/java/com/momorialPro/CadMemorial/service/PropertyService.java`
+- `Backend/src/main/java/com/momorialPro/CadMemorial/mapper/PropertyMapper.java`
+- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/MemorialApiController.java`
 
 ### Frontend
 
-Comando executado com sucesso:
-
-```bash
-cd Frontend
-npm run build
-```
-
-Estado atual do frontend:
-
-- build concluido com sucesso
-- sem erro TypeScript bloqueante
-- apenas warning nao bloqueante de chunk grande do Vite
-
-Tambem foram consultados diagnosticos da IDE nos arquivos alterados, sem erros nos arquivos fechados nesta fase.
-
-## 7. Arquivos mais importantes para a proxima task
-
-### Backend de creditos
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/AdminSettingsController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/CreditController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditPricingSettingsService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/MemorialCreditIntegrationService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/MemorialAiServiceWithCredits.java`
-- `Backend/src/main/resources/db/migration/V11__credit_pricing_settings.sql`
-
-### Frontend de administracao e compra
-
-- `Frontend/src/pages/AdminSettings.tsx`
-- `Frontend/src/services/adminSettings.ts`
-- `Frontend/src/components/financial/CreditPurchaseForm.tsx`
-- `Frontend/src/components/financial/CreditBalance.tsx`
-- `Frontend/src/pages/Financial.tsx`
-- `Frontend/src/pages/MyAccount.tsx`
-- `Frontend/src/services/creditService.ts`
-- `Frontend/src/types/credit.ts`
-
-### Logs e referencia de nuvem
-
-- `Backend/logs/logs.md`
-
-## 8. Pendencias reais para a proxima task
-
-As pendencias mais importantes agora sao:
-
-1. decidir o recorte de commit desta fase de creditos sem misturar alteracoes antigas nao relacionadas
-2. publicar para a branch de deploy `publish/vps-sync-20260612`
-3. atualizar a VPS
-4. validar a criacao da tabela `tab_credit_pricing_settings` na nuvem
-5. validar a nova aba `Creditos` em `Administracao`
-6. validar a tela de compra lendo a tabela oficial do backend
-7. decidir se ja sera religado o desconto real no fluxo do memorial
-
-## 9. Pontos de atencao importantes
-
-### Git e workspace
-
-- o repositrio esta sujo com muitas alteracoes nao relacionadas entre si
-- nao assumir que um `git add .` e seguro
-- revisar com cuidado o recorte do commit
-- nao reverter mudancas do usuario sem necessidade
-
-### Publicacao
-
-- a branch de deploy usada nesta frente nao e o `main`, e sim `publish/vps-sync-20260612`
-- o ideal e continuar usando publicacao limpa/recortada
-
-### Creditos em producao
-
-Mesmo com a configuracao pronta, ainda restam dois pontos sensiveis:
-
-- o fluxo de compra ainda tem partes de simulacao de confirmacao
-- o consumo automatico no memorial ainda nao esta religado no fluxo principal
-
-Isto significa:
-
-- a tabela administrativa de precos esta pronta
-- a fonte oficial de preco esta pronta
-- mas a blindagem final de producao da cobranca ainda merece uma task propria
-
-## 10. Sequencia recomendada para a proxima task
-
-Ao retomar:
-
-1. reler este arquivo
-2. rodar `git status --short --branch`
-3. separar somente o bloco de creditos/publicacao desejado
-4. confirmar quais arquivos entram no commit
-5. commitar e enviar para `publish/vps-sync-20260612`
-6. na VPS, fazer `git pull` da branch publicada
-7. rebuildar backend/frontend
-8. validar:
-   - `Administracao > Creditos`
-   - `GET /api/admin/settings/credits`
-   - `GET /api/credits/settings`
-   - criacao da tabela `tab_credit_pricing_settings`
-   - compra de creditos usando pacote oficial
-   - compra customizada usando preco oficial
-
-## 11. Resumo executivo
-
-Resumo curto e atualizado do ponto atual:
-
-- a fase de IA administrativa foi resolvida
-- o problema de troca de senha foi resolvido local e nuvem
-- o problema de validacao antecipada em `Proprietarios` foi resolvido
-- a nova configuracao persistente de creditos foi implementada
-- a aba `Creditos` em `Administracao` foi criada
-- backend e frontend passaram na validacao local
-- a publicacao final desta fase ainda nao foi feita
-- o maior cuidado agora e publicar sem misturar alteracoes paralelas do workspace
-
-## 12. Recorte sugerido para o proximo commit
-
-Se a proxima task quiser publicar apenas esta fase de configuracao persistente de creditos, o recorte mais seguro e:
-
-### Backend: incluir
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/AdminSettingsController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/CreditController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditPricingSettingsService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/CreditPurchaseRequestDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/CreditPackageDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/CreditPricingSettingsDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/UpdateCreditPackageRequest.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/UpdateCreditPricingSettingsRequest.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/model/CreditPricingSettings.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/repository/CreditPricingSettingsRepository.java`
-- `Backend/src/main/resources/db/migration/V11__credit_pricing_settings.sql`
-
-### Frontend: incluir
-
-- `Frontend/src/pages/AdminSettings.tsx`
-- `Frontend/src/services/adminSettings.ts`
-- `Frontend/src/components/financial/CreditPurchaseForm.tsx`
-- `Frontend/src/components/financial/CreditBalance.tsx`
-- `Frontend/src/pages/Financial.tsx`
-- `Frontend/src/pages/MyAccount.tsx`
-- `Frontend/src/services/creditService.ts`
-- `Frontend/src/types/credit.ts`
-
-### Handoff: incluir
-
-- `HANDOFF_NOVA_TASK.md`
-
-### Nao incluir neste commit focado em creditos
-
-- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/AuthController.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/service/AuthService.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/ChangePasswordRequestDTO.java`
+- `Frontend/src/pages/Viewer.tsx`
+- `Frontend/src/components/ViewerDXF.tsx`
+- `Frontend/src/components/property/PropertyBasicData.tsx`
+- `Frontend/src/components/property/PropertySummary.tsx`
+- `Frontend/src/pages/PropertiesPresentation.tsx`
 - `Frontend/src/pages/PropertyRegister.tsx`
-- `Frontend/src/components/property/PropertyOwners.tsx`
-- arquivos de DXF, geometria, templates, viewer e reformas visuais
+- `Frontend/src/styles/App.css`
+- `Frontend/src/types/property.ts`
+
+## Validacoes Ja Feitas
+
+- Backend compilando com `.\mvnw.cmd -q -DskipTests compile`
+- Diagnosticos limpos nos arquivos alterados mais recentemente
+- Diagnosticos limpos nos ajustes de frontend desta etapa
+
+## Problemas Ainda Em Aberto
+
+### 1. Validacao final do memorial completo
+
+Ainda e recomendavel rodar um teste completo novo para confirmar:
+
+- topo com um unico cabecalho
+- todos os lotes esperados presentes
+- declaracao unica no fechamento
+- ausencia de bloco hibrido ou lote fora do padrao
+
+### 2. Dependencia operacional da OpenAI
+
+Os logs mais recentes ainda mostraram `429 Too Many Requests` em algumas geracoes.
+
+Isso significa:
+
+- o fallback esta protegendo a operacao
+- mas a escrita da IA ainda pode oscilar por limite temporario
+
+### 3. Limpeza de repositorio e estabilizacao operacional
+
+O deploy principal desta frente ja foi concluido, mas o repositorio continua com muitas alteracoes misturadas, incluindo frentes fora deste escopo:
+
+- creditos
+- templates
+- admin
+- docs
+- temporarios
+- uploads
+
+- Para as proximas rodadas, ainda e preciso revisar com cuidado o que realmente entra em cada commit.
+
+## Nova Task Recomendada
+
+Fechar a validacao funcional da entrega e preparar a proxima rodada sem misturar frentes paralelas.
+
+### Objetivo
+
+Validar em producao o que foi publicado e limpar o terreno para a proxima frente sem contaminar deploys futuros.
+
+### Prioridade 1
+
+Executar uma validacao final do fluxo principal publicado:
+
+- login
+- configuracao com `Normas e Exemplos` e `Pasta de Templates`
+- cadastro/edicao de imovel com pontos nomeados
+- viewer
+- geracao de memorial
+- conferencia do consumo e do estorno de creditos quando aplicavel
+
+### Prioridade 2
+
+Investigar pendencias operacionais remanescentes:
+
+- erro de shutdown do Logback no backend
+- arquivos modificados localmente na VPS
+- working tree local ainda misturado com outras frentes
+
+### Prioridade 3
+
+Preparar a proxima rodada com seguranca:
+
+- separar novas frentes por commit
+- evitar reaproveitar branch quebrada antiga
+- considerar clone/worktree mais limpo para novos deploys
+
+## Escopo Seguro Sugerido Para Commit
+
+- `Backend/src/main/java/com/momorialPro/CadMemorial/service/MemorialApiService.java`
+- `Backend/src/main/java/com/momorialPro/CadMemorial/service/DxfGeoReferenciaExtractorService.java`
+- `Backend/src/main/java/com/momorialPro/CadMemorial/service/PropertyService.java`
+- `Backend/src/main/java/com/momorialPro/CadMemorial/mapper/PropertyMapper.java`
+- `Backend/src/main/java/com/momorialPro/CadMemorial/controller/MemorialApiController.java`
+- `Frontend/src/components/property/PropertyBasicData.tsx`
+- `Frontend/src/components/property/PropertySummary.tsx`
+- `Frontend/src/pages/PropertiesPresentation.tsx`
+- `Frontend/src/pages/PropertyRegister.tsx`
+- `Frontend/src/pages/Viewer.tsx`
+- `Frontend/src/components/ViewerDXF.tsx`
+- `Frontend/src/styles/App.css`
+- `Frontend/src/types/property.ts`
+
+## O Que Nao Levar Sem Revisao
+
+- `Backend/uploads/dxf/*`
+- `Backend/Memoriais/*`
+- `.dbg/`
 - `.trae-publish-temp/`
-- `Backend/DXF/`
-- `Backend/Memoriais/`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/PolygonRequestDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/PolygonResultDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/VectorDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/dto/VertexDTO.java`
-- `Backend/src/main/java/com/momorialPro/CadMemorial/util/GeometryCalculator.java`
-- `Frontend/src/utils/geometry.ts`
-- `Frontend/src/utils/polygonExtraction.ts`
-- `HANDOFF_REFORMA_VISUAL.md`
+- arquivos temporarios e testes soltos
+- mudancas de creditos/admin/templates/docs que nao pertencem a esta entrega
 
-### Motivo do recorte
+## Sugestao De Inicio Imediato Para A Proxima Pessoa
 
-- o bloco acima fecha a funcionalidade de precificacao persistente de creditos de ponta a ponta
-- backend e frontend desse recorte ja passaram em validacao local
-- incluir outros arquivos agora aumenta o risco de publicar mudancas paralelas sem relacao direta com creditos
-
-## 13. Sequencia exata de git add sugerida
-
-Se a proxima task quiser preparar somente o commit da fase de creditos, usar um staging explicito, arquivo por arquivo.
-
-### Comando sugerido
-
-Executar na raiz do repositorio:
-
-```bash
-git add -- \
-  HANDOFF_NOVA_TASK.md \
-  Backend/src/main/java/com/momorialPro/CadMemorial/controller/AdminSettingsController.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/controller/CreditController.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditService.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/service/CreditPricingSettingsService.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/dto/CreditPurchaseRequestDTO.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/dto/CreditPackageDTO.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/dto/CreditPricingSettingsDTO.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/dto/UpdateCreditPackageRequest.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/dto/UpdateCreditPricingSettingsRequest.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/model/CreditPricingSettings.java \
-  Backend/src/main/java/com/momorialPro/CadMemorial/repository/CreditPricingSettingsRepository.java \
-  Backend/src/main/resources/db/migration/V11__credit_pricing_settings.sql \
-  Frontend/src/pages/AdminSettings.tsx \
-  Frontend/src/services/adminSettings.ts \
-  Frontend/src/components/financial/CreditPurchaseForm.tsx \
-  Frontend/src/components/financial/CreditBalance.tsx \
-  Frontend/src/pages/Financial.tsx \
-  Frontend/src/pages/MyAccount.tsx \
-  Frontend/src/services/creditService.ts \
-  Frontend/src/types/credit.ts
-```
-
-### Conferencia logo depois
-
-Depois do `git add`, conferir exatamente o staging:
-
-```bash
-git diff --cached --name-status
-```
-
-Esperado:
-
-- apenas arquivos desta fase de creditos
-- nenhum arquivo de troca de senha
-- nenhum arquivo de `PropertyRegister` ou `PropertyOwners`
-- nenhum arquivo de DXF, geometria, viewer ou reforma visual
-
-### Se o staging vier contaminado
-
-Se entrar algo a mais por engano:
-
-```bash
-git restore --staged <arquivo>
-```
-
-Exemplos:
-
-```bash
-git restore --staged Frontend/src/pages/PropertyRegister.tsx
-git restore --staged Backend/src/main/java/com/momorialPro/CadMemorial/controller/AuthController.java
-```
-
-### Commit sugerido
-
-Se o staging estiver limpo, uma mensagem coerente para esta fase seria:
-
-```bash
-git commit -m "feat: add persistent admin credit pricing settings"
-```
-
-### Push da branch de deploy
-
-Se a proxima task continuar pela branch de publicacao usada nesta frente, revisar primeiro em qual branch local o commit sera feito e depois publicar para:
-
-```bash
-git push origin HEAD:publish/vps-sync-20260612
-```
-
-## 14. Bloco sugerido para redeploy na VPS
-
-Depois do `push`, a proxima task pode seguir com um redeploy objetivo na VPS.
-
-### Atualizar a branch publicada
-
-No diretorio do clone da VPS:
-
-```bash
-cd /opt/geolimites/repo
-git fetch origin
-git checkout publish/vps-sync-20260612
-git pull origin publish/vps-sync-20260612
-```
-
-### Rebuild dos containers
-
-Se o ambiente estiver usando `docker compose` conforme o fluxo ja trabalhado nesta frente:
-
-```bash
-docker compose build backend frontend
-docker compose up -d backend frontend
-```
-
-Se houver necessidade de rebuild completo do ambiente:
-
-```bash
-docker compose up -d --build
-```
-
-### Validacoes imediatas apos o redeploy
-
-Conferir:
-
-- se o backend subiu sem erro
-- se o frontend carregou a versao nova
-- se a migration `V11__credit_pricing_settings.sql` foi aplicada
-- se os endpoints de creditos responderam
-
-### Validacao funcional minima
-
-Validar no navegador:
-
-- `Administracao > Creditos`
-- tela de compra de creditos
-- exibicao das regras em `Minha Conta`
-- exibicao das regras em `Financeiro`
-
-Validar no backend:
-
-```bash
-curl http://localhost:9010/api/credits/settings
-curl http://localhost:9010/api/admin/settings/credits
-```
-
-Observacao:
-
-- o endpoint administrativo exige autenticacao administrativa; se `curl` anonimo nao servir, validar pela interface autenticada ou por ferramenta autenticada
-
-### Validacao de banco
-
-No PostgreSQL, conferir a existencia da tabela e do registro singleton:
-
-```sql
-SELECT * FROM tab_credit_pricing_settings;
-```
-
-Esperado:
-
-- tabela existente
-- pelo menos o registro com `credit_pricing_id = 1`
-
-### Logs uteis
-
-Se algo falhar, verificar primeiro:
-
-```bash
-docker compose logs backend --tail=200
-docker compose logs frontend --tail=200
-```
-
-Se o ambiente usar servico separado para backend, complementar com:
-
-```bash
-sudo journalctl -u geolimites-backend -n 200 --no-pager
-```
-
-## 15. Ultima observacao para a retomada
-
-Se a proxima task decidir ir alem do deploy e endurecer a cobranca em producao, o passo seguinte mais natural sera:
-
-- remover a confirmacao simulada de compra
-- restringir a confirmacao real a webhook/processo confiavel
-- religar o consumo automatico de creditos no fluxo principal de geracao de memorial
-
-Esses pontos ja foram identificados, mas nao fazem parte obrigatoria do primeiro deploy da tabela administrativa de precos.
+1. validar em producao `Configuracao`, `Cadastro de Imoveis`, `Viewer` e geracao de memorial
+2. confirmar o fluxo de creditos com um caso real ou controlado
+3. registrar qualquer erro residual observado em runtime
+4. tratar separadamente a limpeza do repo local e da VPS
+5. so depois iniciar nova frente funcional

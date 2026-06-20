@@ -35,15 +35,15 @@ public class CreditPricingSettings extends AuditBase {
 
     @Column(name = "small_project_max_lots", nullable = false)
     @Builder.Default
-    private Integer smallProjectMaxLots = 5;
+    private Integer smallProjectMaxLots = 10;
 
     @Column(name = "small_project_credit_cost", nullable = false)
     @Builder.Default
-    private Integer smallProjectCreditCost = 3;
+    private Integer smallProjectCreditCost = 2;
 
     @Column(name = "large_project_credit_cost", nullable = false)
     @Builder.Default
-    private Integer largeProjectCreditCost = 10;
+    private Integer largeProjectCreditCost = 3;
 
     @Column(name = "custom_price_per_credit", nullable = false, precision = 10, scale = 2)
     @Builder.Default

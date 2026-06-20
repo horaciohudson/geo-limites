@@ -126,7 +126,8 @@ public class TemplateController {
             @RequestParam(value = "description", required = false) String description,
             @RequestParam(value = "municipality", required = false) String municipality,
             @RequestParam(value = "abntNorm", required = false) String abntNorm,
-            @RequestParam(value = "memorialStandardId", required = false) UUID memorialStandardId) {
+            @RequestParam(value = "memorialStandardId", required = false) UUID memorialStandardId,
+            @RequestParam(value = "targetFolderPath", required = false) String targetFolderPath) {
         
         try {
             UUID userId = AuthUtils.getCurrentUserId();
@@ -146,13 +147,16 @@ public class TemplateController {
                 return ResponseEntity.status(HttpStatus.CONFLICT).build();
             }
             
+            log.info("====> targetFolderPath recebido do frontend: {}", targetFolderPath);
+            log.info("====> templatesDir padrao configurado: {}", templatesDir);
+            
             TemplateGenerationRequestDTO request = TemplateGenerationRequestDTO.builder()
                     .name(name.trim())
                     .description(description)
                     .municipality(municipality)
                     .abntNorm(abntNorm)
                     .memorialStandardId(memorialStandardId)
-                    .targetFolderPath(templatesDir)
+                    .targetFolderPath(targetFolderPath != null && !targetFolderPath.isBlank() ? targetFolderPath : templatesDir)
                     .build();
             
             TemplateGenerationResponseDTO response = templateService.generateTemplate(file, request, userId);

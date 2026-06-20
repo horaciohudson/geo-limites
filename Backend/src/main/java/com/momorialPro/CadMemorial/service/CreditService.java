@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -293,6 +294,26 @@ public class CreditService {
     }
 
     /**
+     * Resumo de memoriais cobrados para a conta do usuario.
+     */
+    public MemorialUsageSummary getMemorialUsageSummary(UUID userId) {
+        long memorialsCreated = transactionRepository.countMemorialGenerationsByUserId(userId);
+        int creditsUsedForMemorials = transactionRepository.sumMemorialCreditsUsedByUserId(userId);
+        LocalDateTime lastMemorialGenerationAt = transactionRepository.findLastMemorialGenerationAtByUserId(userId);
+
+        double averageCreditsPerMemorial = memorialsCreated > 0
+                ? (double) creditsUsedForMemorials / memorialsCreated
+                : 0.0;
+
+        return new MemorialUsageSummary(
+                memorialsCreated,
+                creditsUsedForMemorials,
+                averageCreditsPerMemorial,
+                lastMemorialGenerationAt
+        );
+    }
+
+    /**
      * Método auxiliar: Busca compras do usuário
      */
     public List<CreditPurchase> getUserPurchases(UUID userId) {
@@ -306,4 +327,11 @@ public class CreditService {
         return purchaseRepository.findByIdAndUserId(purchaseId, userId)
             .orElseThrow(() -> new PurchaseNotFoundException(purchaseId));
     }
+
+    public record MemorialUsageSummary(
+            long memorialsCreated,
+            int creditsUsedForMemorials,
+            double averageCreditsPerMemorial,
+            LocalDateTime lastMemorialGenerationAt
+    ) {}
 }
