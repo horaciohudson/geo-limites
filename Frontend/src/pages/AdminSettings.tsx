@@ -762,7 +762,7 @@ const AdminSettings: React.FC = () => {
   const handleResendVerification = async (targetUser: User) => {
     try {
       setResendingUserId(targetUser.id);
-      const result: MessageResponse = await adminSettingsService.resendUserVerification(targetUser.id);
+      const result: MessageResponse = await tenantAdminService.resendGlobalUserVerification(targetUser.id);
       showSuccess(result.message || `Novo e-mail de confirmacao enviado para ${targetUser.email || targetUser.username}.`);
       await loadUsers();
     } catch (error: unknown) {
@@ -807,7 +807,7 @@ const AdminSettings: React.FC = () => {
         active: editUserForm.active,
       };
 
-      const updatedUser = await adminSettingsService.updateUser(userId, payload);
+      const updatedUser = await tenantAdminService.updateGlobalUser(userId, payload);
       showSuccess(`Usuario ${updatedUser.email || updatedUser.username} atualizado com sucesso.`);
       handleCancelEditUser();
       await loadUsers();
@@ -826,7 +826,7 @@ const AdminSettings: React.FC = () => {
         active: !(targetUser.active !== false),
       };
 
-      const updatedUser = await adminSettingsService.updateUser(targetUser.id, payload);
+      const updatedUser = await tenantAdminService.updateGlobalUser(targetUser.id, payload);
       showSuccess(
         updatedUser.active
           ? `Usuario ${updatedUser.email || updatedUser.username} reativado com sucesso.`
@@ -852,7 +852,7 @@ const AdminSettings: React.FC = () => {
 
     try {
       setUpdatingUserId(targetUser.id);
-      const result = await adminSettingsService.resetUserPassword(targetUser.id, {
+      const result = await tenantAdminService.resetGlobalUserPassword(targetUser.id, {
         newPassword: passwordResetForm.newPassword,
       });
       showSuccess(result.message || `Senha redefinida com sucesso para ${targetUser.email || targetUser.username}.`);

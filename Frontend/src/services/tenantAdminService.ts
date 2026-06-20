@@ -1,5 +1,10 @@
 import api from './api';
 import type { User } from '@/types';
+import type {
+  AdminUserPasswordResetRequest,
+  AdminUserUpdateRequest,
+  MessageResponse,
+} from '@/services/adminSettings';
 
 export interface TenantOperationalAdminDTO {
   tenantId: string;
@@ -36,6 +41,21 @@ export interface TenantOperationalActionRequest {
 class TenantAdminService {
   async getGlobalUsers(): Promise<User[]> {
     const response = await api.get('/admin/tenants/users');
+    return response.data;
+  }
+
+  async updateGlobalUser(userId: string, payload: AdminUserUpdateRequest): Promise<User> {
+    const response = await api.put(`/admin/tenants/users/${userId}`, payload);
+    return response.data;
+  }
+
+  async resetGlobalUserPassword(userId: string, payload: AdminUserPasswordResetRequest): Promise<MessageResponse> {
+    const response = await api.post(`/admin/tenants/users/${userId}/reset-password`, payload);
+    return response.data;
+  }
+
+  async resendGlobalUserVerification(userId: string): Promise<MessageResponse> {
+    const response = await api.post(`/admin/tenants/users/${userId}/resend-verification`);
     return response.data;
   }
 

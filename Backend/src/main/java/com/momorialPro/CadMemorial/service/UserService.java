@@ -107,17 +107,31 @@ public class UserService {
         User currentUser = AuthUtils.getRequiredCurrentUser();
         User user = repository.findByIdAndTenantId(id, currentUser.getTenant().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Usuario nao encontrado."));
+        return updateUserInternal(user, dto, currentUser);
+    }
+
+    @Transactional
+    public UserDTO updateGlobal(UUID id, UserUpdateDTO dto) {
+        requireAdmin();
+        User currentUser = AuthUtils.getRequiredCurrentUser();
+        User user = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario nao encontrado."));
+        return updateUserInternal(user, dto, currentUser);
+    }
+
+    private UserDTO updateUserInternal(User user, UserUpdateDTO dto, User currentUser) {
+        UUID targetTenantId = user.getTenant() != null ? user.getTenant().getId() : currentUser.getTenant().getId();
 
         String normalizedEmail = dto.getEmail().trim().toLowerCase();
         String normalizedUsername = dto.getUsername().trim().toLowerCase();
 
-        repository.findByUsernameIgnoreCaseAndTenantId(normalizedUsername, currentUser.getTenant().getId())
+        repository.findByUsernameIgnoreCaseAndTenantId(normalizedUsername, targetTenantId)
                 .filter(existing -> !existing.getId().equals(user.getId()))
                 .ifPresent(existing -> {
                     throw new IllegalArgumentException("Ja existe um usuario com esse login neste tenant.");
                 });
 
-        repository.findByEmailIgnoreCaseAndTenantId(normalizedEmail, currentUser.getTenant().getId())
+        repository.findByEmailIgnoreCaseAndTenantId(normalizedEmail, targetTenantId)
                 .filter(existing -> !existing.getId().equals(user.getId()))
                 .ifPresent(existing -> {
                     throw new IllegalArgumentException("Ja existe um usuario com esse e-mail neste tenant.");
@@ -157,6 +171,18 @@ public class UserService {
         requireAdmin();
         User user = repository.findByIdAndTenantId(id, AuthUtils.getRequiredCurrentTenantId())
                 .orElseThrow(() -> new IllegalArgumentException("Usuario nao encontrado."));
+        return resetPasswordInternal(user, dto);
+    }
+
+    @Transactional
+    public MessageResponseDTO resetPasswordGlobal(UUID id, AdminUserPasswordResetDTO dto) {
+        requireAdmin();
+        User user = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario nao encontrado."));
+        return resetPasswordInternal(user, dto);
+    }
+
+    private MessageResponseDTO resetPasswordInternal(User user, AdminUserPasswordResetDTO dto) {
 
         String normalizedPassword = dto.getNewPassword() != null ? dto.getNewPassword().trim() : "";
         if (normalizedPassword.length() < 6) {
@@ -172,9 +198,20 @@ public class UserService {
     @Transactional
     public MessageResponseDTO resendVerification(UUID id) {
         requireAdmin();
-
         User user = repository.findByIdAndTenantId(id, AuthUtils.getRequiredCurrentTenantId())
                 .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado"));
+        return resendVerificationInternal(user);
+    }
+
+    @Transactional
+    public MessageResponseDTO resendVerificationGlobal(UUID id) {
+        requireAdmin();
+        User user = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado"));
+        return resendVerificationInternal(user);
+    }
+
+    private MessageResponseDTO resendVerificationInternal(User user) {
 
         if (Boolean.TRUE.equals(user.getVerified())) {
             return new MessageResponseDTO("Este usuario ja possui e-mail confirmado.");
@@ -211,7 +248,11 @@ public class UserService {
             return;
         }
 
-        long otherActiveAdmins = repository.findByTenantId(AuthUtils.getRequiredCurrentTenantId()).stream()
+        UUID tenantId = targetUser.getTenant() != null
+                ? targetUser.getTenant().getId()
+                : AuthUtils.getRequiredCurrentTenantId();
+
+        long otherActiveAdmins = repository.findByTenantId(tenantId).stream()
                 .filter(candidate -> !candidate.getId().equals(targetUser.getId()))
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getActive()))
                 .filter(this::hasAdminRole)

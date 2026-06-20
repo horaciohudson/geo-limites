@@ -1,7 +1,10 @@
 package com.momorialPro.CadMemorial.controller;
 
+import com.momorialPro.CadMemorial.dto.AdminUserPasswordResetDTO;
+import com.momorialPro.CadMemorial.dto.MessageResponseDTO;
 import com.momorialPro.CadMemorial.dto.admin.TenantOperationalActionRequest;
 import com.momorialPro.CadMemorial.dto.admin.TenantOperationalAdminDTO;
+import com.momorialPro.CadMemorial.dto.UserUpdateDTO;
 import com.momorialPro.CadMemorial.dto.UserDTO;
 import com.momorialPro.CadMemorial.service.TenantAdministrationService;
 import com.momorialPro.CadMemorial.service.UserService;
@@ -28,6 +31,26 @@ public class TenantAdministrationController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<UserDTO>> listAllUsersGlobally() {
         return ResponseEntity.ok(userService.findAllGlobal());
+    }
+
+    @PutMapping("/users/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserDTO> updateUserGlobally(@PathVariable UUID id, @RequestBody UserUpdateDTO dto) {
+        return ResponseEntity.ok(userService.updateGlobal(id, dto));
+    }
+
+    @PostMapping("/users/{id}/reset-password")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<MessageResponseDTO> resetUserPasswordGlobally(
+            @PathVariable UUID id,
+            @RequestBody AdminUserPasswordResetDTO dto) {
+        return ResponseEntity.ok(userService.resetPasswordGlobal(id, dto));
+    }
+
+    @PostMapping("/users/{id}/resend-verification")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<MessageResponseDTO> resendVerificationGlobally(@PathVariable UUID id) {
+        return ResponseEntity.ok(userService.resendVerificationGlobal(id));
     }
 
     @GetMapping("/operational")
