@@ -38,6 +38,11 @@ As entradas principais visiveis hoje no menu sao:
 - **Administracao**, quando o perfil possuir permissao
 - **Sair**
 
+Os nomes que mais costumam gerar duvida sao:
+
+- **Normas e Templates**: uso operacional da sessao atual
+- **Normas e Exemplos**: manutencao administrativa da base documental
+
 ## Boas praticas iniciais
 
 - Confirmar se o nome exibido no topo esta correto.

@@ -13,7 +13,7 @@ Usa o sistema para selecionar imoveis, definir normas, escolher arquivos DXF, vi
 Acompanha a padronizacao do trabalho, organiza normas e modelos base e orienta a equipe sobre o uso correto da plataforma.
 
 ### Administrador do sistema
-Configura empresa, SMTP, usuarios e aspectos de acesso administrativo do tenant.
+Configura empresa, SMTP e a gestao global de usuarios do sistema, incluindo operacoes administrativas de acesso.
 
 ## Fluxo recomendado de leitura
 
@@ -51,9 +51,14 @@ Dentro deles, as entradas visiveis sao:
 
 ### Conta e Acesso
 - **Conta**: dados do usuario, creditos e operacoes relacionadas ao perfil.
-- **Administracao**: configuracao de SMTP, dados do tenant e gestao de usuarios, quando o perfil tem permissao.
+- **Administracao**: configuracao de SMTP, dados do tenant e gestao global de usuarios, quando o perfil tem permissao.
 - **Sair**: encerra a sessao atual com seguranca.
 
 ## Observacao importante
 
 O produto nao depende mais de uma tela de **Pasta de Templates** para salvar arquivos no servidor. Quando um modelo base e gerado no fluxo atual, o arquivo e salvo localmente pelo navegador do usuario ou baixado por fallback.
+
+Para leitura consistente do manual:
+
+- `Normas e Templates` sempre se refere a selecao operacional da sessao atual
+- `Normas e Exemplos` sempre se refere a manutencao administrativa da base documental

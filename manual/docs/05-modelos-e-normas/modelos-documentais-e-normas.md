@@ -2,7 +2,12 @@
 
 ## Onde ficam essas configuracoes
 
-Na secao **Configuracao** do menu lateral, a tela visivel hoje e **Normas e Exemplos**. Essa area concentra a manutencao da base documental reutilizada pela plataforma.
+Na secao **Configuracao** do menu lateral, a tela visivel hoje e **Normas e Exemplos**. Em alguns contextos administrativos, a area de **Pasta de Templates** tambem pode aparecer por compatibilidade operacional. O centro do fluxo documental, porem, continua em **Normas e Exemplos**.
+
+Essa nomenclatura e diferente da tela operacional **Normas e Templates**:
+
+- **Normas e Exemplos**: cria, importa e mantem a base documental
+- **Normas e Templates**: seleciona a norma e o modelo que serao usados na operacao atual
 
 ## O que e feito em Normas e Exemplos
 
@@ -35,7 +40,7 @@ No fluxo atual, os modelos podem nascer de tres formas:
 
 ## Como o salvamento funciona hoje
 
-O GeoLimites nao depende mais de uma configuracao de **Pasta de Templates** no servidor para esse fluxo.
+O GeoLimites nao depende da **Pasta de Templates** como fluxo principal para gerar modelos base.
 
 Quando um modelo base e gerado:
 
@@ -43,7 +48,7 @@ Quando um modelo base e gerado:
 - se o navegador nao suportar essa integracao, o sistema faz o download classico do arquivo
 - alem disso, o modelo pode permanecer no navegador para uso imediato na sessao atual
 
-Isso evita depender de um caminho fisico configurado manualmente no backend para a geracao do modelo base.
+Isso evita depender de um caminho fisico configurado manualmente no backend para a geracao do modelo base, mesmo que a area de `Pasta de Templates` continue visivel por compatibilidade ou organizacao administrativa.
 
 ## Quando usar um modelo diferente
 
@@ -61,4 +66,10 @@ Isso evita depender de um caminho fisico configurado manualmente no backend para
 
 ## Relacao com a geracao do memorial
 
-A configuracao correta dessa area influencia diretamente a qualidade do memorial gerado em **Normas e Templates** e processado no **Visualizador**. Se a base documental estiver incompleta ou inadequada, o resultado final tambem perde consistencia.
+A configuracao correta dessa area influencia diretamente a qualidade do memorial gerado no fluxo operacional, que passa por **Normas e Templates** e depois pelo **Visualizador**. Se a base documental estiver incompleta ou inadequada, o resultado final tambem perde consistencia.
+
+No fluxo mais recente, vale lembrar:
+
+- a base documental orienta a redacao
+- a geometria e a ordem tecnica ficam sustentadas pelo backend
+- quando a IA falha temporariamente, o sistema pode recorrer ao fallback tecnico para manter a operacao
