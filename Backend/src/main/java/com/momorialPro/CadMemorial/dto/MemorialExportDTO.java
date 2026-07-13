@@ -15,6 +15,9 @@ public class MemorialExportDTO {
     private String projectName;
     private String projectDescription;
     private String memorialText;
+    private String technicalSummaryJson;
+    private String documentSummaryJson;
+    private ProcessingContextStatusDTO processingContextStatus;
     private String comparisonSummary;
     private List<DxfEntityChangeDTO> differences;
 

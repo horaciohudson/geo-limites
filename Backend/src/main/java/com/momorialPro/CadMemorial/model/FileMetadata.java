@@ -50,4 +50,12 @@ public class FileMetadata extends AuditBase {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
     private User owner;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "property_id")
+    private Property property;
+
+    @Builder.Default
+    @Column(name = "is_primary_for_property", nullable = false)
+    private Boolean primaryForProperty = false;
 }

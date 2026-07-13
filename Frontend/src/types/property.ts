@@ -164,6 +164,18 @@ export interface PropertyFile {
   updatedAt: string;
 }
 
+export interface PropertyFormFile {
+  id?: string;
+  name: string;
+  size: number;
+  type?: string;
+  lastModified?: number;
+  backendFileId?: string;
+  primaryTechnical?: boolean;
+  uploadedFromBackend?: boolean;
+  rawFile?: File;
+}
+
 // Enums
 export type PropertyType = 'URBAN' | 'RURAL' | 'MIXED';
 export type LandUse = 'RESIDENTIAL' | 'COMMERCIAL' | 'INDUSTRIAL' | 'AGRICULTURAL' | 'MIXED';
@@ -192,7 +204,7 @@ export interface PropertyFormData {
   documents: Omit<PropertyDocument, 'id' | 'propertyId' | 'createdAt' | 'updatedAt'>[];
   
   // Aba 4: Arquivos
-  files: File[];
+  files: PropertyFormFile[];
 }
 
 export interface PropertyFormValidation {

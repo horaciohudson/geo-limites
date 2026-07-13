@@ -102,8 +102,7 @@ export const templatesService = {
       if (request.memorialStandardId) formData.append('memorialStandardId', request.memorialStandardId);
       if (request.targetFolderPath) formData.append('targetFolderPath', request.targetFolderPath);
 
-      // Usar apenas o endpoint correto com proxy configurado
-      const response = await api.post('/api/templates/generate', formData, {
+      const response = await api.post('/templates/generate', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),

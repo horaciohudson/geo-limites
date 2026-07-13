@@ -93,6 +93,7 @@ public class DataInitializer implements CommandLineRunner {
             changed = true;
         }
 
+        // Keep existing profile and password untouched for already-provisioned admins.
         if (user.getRoles().stream().noneMatch(role -> Objects.equals(role.getName(), adminRole.getName()))) {
             user.getRoles().add(adminRole);
             changed = true;

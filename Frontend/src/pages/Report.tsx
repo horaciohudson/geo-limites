@@ -8,21 +8,16 @@
 // ⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
 
 import React, { useState, useEffect } from 'react';
-import type { FileMetadata, MemorialResponse } from '../types/index';
+import type { FileMetadata } from '../types/index';
 import type { MemorialStandard } from '@/types/memorial-standard';
 import api from '@/services/api';
-import aiService from '@/services/aiService';
-import { parseDXF } from '@/utils/dxfParser';
-import jsPDF from 'jspdf';
 import Button from '@/components/Button';
 import Loading from '@/components/Loading';
 import { MemorialNormsSelector } from '@/components/MemorialNormsSelector';
 import { TemplateSelector } from '@/components/TemplateSelector';
+import { useOperationContext } from '@/contexts/OperationContext';
 
-interface StoredPropertySelection {
-  id?: string;
-  propertyId?: string;
-}
+const loadJsPdf = async () => (await import('jspdf')).default;
 
 interface SelectedTemplateField {
   key: string;
@@ -50,26 +45,13 @@ interface ApiErrorLike {
   };
 }
 
-const getErrorMessage = (error: unknown, fallback: string): string => {
-  if (typeof error === 'object' && error !== null) {
-    const apiError = error as ApiErrorLike;
-    return apiError.response?.data?.message || apiError.message || fallback;
-  }
+interface StoredPropertySelection {
+  id?: string;
+  propertyId?: string;
+}
 
-  return fallback;
-};
-
-// Função para obter propertyId selecionado do localStorage
-function getSelectedPropertyId(): string | null {
+const getFallbackPropertyId = (): string | null => {
   try {
-    const selectedProperty = JSON.parse(
-      localStorage.getItem('selectedPropertyForMemorial') || 'null'
-    ) as StoredPropertySelection | null;
-
-    if (selectedProperty?.id || selectedProperty?.propertyId) {
-      return selectedProperty.id || selectedProperty.propertyId || null;
-    }
-
     const properties = JSON.parse(localStorage.getItem('properties') || '[]') as StoredPropertySelection[];
     if (properties.length > 0) {
       const lastProperty = properties[properties.length - 1];
@@ -81,29 +63,38 @@ function getSelectedPropertyId(): string | null {
     console.error('❌ Erro ao ler propriedade do localStorage:', e);
     return null;
   }
-}
+};
 
 const Report: React.FC = () => {
+  const { selectedProperty, activePropertyId } = useOperationContext();
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [selectedFileId, setSelectedFileId] = useState('');
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
   const [memorial, setMemorial] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
   const [isLoadingFiles, setIsLoadingFiles] = useState(true);
   const [error, setError] = useState('');
-  const [selectedNorms, setSelectedNorms] = useState<MemorialStandard[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<SelectedTemplateData | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [, setSelectedNorms] = useState<MemorialStandard[]>([]);
+  const [, setSelectedTemplate] = useState<SelectedTemplateData | null>(null);
+  const [, setSelectedTemplateId] = useState<string>('');
+
+  const resolvedPropertyId =
+    activePropertyId ||
+    selectedProperty?.propertyId ||
+    selectedProperty?.id ||
+    getFallbackPropertyId();
 
   useEffect(() => {
     loadFiles();
-  }, []);
+  }, [resolvedPropertyId]);
 
   const loadFiles = async () => {
     try {
       setIsLoadingFiles(true);
-      const response = await api.get<FileMetadata[]>('/dxf/my-files');
+      const response = await api.get<FileMetadata[]>('/dxf/my-files', {
+        params: resolvedPropertyId ? { propertyId: resolvedPropertyId } : undefined
+      });
       setFiles(response.data);
     } catch (err: unknown) {
       const apiError = err as ApiErrorLike;
@@ -121,103 +112,14 @@ const Report: React.FC = () => {
     }
   };
 
-  const generateMemorial = async () => {
-    if (!selectedFileId || !projectName.trim()) {
-      setError('Por favor, selecione um arquivo e informe o nome do projeto');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setError('');
-      setMemorial('');
-
-      const selectedFile = files.find(f => f.id === selectedFileId);
-      if (!selectedFile) {
-        setError('Arquivo selecionado não encontrado');
-        return;
-      }
-
-      const fileResponse = await api.get(`/dxf/${selectedFileId}/download`, {
-        responseType: 'text'
-      });
-
-      const dxfData = parseDXF(fileResponse.data);
-
-      const entities = dxfData.entities.map(entity => {
-        return {
-          type: entity.type,
-          layer: entity.layer,
-          // Extrair coordenadas de properties para campos diretos
-          x: entity.properties.x || entity.properties.x1 || entity.properties.centerX,
-          y: entity.properties.y || entity.properties.y1 || entity.properties.centerY,
-          z: entity.properties.z || entity.properties.z1,
-          x2: entity.properties.x2,
-          y2: entity.properties.y2,
-          z2: entity.properties.z2,
-          radius: entity.properties.radius,
-          startAngle: entity.properties.startAngle,
-          endAngle: entity.properties.endAngle,
-          text: entity.properties.text,
-          textStyle: entity.properties.textStyle,
-          textHeight: entity.properties.textHeight,
-          textRotation: entity.properties.rotation,
-          // ⚡ CRÍTICO: Extrair vertices para campo direto (requerido pelo backend DTO)
-          vertices: entity.properties.vertices,
-          // Manter properties para compatibilidade
-          properties: entity.properties
-        };
-      });
-
-      const request = {
-        entities,
-        fileName: selectedFile.originalName,
-        projectName: projectName.trim(),
-        projectDescription:
-          projectDescription.trim() ||
-          `Análise técnica do arquivo ${selectedFile.originalName}`,
-        selectedNorms: selectedNorms,
-        selectedTemplate: selectedTemplate,
-        templateId: selectedTemplateId
-      };
-
-      const requestWithProperty = {
-        ...request,
-        propertyId: getSelectedPropertyId()
-      };
-
-      // Usar aiService para obter endpoint correto
-      const aiConfig = aiService.getAIConfig();
-      const endpoint = aiConfig.endpoint;
-
-      const requestWithAI = {
-        ...requestWithProperty,
-        ...aiService.getAIParameters()
-      };
-
-      const response = await api.post<MemorialResponse>(
-        endpoint,
-        requestWithAI
-      );
-      setMemorial(
-        response.data.memorialText ||
-        'Memorial gerado com sucesso, mas sem detalhes técnicos.'
-      );
-    } catch (err: unknown) {
-      console.error('Erro ao gerar memorial:', err);
-      setError(getErrorMessage(err, 'Erro ao gerar memorial descritivo'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const downloadMemorial = () => {
+  const downloadMemorial = async () => {
     if (!memorial) return;
 
     const selectedFile = files.find(f => f.id === selectedFileId);
     if (!selectedFile) return;
 
-    const doc = new jsPDF();
+    const JsPdf = await loadJsPdf();
+    const doc = new JsPdf();
     const hasDocumentHeader = /^\s*Memorial Descritivo\b/i.test(memorial);
     let yPosition = 20;
 
@@ -371,13 +273,6 @@ const Report: React.FC = () => {
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-actions">
-            <Button
-              onClick={generateMemorial}
-              disabled={isLoading || !selectedFileId || !projectName.trim()}
-            >
-              {isLoading ? 'Gerando memorial...' : 'Gerar Memorial'}
-            </Button>
-
             <Button onClick={clearForm} variant="secondary" disabled={isLoading}>
               Limpar
             </Button>

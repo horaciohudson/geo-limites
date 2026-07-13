@@ -12,4 +12,6 @@ import lombok.NoArgsConstructor;
 public class ApiSettingsDTO {
     private String templateApiProvider;
     private String memorialApiProvider;
+    private String templateApiModel;
+    private String memorialApiModel;
 }

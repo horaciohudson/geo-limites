@@ -599,7 +599,7 @@ public class DxfTextExtractorService {
         // Verifica se contém coordenadas UTM/SIRGAS
         return cleanText.matches(".*[EN]\\s*\\d{6,}[.,]?\\d*.*") ||
                 cleanText.matches(".*\\d{6,}[.,]?\\d*\\s*[EN].*") ||
-                cleanText.matches("P\\d+.*[EN].*\\d{6,}.*") ||
+                cleanText.matches(".*(?:P|PT|PONTO|V|VERTICE|VERTEX)\\s*[-_:/# ]*\\d+.*[EN].*\\d{6,}.*") ||
                 (cleanText.contains("E ") && cleanText.contains("N ") &&
                         cleanText.matches(".*\\d{6,}.*"));
     }
@@ -607,8 +607,10 @@ public class DxfTextExtractorService {
     private String extractPointName(String text) {
         if (text == null) return null;
 
-        // Procura padrões como P01, P02, etc.
-        java.util.regex.Pattern pointPattern = java.util.regex.Pattern.compile("P(\\d{1,3})");
+        // Procura padrões como P01, P 01, PONTO 01, V01, etc.
+        java.util.regex.Pattern pointPattern = java.util.regex.Pattern.compile(
+            "(?i)\\b(?:P|PT|PONTO|V|VERTICE|VERTEX)\\s*[-_:/# ]*0*(\\d{1,4})\\b"
+        );
         java.util.regex.Matcher matcher = pointPattern.matcher(text);
 
         if (matcher.find()) {

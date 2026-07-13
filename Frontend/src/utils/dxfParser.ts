@@ -2,6 +2,7 @@
 export interface DXFVertex {
   x: number;
   y: number;
+  bulge?: number;
 }
 
 type DXFPropertyValue = string | number | boolean | DXFVertex[] | Array<string | number>;
@@ -40,10 +41,15 @@ export interface DXFEntityProperties {
   verticalAlign?: number;
   halign?: number;
   valign?: number;
+  lineColor?: string;
+  fillColor?: string;
+  editorEntityId?: string;
+  editorGroupId?: string;
   vertexCount?: number;
   vertices?: DXFVertex[];
   code_10?: string | number | Array<string | number>;
   code_20?: string | number | Array<string | number>;
+  code_42?: string | number | Array<string | number>;
   [key: string]: DXFPropertyValue | undefined;
 }
 
@@ -57,6 +63,7 @@ export interface DXFLayer {
   name: string;
   color?: number;
   lineType?: string;
+  editorCreated?: boolean;
 }
 
 export interface DXFData {
@@ -65,6 +72,36 @@ export interface DXFData {
   entityCounts: Record<string, number>;
   layerCounts: Record<string, number>;
 }
+
+interface DXFBlockDefinition {
+  name: string;
+  layer: string;
+  baseX: number;
+  baseY: number;
+  entities: DXFEntity[];
+}
+
+interface DXFInsertTransform {
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+  layer: string;
+}
+
+const SUPPORTED_DXF_ENTITY_TYPES = new Set([
+  'LINE',
+  'CIRCLE',
+  'ARC',
+  'TEXT',
+  'MTEXT',
+  'ATTRIB',
+  'POINT',
+  'LWPOLYLINE',
+  'POLYLINE',
+  'INSERT'
+]);
 
 /**
  * Parser básico para arquivos DXF
@@ -76,6 +113,10 @@ export class DXFParser {
 
   constructor(content: string) {
     this.lines = content.split('\n').map(line => line.trim());
+  }
+
+  private isTextEntity(entityType: string): boolean {
+    return entityType === 'TEXT' || entityType === 'MTEXT' || entityType === 'ATTRIB';
   }
 
   private parseNumber(value: DXFPropertyValue | undefined): number | null {
@@ -102,6 +143,16 @@ export class DXFParser {
     return parsed === null ? [] : [parsed];
   }
 
+  private isRenderable2DPolylineFlag(flag: number | null): boolean {
+    if (flag === null) {
+      return true;
+    }
+
+    // Exclui estruturas POLYLINE nao-2D que geram conexoes espurias no renderer:
+    // 8 = 3D polyline, 16 = polygon mesh, 64 = polyface mesh.
+    return (flag & 8) === 0 && (flag & 16) === 0 && (flag & 64) === 0;
+  }
+
   /**
    * Faz o parsing completo do arquivo DXF
    */
@@ -109,12 +160,20 @@ export class DXFParser {
     this.currentIndex = 0;
     const entities: DXFEntity[] = [];
     const layers: DXFLayer[] = [];
+    const blockDefinitions = new Map<string, DXFBlockDefinition>();
+
+    // Procura pela secao BLOCKS antes da ENTITIES para permitir expandir INSERTs.
+    const blocksStart = this.findSection('BLOCKS');
+    if (blocksStart !== -1) {
+      this.currentIndex = blocksStart;
+      this.parseBlocks(blockDefinitions);
+    }
 
     // Procura pela seção ENTITIES
     const entitiesStart = this.findSection('ENTITIES');
     if (entitiesStart !== -1) {
       this.currentIndex = entitiesStart;
-      this.parseEntities(entities);
+      this.parseEntities(entities, blockDefinitions);
     }
 
     // Procura pela seção TABLES (onde ficam as layers)
@@ -157,28 +216,176 @@ export class DXFParser {
   /**
    * Faz o parsing das entidades
    */
-  private parseEntities(entities: DXFEntity[]): void {
+  private parseEntities(entities: DXFEntity[], blockDefinitions: Map<string, DXFBlockDefinition>): void {
     while (this.currentIndex < this.lines.length - 1) {
       const line = this.lines[this.currentIndex];
-      
-      if (line === '0') {
-        const nextLine = this.lines[this.currentIndex + 1];
-        
-        if (nextLine === 'ENDSEC') {
+
+      if (line !== '0') {
+        this.currentIndex++;
+        continue;
+      }
+
+      const nextLine = this.lines[this.currentIndex + 1];
+      if (nextLine === 'ENDSEC') {
+        break;
+      }
+
+      if (nextLine === 'POLYLINE' || SUPPORTED_DXF_ENTITY_TYPES.has(nextLine)) {
+        const entity = this.parseSupportedEntityAtCurrentIndex(nextLine);
+        if (entity?.type === 'INSERT') {
+          const expandedEntities = this.expandInsertEntity(entity, blockDefinitions);
+          if (expandedEntities.length > 0) {
+            entities.push(...expandedEntities);
+          } else {
+            entities.push(entity);
+          }
+        } else if (entity) {
+          entities.push(entity);
+        }
+        continue;
+      }
+
+      this.currentIndex++;
+    }
+  }
+
+  private parseSupportedEntityAtCurrentIndex(entityType: string): DXFEntity | null {
+    if (entityType !== 'POLYLINE') {
+      const entity = this.parseEntity(entityType);
+      this.currentIndex++;
+      return entity;
+    }
+
+    const polyline = this.parseEntity('POLYLINE');
+    if (!polyline) {
+      this.currentIndex++;
+      return null;
+    }
+
+    this.currentIndex++;
+    const vertices: DXFVertex[] = [];
+
+    while (this.currentIndex < this.lines.length - 1 && this.lines[this.currentIndex] === '0') {
+      const childType = this.lines[this.currentIndex + 1];
+      if (childType === 'VERTEX') {
+        const vertex = this.parseEntity('VERTEX');
+        this.currentIndex++;
+        const x = this.parseNumber(vertex?.properties?.x);
+        const y = this.parseNumber(vertex?.properties?.y);
+        if (x !== null && y !== null) {
+          const bulge = this.parseNumber(vertex?.properties?.bulge);
+          vertices.push(bulge !== null ? { x, y, bulge } : { x, y });
+        }
+        continue;
+      }
+
+      if (childType === 'SEQEND') {
+        this.currentIndex += 2;
+        break;
+      }
+
+      break;
+    }
+
+    if (vertices.length > 0) {
+      polyline.properties.vertices = vertices;
+    }
+
+    const polylineFlag = this.parseNumber(polyline.properties.polylineFlag);
+    if (!this.isRenderable2DPolylineFlag(polylineFlag)) {
+      return null;
+    }
+
+    return polyline;
+  }
+
+  private parseBlocks(blockDefinitions: Map<string, DXFBlockDefinition>): void {
+    while (this.currentIndex < this.lines.length - 1) {
+      const line = this.lines[this.currentIndex];
+
+      if (line !== '0') {
+        this.currentIndex++;
+        continue;
+      }
+
+      const nextLine = this.lines[this.currentIndex + 1];
+      if (nextLine === 'ENDSEC') {
+        break;
+      }
+
+      if (nextLine === 'BLOCK') {
+        const block = this.parseBlockDefinition();
+        if (block?.name) {
+          blockDefinitions.set(block.name, block);
+        }
+      }
+
+      this.currentIndex++;
+    }
+  }
+
+  private parseBlockDefinition(): DXFBlockDefinition | null {
+    const block: DXFBlockDefinition = {
+      name: '',
+      layer: '0',
+      baseX: 0,
+      baseY: 0,
+      entities: []
+    };
+
+    this.currentIndex += 2; // pula o '0' e o 'BLOCK'
+
+    while (this.currentIndex < this.lines.length - 1) {
+      const code = this.lines[this.currentIndex];
+      const value = this.lines[this.currentIndex + 1];
+
+      if (code === '0') {
+        if (value === 'ENDBLK') {
+          this.currentIndex += 1; // deixa o cursor na linha ENDBLK para o incremento externo concluir o salto
           break;
         }
 
-        // Tipos de entidades comuns
-        if (['LINE', 'CIRCLE', 'ARC', 'TEXT', 'POLYLINE', 'LWPOLYLINE', 'INSERT'].includes(nextLine)) {
-          const entity = this.parseEntity(nextLine);
+        if (value === 'POLYLINE' || SUPPORTED_DXF_ENTITY_TYPES.has(value)) {
+          const entity = this.parseSupportedEntityAtCurrentIndex(value);
           if (entity) {
-            entities.push(entity);
+            block.entities.push(entity);
           }
+          continue;
+        }
+
+        this.currentIndex++;
+        continue;
+      }
+
+      switch (code) {
+        case '2':
+          if (!block.name) {
+            block.name = value;
+          }
+          break;
+        case '8':
+          block.layer = value;
+          break;
+        case '10': {
+          const baseX = parseFloat(value);
+          if (!Number.isNaN(baseX)) {
+            block.baseX = baseX;
+          }
+          break;
+        }
+        case '20': {
+          const baseY = parseFloat(value);
+          if (!Number.isNaN(baseY)) {
+            block.baseY = baseY;
+          }
+          break;
         }
       }
-      
-      this.currentIndex++;
+
+      this.currentIndex += 2;
     }
+
+    return block.name ? block : null;
   }
 
   /**
@@ -190,6 +397,8 @@ export class DXFParser {
       layer: '0', // layer padrão
       properties: {}
     };
+    const lwPolylineVertices: Array<Partial<DXFVertex>> = [];
+    let activeLwPolylineVertexIndex = -1;
 
     this.currentIndex += 2; // pula o '0' e o tipo da entidade
 
@@ -209,6 +418,14 @@ export class DXFParser {
         case '8': // Layer
           entity.layer = value;
           break;
+        case '2': // Nome do bloco para INSERT
+          if (entityType === 'INSERT') {
+            entity.properties.blockName = value;
+            entity.properties.code_2 = value;
+          } else {
+            entity.properties[`code_${code}`] = value;
+          }
+          break;
         
         // Coordenadas principais
         case '10': // X coordinate (start point for lines, center for circles)
@@ -220,7 +437,13 @@ export class DXFParser {
             } else if (entityType === 'CIRCLE' || entityType === 'ARC') {
               entity.properties.centerX = xValue;
               entity.properties.x = xValue; // Também armazenar como x genérico
-            } else if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
+            } else if (entityType === 'LWPOLYLINE') {
+              lwPolylineVertices.push({ x: xValue });
+              activeLwPolylineVertexIndex = lwPolylineVertices.length - 1;
+              if (entity.properties.x === undefined) {
+                entity.properties.x = xValue;
+              }
+            } else if (entityType === 'POLYLINE') {
               // Para polylines, captura múltiplas coordenadas X
               if (entity.properties.code_10 !== undefined) {
                 if (!Array.isArray(entity.properties.code_10)) {
@@ -248,7 +471,16 @@ export class DXFParser {
             } else if (entityType === 'CIRCLE' || entityType === 'ARC') {
               entity.properties.centerY = yValue;
               entity.properties.y = yValue; // Também armazenar como y genérico
-            } else if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
+            } else if (entityType === 'LWPOLYLINE') {
+              if (activeLwPolylineVertexIndex >= 0) {
+                const activeVertex = lwPolylineVertices[activeLwPolylineVertexIndex] || {};
+                activeVertex.y = yValue;
+                lwPolylineVertices[activeLwPolylineVertexIndex] = activeVertex;
+              }
+              if (entity.properties.y === undefined) {
+                entity.properties.y = yValue;
+              }
+            } else if (entityType === 'POLYLINE') {
               // Para polylines, captura múltiplas coordenadas Y
               if (entity.properties.code_20 !== undefined) {
                 if (!Array.isArray(entity.properties.code_20)) {
@@ -275,7 +507,7 @@ export class DXFParser {
         case '11': // X2 coordinate (end point for lines) or alignment point X (for text)
           const x2Value = parseFloat(value);
           if (!isNaN(x2Value)) {
-            if (entityType === 'TEXT' || entityType === 'MTEXT') {
+            if (this.isTextEntity(entityType)) {
               entity.properties.alignmentX = x2Value;
             } else {
               entity.properties.x2 = x2Value;
@@ -285,7 +517,7 @@ export class DXFParser {
         case '21': // Y2 coordinate (end point for lines) or alignment point Y (for text)
           const y2Value = parseFloat(value);
           if (!isNaN(y2Value)) {
-            if (entityType === 'TEXT' || entityType === 'MTEXT') {
+            if (this.isTextEntity(entityType)) {
               entity.properties.alignmentY = y2Value;
             } else {
               entity.properties.y2 = y2Value;
@@ -299,7 +531,9 @@ export class DXFParser {
           if (!isNaN(val40)) {
             if (entityType === 'CIRCLE' || entityType === 'ARC') {
               entity.properties.radius = val40;
-            } else if (entityType === 'TEXT' || entityType === 'MTEXT') {
+            } else if (entityType === 'INSERT') {
+              entity.properties.scaleX = val40;
+            } else if (this.isTextEntity(entityType)) {
               entity.properties.height = val40;
               entity.properties.textHeight = val40; // Alias para compatibilidade
             } else {
@@ -312,7 +546,9 @@ export class DXFParser {
           if (!isNaN(val50)) {
             if (entityType === 'ARC') {
               entity.properties.startAngle = val50;
-            } else if (entityType === 'TEXT' || entityType === 'MTEXT') {
+            } else if (entityType === 'INSERT') {
+              entity.properties.rotation = val50;
+            } else if (this.isTextEntity(entityType)) {
               entity.properties.rotation = val50;
             }
           }
@@ -333,7 +569,12 @@ export class DXFParser {
           }
           break;
         case '43': // Width of MTEXT
-          if (entityType === 'MTEXT') {
+          if (entityType === 'INSERT') {
+            const scaleZ = parseFloat(value);
+            if (!isNaN(scaleZ)) {
+              entity.properties.scaleZ = scaleZ;
+            }
+          } else if (entityType === 'MTEXT') {
             const mtextWidth = parseFloat(value);
             if (!isNaN(mtextWidth)) {
               entity.properties.width = mtextWidth;
@@ -355,13 +596,47 @@ export class DXFParser {
         case '41': // Text width factor or other height
           const val41 = parseFloat(value);
           if (!isNaN(val41)) {
-            if (entityType === 'TEXT' || entityType === 'MTEXT') {
+            if (entityType === 'INSERT') {
+              entity.properties.scaleX = val41;
+            } else if (this.isTextEntity(entityType)) {
               entity.properties.widthFactor = val41;
             }
           }
           break;
+        case '42': // Bulge for polyline vertices
+          if (entityType === 'INSERT') {
+            const scaleY = parseFloat(value);
+            if (!isNaN(scaleY)) {
+              entity.properties.scaleY = scaleY;
+            }
+          } else if (entityType === 'VERTEX') {
+            const bulgeValue = parseFloat(value);
+            if (!isNaN(bulgeValue)) {
+              entity.properties.bulge = bulgeValue;
+            }
+          } else if (entityType === 'LWPOLYLINE') {
+            const bulgeValue = parseFloat(value);
+            if (!isNaN(bulgeValue) && activeLwPolylineVertexIndex >= 0) {
+              const activeVertex = lwPolylineVertices[activeLwPolylineVertexIndex] || {};
+              activeVertex.bulge = bulgeValue;
+              lwPolylineVertices[activeLwPolylineVertexIndex] = activeVertex;
+            }
+          } else if (entityType === 'POLYLINE') {
+            const bulgeValue = parseFloat(value);
+            if (!isNaN(bulgeValue)) {
+              if (entity.properties.code_42 !== undefined) {
+                if (!Array.isArray(entity.properties.code_42)) {
+                  entity.properties.code_42 = [entity.properties.code_42];
+                }
+                entity.properties.code_42.push(bulgeValue);
+              } else {
+                entity.properties.code_42 = bulgeValue;
+              }
+            }
+          }
+          break;
         case '71': // Text generation flags
-          if (entityType === 'TEXT' || entityType === 'MTEXT') {
+          if (this.isTextEntity(entityType)) {
             const textFlags = parseInt(value);
             if (!isNaN(textFlags)) {
               entity.properties.textFlags = textFlags;
@@ -398,7 +673,7 @@ export class DXFParser {
         
         // Propriedades adicionais importantes
         case '72': // Horizontal text justification
-          if (entityType === 'TEXT' || entityType === 'MTEXT') {
+          if (this.isTextEntity(entityType)) {
             const hAlign = parseInt(value);
             if (!isNaN(hAlign)) {
               entity.properties.horizontalAlign = hAlign;
@@ -407,7 +682,7 @@ export class DXFParser {
           }
           break;
         case '73': // Vertical text justification
-          if (entityType === 'TEXT' || entityType === 'MTEXT') {
+          if (this.isTextEntity(entityType)) {
             const vAlign = parseInt(value);
             if (!isNaN(vAlign)) {
               entity.properties.verticalAlign = vAlign;
@@ -426,12 +701,20 @@ export class DXFParser {
     }
 
     // Pós-processamento para polylines
-    if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
+    if (entityType === 'LWPOLYLINE' && lwPolylineVertices.length > 0) {
+      entity.properties.vertices = lwPolylineVertices
+        .filter((vertex): vertex is DXFVertex => typeof vertex.x === 'number' && typeof vertex.y === 'number')
+        .map((vertex) => (
+          typeof vertex.bulge === 'number'
+            ? { x: vertex.x, y: vertex.y, bulge: vertex.bulge }
+            : { x: vertex.x, y: vertex.y }
+        ));
+    } else if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
       entity.properties.vertices = this.extractPolylineVertices(entity.properties);
     }
 
     // Pós-processamento para textos
-    if ((entityType === 'TEXT' || entityType === 'MTEXT') && 
+    if (this.isTextEntity(entityType) && 
         entity.properties.alignmentX !== undefined && 
         entity.properties.alignmentY !== undefined) {
       
@@ -448,6 +731,216 @@ export class DXFParser {
     }
 
     return entity;
+  }
+
+  private cloneVertices(vertices: DXFVertex[] | undefined): DXFVertex[] | undefined {
+    if (!vertices) {
+      return undefined;
+    }
+
+    return vertices.map((vertex) => (
+      typeof vertex.bulge === 'number'
+        ? { x: vertex.x, y: vertex.y, bulge: vertex.bulge }
+        : { x: vertex.x, y: vertex.y }
+    ));
+  }
+
+  private cloneEntity(entity: DXFEntity): DXFEntity {
+    return {
+      type: entity.type,
+      layer: entity.layer,
+      properties: {
+        ...entity.properties,
+        ...(entity.properties.vertices ? { vertices: this.cloneVertices(entity.properties.vertices) } : {})
+      }
+    };
+  }
+
+  private transformInsertPoint(
+    x: number,
+    y: number,
+    block: DXFBlockDefinition,
+    transform: DXFInsertTransform
+  ): { x: number; y: number } {
+    const localX = (x - block.baseX) * transform.scaleX;
+    const localY = (y - block.baseY) * transform.scaleY;
+    const radians = (transform.rotation * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+
+    return {
+      x: transform.x + (localX * cos) - (localY * sin),
+      y: transform.y + (localX * sin) + (localY * cos)
+    };
+  }
+
+  private normalizeInsertScale(value: number | null): number {
+    if (value === null || !Number.isFinite(value) || Math.abs(value) <= 0.0000001) {
+      return 1;
+    }
+    return value;
+  }
+
+  private buildInsertTransform(entity: DXFEntity): DXFInsertTransform {
+    return {
+      x: this.parseNumber(entity.properties.x) ?? 0,
+      y: this.parseNumber(entity.properties.y) ?? 0,
+      scaleX: this.normalizeInsertScale(this.parseNumber(entity.properties.scaleX)),
+      scaleY: this.normalizeInsertScale(this.parseNumber(entity.properties.scaleY)),
+      rotation: this.parseNumber(entity.properties.rotation) ?? 0,
+      layer: entity.layer || '0'
+    };
+  }
+
+  private expandInsertEntity(
+    entity: DXFEntity,
+    blockDefinitions: Map<string, DXFBlockDefinition>,
+    depth: number = 0
+  ): DXFEntity[] {
+    if (depth > 8) {
+      return [];
+    }
+
+    const blockName = typeof entity.properties.blockName === 'string'
+      ? entity.properties.blockName.trim()
+      : (typeof entity.properties.code_2 === 'string' ? entity.properties.code_2.trim() : '');
+    if (!blockName) {
+      return [];
+    }
+
+    const block = blockDefinitions.get(blockName);
+    if (!block) {
+      return [];
+    }
+
+    const transform = this.buildInsertTransform(entity);
+    return block.entities.flatMap((childEntity) => this.materializeBlockEntity(childEntity, block, transform, blockDefinitions, depth + 1));
+  }
+
+  private materializeBlockEntity(
+    sourceEntity: DXFEntity,
+    block: DXFBlockDefinition,
+    transform: DXFInsertTransform,
+    blockDefinitions: Map<string, DXFBlockDefinition>,
+    depth: number
+  ): DXFEntity[] {
+    const entity = this.cloneEntity(sourceEntity);
+    const props = entity.properties;
+    const resolvedLayer = entity.layer === '0' ? transform.layer : entity.layer;
+    const averageScale = (Math.abs(transform.scaleX) + Math.abs(transform.scaleY)) / 2;
+    const mirrored = (transform.scaleX * transform.scaleY) < 0;
+
+    entity.layer = resolvedLayer;
+
+    switch (entity.type) {
+      case 'LINE': {
+        const start = (typeof props.x1 === 'number' && typeof props.y1 === 'number')
+          ? this.transformInsertPoint(props.x1, props.y1, block, transform)
+          : null;
+        const end = (typeof props.x2 === 'number' && typeof props.y2 === 'number')
+          ? this.transformInsertPoint(props.x2, props.y2, block, transform)
+          : null;
+        if (!start || !end) {
+          return [entity];
+        }
+        props.x1 = start.x;
+        props.y1 = start.y;
+        props.x2 = end.x;
+        props.y2 = end.y;
+        props.x = start.x;
+        props.y = start.y;
+        return [entity];
+      }
+      case 'POINT':
+      case 'TEXT':
+      case 'MTEXT':
+      case 'ATTRIB': {
+        if (typeof props.x === 'number' && typeof props.y === 'number') {
+          const point = this.transformInsertPoint(props.x, props.y, block, transform);
+          props.x = point.x;
+          props.y = point.y;
+        }
+        if (typeof props.alignmentX === 'number' && typeof props.alignmentY === 'number') {
+          const alignPoint = this.transformInsertPoint(props.alignmentX, props.alignmentY, block, transform);
+          props.alignmentX = alignPoint.x;
+          props.alignmentY = alignPoint.y;
+        }
+        if (entity.type !== 'POINT') {
+          if (typeof props.height === 'number') {
+            props.height = Math.max(props.height * averageScale, 0.0001);
+          }
+          if (typeof props.textHeight === 'number') {
+            props.textHeight = Math.max(props.textHeight * averageScale, 0.0001);
+          }
+          if (typeof props.rotation === 'number') {
+            props.rotation += transform.rotation;
+          } else {
+            props.rotation = transform.rotation;
+          }
+        }
+        return [entity];
+      }
+      case 'CIRCLE':
+      case 'ARC': {
+        const centerX = typeof props.centerX === 'number' ? props.centerX : props.x;
+        const centerY = typeof props.centerY === 'number' ? props.centerY : props.y;
+        if (typeof centerX !== 'number' || typeof centerY !== 'number') {
+          return [entity];
+        }
+        const center = this.transformInsertPoint(centerX, centerY, block, transform);
+        props.centerX = center.x;
+        props.centerY = center.y;
+        props.x = center.x;
+        props.y = center.y;
+        if (typeof props.radius === 'number') {
+          props.radius = Math.max(props.radius * averageScale, 0.0001);
+        }
+        if (entity.type === 'ARC') {
+          if (typeof props.startAngle === 'number') {
+            props.startAngle += transform.rotation;
+          }
+          if (typeof props.endAngle === 'number') {
+            props.endAngle += transform.rotation;
+          }
+        }
+        return [entity];
+      }
+      case 'LWPOLYLINE':
+      case 'POLYLINE': {
+        if (props.vertices && props.vertices.length > 0) {
+          props.vertices = props.vertices.map((vertex) => {
+            const point = this.transformInsertPoint(vertex.x, vertex.y, block, transform);
+            const nextVertex: DXFVertex = { x: point.x, y: point.y };
+            if (typeof vertex.bulge === 'number') {
+              nextVertex.bulge = mirrored ? -vertex.bulge : vertex.bulge;
+            }
+            return nextVertex;
+          });
+          props.x = props.vertices[0]?.x;
+          props.y = props.vertices[0]?.y;
+        }
+        return [entity];
+      }
+      case 'INSERT': {
+        const nestedInsertPoint = this.transformInsertPoint(
+          typeof props.x === 'number' ? props.x : block.baseX,
+          typeof props.y === 'number' ? props.y : block.baseY,
+          block,
+          transform
+        );
+        entity.layer = resolvedLayer;
+        entity.properties.x = nestedInsertPoint.x;
+        entity.properties.y = nestedInsertPoint.y;
+        entity.properties.scaleX = this.normalizeInsertScale(this.parseNumber(props.scaleX)) * transform.scaleX;
+        entity.properties.scaleY = this.normalizeInsertScale(this.parseNumber(props.scaleY)) * transform.scaleY;
+        entity.properties.rotation = (this.parseNumber(props.rotation) ?? 0) + transform.rotation;
+
+        const expandedNested = this.expandInsertEntity(entity, blockDefinitions, depth);
+        return expandedNested.length > 0 ? expandedNested : [entity];
+      }
+      default:
+        return [entity];
+    }
   }
 
   /**
@@ -529,6 +1022,11 @@ export class DXFParser {
         case '6': // Line type
           layer.lineType = value;
           break;
+        case '999':
+          if (value === 'GEO_LIMITES_EDITOR_LAYER') {
+            layer.editorCreated = true;
+          }
+          break;
       }
 
       this.currentIndex += 2;
@@ -549,11 +1047,16 @@ export class DXFParser {
     
     // Combina as coordenadas X e Y
     const minLength = Math.min(xCoords.length, yCoords.length);
+    const bulges = this.parseNumberList(properties.code_42);
     for (let i = 0; i < minLength; i++) {
-      vertices.push({
+      const vertex: DXFVertex = {
         x: xCoords[i],
         y: yCoords[i]
-      });
+      };
+      if (typeof bulges[i] === 'number' && Number.isFinite(bulges[i]) && Math.abs(bulges[i]) > 0.000001) {
+        vertex.bulge = bulges[i];
+      }
+      vertices.push(vertex);
     }
     
     // Se não encontrou vértices no formato acima, tenta outros formatos

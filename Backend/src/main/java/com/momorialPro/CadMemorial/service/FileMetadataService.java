@@ -3,8 +3,10 @@ package com.momorialPro.CadMemorial.service;
 
 
 import com.momorialPro.CadMemorial.model.FileMetadata;
+import com.momorialPro.CadMemorial.model.Property;
 import com.momorialPro.CadMemorial.model.User;
 import com.momorialPro.CadMemorial.repository.FileMetadataRepository;
+import com.momorialPro.CadMemorial.repository.PropertyRepository;
 import com.momorialPro.CadMemorial.repository.UserRepository;
 import com.momorialPro.CadMemorial.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +19,12 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.*;
+import java.util.Comparator;
 import java.security.MessageDigest;
 import java.util.*;
 
@@ -28,6 +35,7 @@ import java.util.*;
 public class FileMetadataService {
 
     private final FileMetadataRepository repository;
+    private final PropertyRepository propertyRepository;
     private final UserRepository userRepository;
 
     @Value("${memorialpro.storage.dxf-dir:uploads/dxf}")
@@ -41,6 +49,18 @@ public class FileMetadataService {
 
     @Transactional
     public FileMetadata store(MultipartFile file) throws IOException {
+        return store(file, null, null);
+    }
+
+    @Transactional
+    public FileMetadata store(MultipartFile file, UUID propertyId, Boolean primaryForProperty) throws IOException {
+        // #region debug-point B:store-entry
+        reportDxfUpload500Debug("B", "[DEBUG] store called", Map.of(
+                "originalName", file != null ? String.valueOf(file.getOriginalFilename()) : "null",
+                "propertyId", propertyId == null ? "null" : propertyId.toString(),
+                "primaryForProperty", primaryForProperty == null ? "null" : primaryForProperty.toString()
+        ));
+        // #endregion
         if (file == null || file.isEmpty())
             throw new IllegalArgumentException("Arquivo vazio");
 
@@ -58,6 +78,44 @@ public class FileMetadataService {
 
         // --- obtém o usuário logado pelo token JWT ---
         User owner = AuthUtils.getRequiredCurrentUser();
+        UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
+        Property property = null;
+        boolean shouldSetPrimary = false;
+
+        if (propertyId != null) {
+            // #region debug-point C:property-lookup
+            reportDxfUpload500Debug("C", "[DEBUG] resolving property for uploaded file", Map.of(
+                    "propertyId", propertyId.toString(),
+                    "tenantId", tenantId.toString(),
+                    "ownerId", owner.getId() == null ? "null" : owner.getId().toString()
+            ));
+            // #endregion
+            property = propertyRepository.findByPropertyIdAndTenantIdAndUserIdAndActiveTrue(propertyId, tenantId, owner.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Imovel nao encontrado para vincular o arquivo tecnico."));
+
+            List<FileMetadata> currentPropertyFiles = repository.findByTenantIdAndPropertyPropertyIdOrderByCreatedAtDesc(tenantId, propertyId);
+            shouldSetPrimary = Boolean.TRUE.equals(primaryForProperty) || currentPropertyFiles.isEmpty();
+            // #region debug-point C:property-files-loaded
+            reportDxfUpload500Debug("C", "[DEBUG] current property files loaded", Map.of(
+                    "propertyId", propertyId.toString(),
+                    "currentFileCount", String.valueOf(currentPropertyFiles.size()),
+                    "shouldSetPrimary", String.valueOf(shouldSetPrimary)
+            ));
+            // #endregion
+
+            if (shouldSetPrimary) {
+                currentPropertyFiles.forEach(existingFile -> existingFile.setPrimaryForProperty(false));
+                if (!currentPropertyFiles.isEmpty()) {
+                    // #region debug-point D:clear-primary
+                    reportDxfUpload500Debug("D", "[DEBUG] clearing previous primary flags", Map.of(
+                            "propertyId", propertyId.toString(),
+                            "affectedFileCount", String.valueOf(currentPropertyFiles.size())
+                    ));
+                    // #endregion
+                    repository.saveAll(currentPropertyFiles);
+                }
+            }
+        }
 
         FileMetadata meta = FileMetadata.builder()
                 .originalName(original)
@@ -69,18 +127,43 @@ public class FileMetadataService {
                 .diskPath(target.toString())
                 .tenant(owner.getTenant())
                 .owner(owner)
+                .property(property)
+                .primaryForProperty(shouldSetPrimary)
                 .build();
 
+        // #region debug-point E:store-save
+        reportDxfUpload500Debug("E", "[DEBUG] saving file metadata", Map.of(
+                "storedName", storedName,
+                "propertyResolved", String.valueOf(property != null),
+                "primaryForProperty", String.valueOf(shouldSetPrimary)
+        ));
+        // #endregion
         return repository.save(meta);
     }
 
     @Transactional(readOnly = true)
     public List<FileMetadata> list() {
+        return list(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FileMetadata> list(UUID propertyId) {
         String username = AuthUtils.getCurrentUsername();
         if (username == null)
             throw new IllegalStateException("Usuário não autenticado");
 
         UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
+        if (propertyId != null) {
+            return repository.findByTenantIdAndOwnerUsernameAndPropertyPropertyIdOrderByCreatedAtDesc(
+                    tenantId,
+                    username,
+                    propertyId
+            ).stream()
+                    .sorted(Comparator
+                            .comparing((FileMetadata file) -> !Boolean.TRUE.equals(file.getPrimaryForProperty()))
+                            .thenComparing(FileMetadata::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .toList();
+        }
         return repository.findByTenantIdAndOwnerUsernameOrderByCreatedAtDesc(tenantId, username);
     }
 
@@ -128,5 +211,35 @@ public class FileMetadataService {
         } catch (Exception e) {
             throw new RuntimeException("Falha ao calcular SHA-256", e);
         }
+    }
+
+    private void reportDxfUpload500Debug(String hypothesisId, String msg, Map<String, ?> data) {
+        try {
+            String payload = "{\"sessionId\":\"dxf-upload-500\",\"runId\":\"pre-fix\",\"hypothesisId\":\"" + hypothesisId +
+                    "\",\"location\":\"FileMetadataService.java\",\"msg\":\"" + escapeJson(msg) +
+                    "\",\"data\":" + mapToJson(data) + ",\"ts\":" + System.currentTimeMillis() + "}";
+            HttpClient.newHttpClient().sendAsync(
+                    HttpRequest.newBuilder(URI.create("http://127.0.0.1:7778/event"))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(payload))
+                            .build(),
+                    HttpResponse.BodyHandlers.discarding()
+            );
+        } catch (Exception ignored) {
+        }
+    }
+
+    private String mapToJson(Map<String, ?> data) {
+        return data.entrySet().stream()
+                .map(entry -> "\"" + escapeJson(entry.getKey()) + "\":\"" + escapeJson(String.valueOf(entry.getValue())) + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "{", "}"));
+    }
+
+    private String escapeJson(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n");
     }
 }

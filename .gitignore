@@ -6,3 +6,18 @@ docker-compose.override.yml
 # Local task handoffs and scratch notes
 HANDOFF_NOVA_TASK.md
 HANDOFF_*.local.md
+
+# Local debug artifacts
+.dbg/
+Frontend/.dbg/
+Frontend/.tmp/
+.trae-publish-temp/
+.trae-*.txt
+Backend/cp.txt
+Backend/mvn-output.txt
+
+# Generated memorial/summary outputs
+Backend/Memoriais/ResumoTecnico*.md
+Backend/Memoriais/Template.md
+Backend/Memoriais/MemorialComIA*.md
+Frontend/memoriais/memorial_IA.md

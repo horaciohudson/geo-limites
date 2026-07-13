@@ -58,6 +58,8 @@ export interface UpdateTenantSettingsRequest {
 export interface ApiSettings {
   templateApiProvider: string;
   memorialApiProvider: string;
+  templateApiModel: string;
+  memorialApiModel: string;
 }
 
 export interface CreditPackageSettings {
@@ -84,6 +86,8 @@ export interface CreditPricingSettings {
 export interface UpdateApiSettingsRequest {
   templateApiProvider: string;
   memorialApiProvider: string;
+  templateApiModel: string;
+  memorialApiModel: string;
 }
 
 export interface OnboardingNotificationSettings {

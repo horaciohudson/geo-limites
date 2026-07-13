@@ -43,7 +43,7 @@ const ResendVerification: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const locationState = (location.state as ResendVerificationLocationState | null) || null;
   const [form, setForm] = useState<FormState>({
-    tenantCode: String(locationState?.tenantCode || localStorage.getItem('tenantCode') || '').toUpperCase(),
+    tenantCode: String(locationState?.tenantCode || '').toUpperCase(),
     email: String(locationState?.email || locationState?.username || ''),
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -52,13 +52,13 @@ const ResendVerification: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (locationState?.tenantCode && !form.tenantCode) {
+    if (locationState?.tenantCode) {
       setForm((prev) => ({ ...prev, tenantCode: String(locationState.tenantCode).toUpperCase() }));
     }
-    if ((locationState?.email || locationState?.username) && !form.email) {
+    if (locationState?.email || locationState?.username) {
       setForm((prev) => ({ ...prev, email: String(locationState?.email || locationState?.username) }));
     }
-  }, [form.email, form.tenantCode, locationState]);
+  }, [locationState]);
 
   if (isAuthenticated) {
     return <Navigate to="/properties" replace />;

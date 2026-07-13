@@ -347,7 +347,7 @@ const PropertyBasicData: React.FC<PropertyBasicDataProps> = ({ data, landmarks, 
         </div>
         <p className="section-description">
           Informe o nome exatamente como aparece no desenho, como `P1`, `V01` ou `ESTACA 10`, junto com a coordenada real correspondente.
-          Com pelo menos dois pontos o sistema consegue alinhar melhor o DXF ao georreferenciamento real.
+          O georreferenciamento do DXF exige no minimo 2 pontos validos, e aceita mais de 2 para melhorar a confianca do alinhamento.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -450,7 +450,7 @@ const PropertyBasicData: React.FC<PropertyBasicDataProps> = ({ data, landmarks, 
           </div>
 
           <div style={{ color: '#64748b', fontSize: '14px' }}>
-            Dica: use os nomes exatamente como aparecem no desenho. Com dois pontos ou mais o alinhamento georreferenciado fica mais confiavel.
+            Dica: use os nomes exatamente como aparecem no desenho. O sistema exige no minimo 2 pontos para georreferenciar e aproveita todos os pontos validos cadastrados.
           </div>
 
         </div>

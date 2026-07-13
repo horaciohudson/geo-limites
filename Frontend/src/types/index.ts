@@ -49,6 +49,7 @@ export interface FileMetadata {
   extension: string;        // extensão (dxf, dwg)
   contentType: string;      // tipo MIME
   sizeBytes: number;        // tamanho em bytes
+  primaryForProperty?: boolean;
   checksumSha256?: string;  // opcional
   diskPath?: string;        // opcional
   ownerId?: string;         // id do dono (UUID)

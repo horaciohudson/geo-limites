@@ -4,18 +4,45 @@ import {
   notifySessionExpired,
   validateJwtLocally,
 } from '@/auth/session';
+import { desktopApi } from '@/services/desktopApi';
 
 // Configuracao da API para GeoLimites
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
+const fallbackApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
+
+const normalizeBackendApiBaseUrl = (baseUrl: string) => {
+  const sanitizedBaseUrl = baseUrl.replace(/\/+$/, '');
+  return sanitizedBaseUrl.toLowerCase().endsWith('/api')
+    ? sanitizedBaseUrl
+    : `${sanitizedBaseUrl}/api`;
+};
+
+let cachedDesktopApiBaseUrlPromise: Promise<string> | null = null;
+
+const resolveApiBaseUrl = async () => {
+  if (!desktopApi.hasBridge()) {
+    return fallbackApiBaseUrl;
+  }
+
+  if (!cachedDesktopApiBaseUrlPromise) {
+    cachedDesktopApiBaseUrlPromise = desktopApi
+      .getBackendBaseUrl()
+      .then((baseUrl) => normalizeBackendApiBaseUrl(baseUrl))
+      .catch(() => fallbackApiBaseUrl);
+  }
+
+  return cachedDesktopApiBaseUrlPromise;
+};
 
 const api = axios.create({
-  baseURL: apiBaseUrl,
-  timeout: 300000, // 5 MINUTOS (300 segundos) - Necessario para geracao de memorial em fluxos longos
+  baseURL: fallbackApiBaseUrl,
+  timeout: 900000, // 15 MINUTOS - Necessario para geracao de memorial em fluxos soberanos longos
 });
 
 // Interceptor para adicionar token JWT automaticamente
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    config.baseURL = await resolveApiBaseUrl();
+
     const token = getStoredToken();
     if (token) {
       // Validar token antes de usar
@@ -49,7 +76,7 @@ api.interceptors.response.use(
 
     // Tratamento específico para timeout
     if (error.code === 'ECONNABORTED') {
-      console.error('⏰ Timeout: Requisição demorou mais que 5 minutos');
+      console.error('â° Timeout: RequisiÃ§Ã£o demorou mais que 15 minutos');
     } else if (!isAuthRequest && hasStoredToken && (error.response?.status === 401 || tokenExpiredHeader)) {
       notifySessionExpired('Sua sessao expirou. Faca login novamente.');
     } else if (!isAuthRequest && hasStoredToken && error.response?.status === 403) {

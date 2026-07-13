@@ -1,68 +1,63 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, useEffect } from 'react';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/auth/AuthContext';
-import { CreditProvider } from './contexts/CreditContext';
 import PrivateRoute from '@/routes/PrivateRoute';
-import { Navbar, Sidebar } from '@/components';
-import CreditNotification from './components/CreditNotification';
-import { Login, Register, VerifyEmail, ResendVerification, Files, Viewer, Report, MemorialStandards, Memorial, ManageStandards, ConfigureTemplates, PropertyRegister, PropertiesPresentation, MyAccount, AdminSettings } from '@/pages';
-import TestViewer from '@/pages/TestViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { TOKEN_STORAGE_KEY } from '@/auth/session';
-import { FileProvider } from '@/contexts/FileContext'; // ✅ Import do novo contexto
-import { ConfigProvider } from '@/contexts/ConfigContext'; // ✅ Import do contexto de configuração
+import { desktopApi } from '@/services/desktopApi';
 import { openHelpPage } from '@/utils/helpLinks';
+import { LAST_DESKTOP_FILE_DIALOG_DIRECTORY_STORAGE_KEY } from '@/utils/desktopFileDialogState';
 import './styles/App.css';
 
+const LoginPage = React.lazy(() => import('@/pages/Login'));
+const RegisterPage = React.lazy(() => import('@/pages/Register'));
+const VerifyEmailPage = React.lazy(() => import('@/pages/VerifyEmail'));
+const ResendVerificationPage = React.lazy(() => import('@/pages/ResendVerification'));
+const CadEditorPage = React.lazy(() => import('@/graphics-engine/adapters/geolimites/GeoLimitesCadEditor'));
+const ViewerPage = React.lazy(() => import('@/pages/Viewer'));
+const ViewerDocumentPage = React.lazy(() => import('@/pages/ViewerDocument'));
+const TestViewerPage = React.lazy(() => import('@/pages/TestViewer'));
+const ReportPage = React.lazy(() => import('@/pages/Report'));
+const MemorialStandardsPage = React.lazy(() => import('@/pages/MemorialStandards'));
+const MemorialPage = React.lazy(() => import('@/pages/Memorial'));
+const ConfigureTemplatesPage = React.lazy(() => import('@/pages/ConfigureTemplates'));
+const PropertyRegisterPage = React.lazy(() => import('@/pages/PropertyRegister'));
+const PropertiesPresentationPage = React.lazy(() => import('@/pages/PropertiesPresentation'));
+const MyAccountPage = React.lazy(() => import('@/pages/MyAccount'));
+const AdminSettingsPage = React.lazy(() => import('@/pages/AdminSettings'));
+const AuthenticatedAppShell = React.lazy(() => import('@/layouts/AuthenticatedAppShell'));
 
-// Context para ações do Sidebar
-interface SidebarContextType {
-  viewerActions: {
-    onDownload?: () => void;
-    onGenerateMemorial?: () => void;
-    onDownloadMemorial?: () => void;
-    onBack?: () => void;
-    isGeneratingMemorial?: boolean;
-    hasMemorial?: boolean;
-    hasDxfData?: boolean;
-    currentFileId?: string;
-  } | null;
-  setViewerActions: (actions: SidebarContextType['viewerActions']) => void;
-}
+const RouteFallback: React.FC<{ label?: string }> = ({ label = 'Carregando pagina...' }) => (
+  <div className="page-loading-state">{label}</div>
+);
 
-const SidebarContext = createContext<SidebarContextType>({
-  viewerActions: null,
-  setViewerActions: () => {}
-});
+const RouterComponent = desktopApi.hasBridge() ? HashRouter : BrowserRouter;
 
-export const useSidebarActions = () => useContext(SidebarContext);
+const getCurrentAppPath = () => {
+  if (!desktopApi.hasBridge()) {
+    return window.location.pathname;
+  }
+
+  const normalizedHash = window.location.hash.replace(/^#/, '');
+  if (!normalizedHash) {
+    return '/';
+  }
+
+  const [pathSegment] = normalizedHash.split('?');
+  return pathSegment.startsWith('/') ? pathSegment : `/${pathSegment}`;
+};
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  const [viewerActions, setViewerActions] = useState<SidebarContextType['viewerActions']>(null);
 
   if (!isAuthenticated) {
     return <>{children}</>;
   }
 
   return (
-    <SidebarContext.Provider value={{ viewerActions, setViewerActions }}>
-      {/* ✅ Envolve tudo no ConfigProvider, FileProvider e CreditProvider */}
-      <ConfigProvider>
-        <FileProvider>
-          <CreditProvider>
-          <div className="app-layout">
-            <Navbar />
-            <div className="app-content">
-              <Sidebar viewerActions={viewerActions || undefined} />
-              <main className="main-content">{children}</main>
-            </div>
-            <CreditNotification />
-          </div>
-          </CreditProvider>
-        </FileProvider>
-      </ConfigProvider>
-    </SidebarContext.Provider>
+    <Suspense fallback={<RouteFallback label="Carregando ambiente..." />}>
+      <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
+    </Suspense>
   );
 };
 
@@ -73,8 +68,13 @@ const App: React.FC = () => {
       // Lista de chaves que devem ser mantidas (tokens + dados de sessão importantes)
       const keysToKeep = [
         TOKEN_STORAGE_KEY,
-        'selectedFiles', 'selectedMemorialNorms', 'selectedTemplate', 'createdTemplates',
-        'memorialPro_templatesFolder' // ✅ Manter configuração de pasta de templates
+        'selectedFiles', 'selectedMemorialNorms', 'selectedTemplate', 'createdMemorialStandards',
+        'selectedPropertyForMemorial',
+        'selectedFilesByProperty',
+        'selectedMemorialNormsByProperty', 'selectedTemplateByProperty', 'memorialSelectionDraftByProperty',
+        'viewerSelectionState',
+        'memorialPro_templatesFolder', // âœ… Manter configuraÃ§Ã£o de pasta de templates
+        LAST_DESKTOP_FILE_DIALOG_DIRECTORY_STORAGE_KEY
       ];
       
       // Padrões de chaves que devem ser mantidas
@@ -110,7 +110,9 @@ const App: React.FC = () => {
   // Configurar limpeza apenas no fechamento real da aplicação
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // Limpar apenas no fechamento real da aba/navegador
+      if (getCurrentAppPath().startsWith('/viewer-document')) {
+        return;
+      }
       clearAppData();
     };
 
@@ -141,7 +143,7 @@ const App: React.FC = () => {
       if ('stopImmediatePropagation' in event) {
         event.stopImmediatePropagation();
       }
-      openHelpPage(window.location.pathname);
+      openHelpPage(getCurrentAppPath());
     };
 
     window.addEventListener('keydown', handleHelpShortcut, true);
@@ -153,21 +155,51 @@ const App: React.FC = () => {
 
   return (
     <AuthProvider>
-      <Router>
+      <RouterComponent>
         <AppLayout>
           <Routes>
             {/* Rotas públicas */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="/resend-verification" element={<ResendVerification />} />
+            <Route
+              path="/login"
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <LoginPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <RegisterPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/verify-email"
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <VerifyEmailPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/resend-verification"
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <ResendVerificationPage />
+                </Suspense>
+              }
+            />
 
             {/* Rotas protegidas */}
             <Route
               path="/properties"
               element={
                 <PrivateRoute>
-                  <PropertiesPresentation />
+                  <Suspense fallback={<RouteFallback />}>
+                    <PropertiesPresentationPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -175,7 +207,9 @@ const App: React.FC = () => {
               path="/properties/cadastro"
               element={
                 <PrivateRoute>
-                  <PropertyRegister />
+                  <Suspense fallback={<RouteFallback />}>
+                    <PropertyRegisterPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -183,7 +217,7 @@ const App: React.FC = () => {
               path="/files"
               element={
                 <PrivateRoute>
-                  <Files />
+                  <Navigate to="/cad-editor" replace />
                 </PrivateRoute>
               }
             />
@@ -191,7 +225,29 @@ const App: React.FC = () => {
               path="/viewer"
               element={
                 <PrivateRoute>
-                  <Viewer />
+                  <Suspense fallback={<RouteFallback />}>
+                    <ViewerPage />
+                  </Suspense>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/viewer-document"
+              element={
+                <PrivateRoute>
+                  <Suspense fallback={<RouteFallback />}>
+                    <ViewerDocumentPage />
+                  </Suspense>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/cad-editor"
+              element={
+                <PrivateRoute>
+                  <Suspense fallback={<RouteFallback label="Carregando editor..." />}>
+                    <CadEditorPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -199,7 +255,9 @@ const App: React.FC = () => {
               path="/test-viewer"
               element={
                 <PrivateRoute>
-                  <TestViewer />
+                  <Suspense fallback={<RouteFallback />}>
+                    <TestViewerPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -207,7 +265,9 @@ const App: React.FC = () => {
               path="/report"
               element={
                 <PrivateRoute>
-                  <Report />
+                  <Suspense fallback={<RouteFallback />}>
+                    <ReportPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -215,7 +275,9 @@ const App: React.FC = () => {
               path="/standards"
               element={
                 <PrivateRoute>
-                  <MemorialStandards />
+                  <Suspense fallback={<RouteFallback />}>
+                    <MemorialStandardsPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -223,7 +285,9 @@ const App: React.FC = () => {
               path="/memorial"
               element={
                 <PrivateRoute>
-                  <Memorial />
+                  <Suspense fallback={<RouteFallback />}>
+                    <MemorialPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -231,7 +295,9 @@ const App: React.FC = () => {
               path="/manage-standards"
               element={
                 <PrivateRoute>
-                  <ManageStandards />
+                  <Suspense fallback={<RouteFallback />}>
+                    <ConfigureTemplatesPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -239,7 +305,7 @@ const App: React.FC = () => {
               path="/configure-templates"
               element={
                 <PrivateRoute>
-                  <ConfigureTemplates />
+                  <Navigate to="/manage-standards" replace />
                 </PrivateRoute>
               }
             />
@@ -247,7 +313,9 @@ const App: React.FC = () => {
               path="/my-account"
               element={
                 <PrivateRoute>
-                  <MyAccount />
+                  <Suspense fallback={<RouteFallback />}>
+                    <MyAccountPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -255,7 +323,9 @@ const App: React.FC = () => {
               path="/admin"
               element={
                 <PrivateRoute>
-                  <AdminSettings />
+                  <Suspense fallback={<RouteFallback />}>
+                    <AdminSettingsPage />
+                  </Suspense>
                 </PrivateRoute>
               }
             />
@@ -270,7 +340,7 @@ const App: React.FC = () => {
             <Route path="*" element={<Navigate to="/properties" replace />} />
           </Routes>
         </AppLayout>
-      </Router>
+      </RouterComponent>
     </AuthProvider>
   );
 };

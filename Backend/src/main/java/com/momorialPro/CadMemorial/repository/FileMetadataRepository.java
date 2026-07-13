@@ -10,11 +10,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface FileMetadataRepository extends JpaRepository<FileMetadata, UUID> {
     List<FileMetadata> findByOwnerUsername(String username);
     List<FileMetadata> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
     List<FileMetadata> findByTenantIdAndOwnerUsernameOrderByCreatedAtDesc(UUID tenantId, String username);
+    List<FileMetadata> findByTenantIdAndOwnerUsernameAndPropertyPropertyIdOrderByCreatedAtDesc(UUID tenantId, String username, UUID propertyId);
+    List<FileMetadata> findByTenantIdAndPropertyPropertyIdOrderByCreatedAtDesc(UUID tenantId, UUID propertyId);
+    List<FileMetadata> findByIdInAndTenantId(Set<UUID> ids, UUID tenantId);
     Optional<FileMetadata> findByIdAndTenantId(UUID id, UUID tenantId);
 }

@@ -1,9 +1,23 @@
 import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useFileContext } from '@/contexts/FileContext';
+import { useOperationContext } from '@/contexts/OperationContext';
 import { useAuth } from '@/auth/AuthContext';
 import { useTenantOperationalAccess } from '@/hooks/useTenantOperationalAccess';
 import styles from '../styles/Sidebar.module.css';
+
+interface StoredPropertySelection {
+  id?: string;
+  propertyId?: string;
+  name?: string;
+  registrationNumber?: string;
+  dxfFiles?: Array<{
+    id?: string;
+    originalName?: string;
+    fileName?: string;
+    primaryForProperty?: boolean;
+  }>;
+}
 
 interface ViewerActions {
   onGenerateMemorial?: () => void;
@@ -20,33 +34,48 @@ const Sidebar: React.FC<SidebarProps> = ({ viewerActions: _viewerActions }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { selectedFiles } = useFileContext();
+  const { selectedProperty } = useOperationContext();
   const { user, logout } = useAuth();
   const { isRestricted, restrictionMessage } = useTenantOperationalAccess();
   const canAccessAdmin = user?.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN') ?? false;
 
-  const handleViewFile = () => {
-    if (selectedFiles.length > 1) {
-      // Múltiplos arquivos selecionados - navegar com IDs múltiplos
-      const fileIds = selectedFiles.map(f => f.id).join(',');
-      navigate(`/viewer?fileIds=${fileIds}`);
-    } else if (selectedFiles.length === 1) {
-      // Um arquivo selecionado
-      navigate(`/viewer?fileId=${selectedFiles[0].id}`);
-    } else {
-      alert('Selecione um ou mais arquivos na lista antes de visualizar.');
+  const getStoredLinkedDxfCount = (): number => {
+    try {
+      const parsed = selectedProperty as StoredPropertySelection | null;
+      return Array.isArray(parsed?.dxfFiles) ? parsed!.dxfFiles!.filter((file) => file?.id).length : 0;
+    } catch {
+      return 0;
     }
   };
 
-  const isViewerActive = location.pathname === '/viewer';
+  const handleViewFile = () => {
+    navigate('/memorial');
+  };
+
+  const handleOpenCadEditor = () => {
+    navigate('/cad-editor');
+  };
+
+  const isViewerActive = location.pathname === '/memorial';
+  const isCadEditorActive = location.pathname === '/cad-editor';
 
   return (
     <aside className={styles.sidebar}>
       <nav className={styles.sidebarNav}>
         <div className={styles.sidebarActions}>
-          <div className={styles.sidebarSectionHeader}>
-            <span className={styles.sidebarSectionHeaderTitle}>Operacao</span>
-          </div>
+          <div className={styles.sidebarSectionTitle}>Operacao</div>
           <ul className={styles.sidebarMenu}>
+            <li>
+              <button
+                className={`${styles.sidebarActionBtn} ${isCadEditorActive ? styles.active : ''}`}
+                onClick={handleOpenCadEditor}
+                title="Abrir o Editor CAD"
+              >
+                <span className={styles.sidebarIcon}>✏️</span>
+                <span className={styles.sidebarLabel}>Editor CAD</span>
+              </button>
+            </li>
+
             <li>
               <NavLink
                 to="/properties"
@@ -68,49 +97,25 @@ const Sidebar: React.FC<SidebarProps> = ({ viewerActions: _viewerActions }) => {
                 }
               >
                 <span className={styles.sidebarIcon}>📋</span>
-                <span className={styles.sidebarLabel}>Normas e Templates</span>
+                <span className={styles.sidebarLabel}>Configurar Memorial</span>
               </NavLink>
-            </li>
-
-            <li>
-              {isRestricted ? (
-                <button
-                  type="button"
-                  className={styles.sidebarActionBtn}
-                  disabled
-                  title={restrictionMessage}
-                >
-                  <span className={styles.sidebarIcon}>📁</span>
-                  <span className={styles.sidebarLabel}>Arquivos DXF</span>
-                </button>
-              ) : (
-                <NavLink
-                  to="/files"
-                  className={({ isActive }) =>
-                    `${styles.sidebarActionBtn} ${isActive ? styles.active : ''}`
-                  }
-                >
-                  <span className={styles.sidebarIcon}>📁</span>
-                  <span className={styles.sidebarLabel}>
-                    Arquivos DXF
-                    {selectedFiles.length > 0 && (
-                      <span className={styles.sidebarCountBadge}>
-                        {selectedFiles.length}
-                      </span>
-                    )}
-                  </span>
-                </NavLink>
-              )}
             </li>
 
             <li>
               <button
                 className={`${styles.sidebarActionBtn} ${isViewerActive ? styles.active : ''}`}
                 onClick={handleViewFile}
-                title="Visualizar arquivo selecionado"
+                title="Abrir Memorial"
               >
                 <span className={styles.sidebarIcon}>👁️</span>
-                <span className={styles.sidebarLabel}>Visualizador</span>
+                <span className={styles.sidebarLabel}>
+                  Memorial
+                  {selectedFiles.length === 0 && getStoredLinkedDxfCount() > 0 && (
+                    <span className={styles.sidebarCountBadge}>
+                      {getStoredLinkedDxfCount()}
+                    </span>
+                  )}
+                </span>
               </button>
             </li>
           </ul>

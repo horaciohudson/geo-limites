@@ -20,8 +20,9 @@ export interface Template {
 export interface TemplateCreate {
   name: string;
   description?: string;
-  fileUrl: string;
-  filePath: string;
+  templateContent?: string;
+  fileUrl?: string;
+  filePath?: string;
   memorialStandardId?: string;
   municipality?: string;
   abntNorm?: string;
@@ -57,12 +58,13 @@ export interface TemplateGenerationRequest {
   abntNorm?: string;
   memorialStandardId?: string;
   exampleFileId: string;
-  targetFolderPath: string;
+  targetFolderPath?: string;
 }
 
 export interface TemplateGenerationResponse {
   id: string;
   name: string;
+  templateContent?: string;
   fileUrl: string;
   filePath: string;
   message: string;

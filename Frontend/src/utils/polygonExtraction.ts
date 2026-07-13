@@ -1,81 +1,77 @@
 import { calculateDistance, calculatePolygonArea } from './geometry';
 import type { Point2D } from './geometry';
 
-// Tolerância para fundir vértices e verificar se um ponto está na linha
-const TOLERANCE = 0.01;
-
-// Retorna o ponto de intersecção entre dois segmentos (se houver e não for nas pontas)
-function getIntersection(p1: Point2D, p2: Point2D, p3: Point2D, p4: Point2D): Point2D | null {
-  const d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
-  if (Math.abs(d) < 0.000001) return null; // Linhas paralelas
-
-  const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / d;
-  const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / d;
-
-  // Se t e u estão entre 0 e 1, há intersecção nos segmentos
-  if (t > -0.001 && t < 1.001 && u > -0.001 && u < 1.001) {
-    return {
-      x: p1.x + t * (p2.x - p1.x),
-      y: p1.y + t * (p2.y - p1.y)
-    };
-  }
-  return null;
-}
-
-// Verifica se dois pontos são iguais dentro da tolerância
-function pointsEqual(p1: Point2D, p2: Point2D) {
-  return Math.abs(p1.x - p2.x) < TOLERANCE && Math.abs(p1.y - p2.y) < TOLERANCE;
-}
-
-// Quebra segmentos nas intersecções (para lidar com linhas soltas que formam grid/T-junctions)
-function splitSegmentsAtIntersections(segments: {p1: Point2D, p2: Point2D}[]): {p1: Point2D, p2: Point2D}[] {
-  const result: {p1: Point2D, p2: Point2D}[] = [];
-  
-  for (let i = 0; i < segments.length; i++) {
-    const segA = segments[i];
-    const splits: Point2D[] = [segA.p1, segA.p2];
-
-    for (let j = 0; j < segments.length; j++) {
-      if (i === j) continue;
-      const segB = segments[j];
-      const inter = getIntersection(segA.p1, segA.p2, segB.p1, segB.p2);
-      
-      if (inter) {
-        // Verifica se a intersecção não é igual a uma das pontas
-        let isEndpoint = false;
-        for (const p of splits) {
-          if (pointsEqual(p, inter)) {
-            isEndpoint = true;
-            break;
-          }
-        }
-        if (!isEndpoint) {
-          splits.push(inter);
-        }
-      }
-    }
-
-    // Se houve quebra, ordena os pontos ao longo do segmento A e cria novos sub-segmentos
-    if (splits.length > 2) {
-      // Ordena por distância a partir de p1
-      splits.sort((a, b) => calculateDistance(segA.p1, a) - calculateDistance(segA.p1, b));
-      for (let k = 0; k < splits.length - 1; k++) {
-        if (!pointsEqual(splits[k], splits[k+1])) {
-          result.push({ p1: splits[k], p2: splits[k+1] });
-        }
-      }
-    } else {
-      result.push(segA);
-    }
-  }
-
-  return result;
-}
-
-export function extractFacesFromLines(rawSegments: {p1: Point2D, p2: Point2D}[]): Point2D[][] {
+export function extractFacesFromLines(
+  rawSegments: { p1: Point2D; p2: Point2D }[],
+  tolerance: number = 0.01
+): Point2D[][] {
   if (rawSegments.length === 0) return [];
 
-  // 0. Quebra segmentos nas intersecções (Resolve o problema de linhas soltas e grids T-junction)
+  const safeTolerance = Number.isFinite(tolerance) && tolerance > 0 ? tolerance : 0.01;
+
+  function pointsEqual(p1: Point2D, p2: Point2D) {
+    return Math.abs(p1.x - p2.x) < safeTolerance && Math.abs(p1.y - p2.y) < safeTolerance;
+  }
+
+  function getIntersection(p1: Point2D, p2: Point2D, p3: Point2D, p4: Point2D): Point2D | null {
+    const d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+    if (Math.abs(d) < 0.000001) return null;
+
+    const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / d;
+    const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / d;
+
+    if (t > -0.001 && t < 1.001 && u > -0.001 && u < 1.001) {
+      return {
+        x: p1.x + t * (p2.x - p1.x),
+        y: p1.y + t * (p2.y - p1.y)
+      };
+    }
+    return null;
+  }
+
+  function splitSegmentsAtIntersections(
+    segments: { p1: Point2D; p2: Point2D }[]
+  ): { p1: Point2D; p2: Point2D }[] {
+    const result: { p1: Point2D; p2: Point2D }[] = [];
+
+    for (let i = 0; i < segments.length; i++) {
+      const segA = segments[i];
+      const splits: Point2D[] = [segA.p1, segA.p2];
+
+      for (let j = 0; j < segments.length; j++) {
+        if (i === j) continue;
+        const segB = segments[j];
+        const inter = getIntersection(segA.p1, segA.p2, segB.p1, segB.p2);
+
+        if (inter) {
+          let isEndpoint = false;
+          for (const p of splits) {
+            if (pointsEqual(p, inter)) {
+              isEndpoint = true;
+              break;
+            }
+          }
+          if (!isEndpoint) {
+            splits.push(inter);
+          }
+        }
+      }
+
+      if (splits.length > 2) {
+        splits.sort((a, b) => calculateDistance(segA.p1, a) - calculateDistance(segA.p1, b));
+        for (let k = 0; k < splits.length - 1; k++) {
+          if (!pointsEqual(splits[k], splits[k + 1])) {
+            result.push({ p1: splits[k], p2: splits[k + 1] });
+          }
+        }
+      } else {
+        result.push(segA);
+      }
+    }
+
+    return result;
+  }
+
   const segments = splitSegmentsAtIntersections(rawSegments);
 
   // 1. Encontrar vértices únicos

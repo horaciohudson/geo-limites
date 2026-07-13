@@ -6,6 +6,7 @@ export type FileMetadata = {
   extension: string;
   contentType: string;
   sizeBytes: number;
+  primaryForProperty?: boolean;
   createdAt: string;
   updatedAt: string;
 };

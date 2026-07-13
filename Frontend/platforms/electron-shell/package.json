@@ -1,0 +1,19 @@
+{
+  "name": "@sigeve/electron-shell",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Casca desktop futura para o ecossistema Sigeve.",
+  "main": "dist/main/index.js",
+  "types": "dist/renderer-bridge/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "npm run build && electron .",
+    "start:local-build": "node ./scripts/start-local-build.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "electron": "^31.7.7",
+    "typescript": "^5.6.3"
+  }
+}

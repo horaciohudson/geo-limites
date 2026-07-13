@@ -1,11 +1,14 @@
 package com.momorialPro.CadMemorial.mapper;
 
+import com.momorialPro.CadMemorial.dto.FileMetadataDTO;
 import com.momorialPro.CadMemorial.dto.PropertyDTO;
+import com.momorialPro.CadMemorial.model.FileMetadata;
 import com.momorialPro.CadMemorial.model.Property;
-import com.momorialPro.CadMemorial.model.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
@@ -19,6 +22,9 @@ public class PropertyMapper {
     
     @Autowired
     private PropertyDocumentMapper documentMapper;
+
+    @Autowired
+    private FileMetadataMapper fileMetadataMapper;
 
     public PropertyDTO toDTO(Property property) {
         if (property == null) {
@@ -97,6 +103,8 @@ public class PropertyMapper {
                     property.getDocuments().stream()
                         .map(documentMapper::toDTO)
                         .collect(Collectors.toList()) : null)
+                .dxfFiles(mapFilesByExtension(property.getFiles(), true))
+                .otherFiles(mapFilesByExtension(property.getFiles(), false))
                 
                 // AUDIT
                 .userId(property.getUser() != null ? property.getUser().getId() : null)
@@ -237,5 +245,31 @@ public class PropertyMapper {
         // NOTES
         entity.setObservations(dto.getObservations());
         entity.setRestrictions(dto.getRestrictions());
+    }
+
+    public List<FileMetadataDTO> mapTechnicalFiles(List<FileMetadata> files) {
+        return mapFilesByExtension(files, true);
+    }
+
+    public List<FileMetadataDTO> mapOtherFiles(List<FileMetadata> files) {
+        return mapFilesByExtension(files, false);
+    }
+
+    private List<FileMetadataDTO> mapFilesByExtension(List<FileMetadata> files, boolean dxfOnly) {
+        if (files == null) {
+            return null;
+        }
+
+        return files.stream()
+                .filter(file -> {
+                    String extension = file.getExtension() == null ? "" : file.getExtension().trim().toLowerCase();
+                    boolean isDxf = "dxf".equals(extension) || "dwg".equals(extension);
+                    return dxfOnly ? isDxf : !isDxf;
+                })
+                .sorted(Comparator
+                        .comparing((FileMetadata file) -> !Boolean.TRUE.equals(file.getPrimaryForProperty()))
+                        .thenComparing(FileMetadata::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(fileMetadataMapper::toDTO)
+                .collect(Collectors.toList());
     }
 }

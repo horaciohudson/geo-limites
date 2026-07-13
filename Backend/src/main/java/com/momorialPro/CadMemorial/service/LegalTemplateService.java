@@ -18,6 +18,13 @@ public class LegalTemplateService {
      * Gera preâmbulo legal completo
      */
     public String generateLegalPreamble(PropertyDTO property, MemorialStandardDTO standard) {
+        return generateLegalPreamble(property, standard, null);
+    }
+
+    public String generateLegalPreamble(
+            PropertyDTO property,
+            MemorialStandardDTO standard,
+            MemorialProcessingContext processingContext) {
         StringBuilder preamble = new StringBuilder();
         
         // Dados básicos (sem cabeçalho - a IA gera o cabeçalho)
@@ -71,7 +78,11 @@ public class LegalTemplateService {
         preamble.append(", possuindo formato poligonal e irregular, conforme seus pontos ");
         
         // COORDENADAS REAIS DO TERRENO ORIGINAL
-        if (property != null && property.getSirgas_e() != null && property.getSirgas_n() != null) {
+        MemorialProcessingContext.BaseAreaContext baseArea =
+                processingContext != null ? processingContext.baseArea() : null;
+        if (baseArea != null && baseArea.hasVertices()) {
+            preamble.append(generateOriginalTerrainCoordinates(baseArea));
+        } else if (property != null && property.getSirgas_e() != null && property.getSirgas_n() != null) {
             double baseE = property.getSirgas_e().doubleValue();
             double baseN = property.getSirgas_n().doubleValue();
             preamble.append(generateOriginalTerrainCoordinates(baseE, baseN));
@@ -82,7 +93,11 @@ public class LegalTemplateService {
         preamble.append(", perfazendo assim, um perímetro de ");
         
         // PERÍMETRO REAL
-        if (property != null && property.getTotalPerimeter() != null) {
+        Double primaryPerimeter = calculatePrimaryPerimeter(baseArea);
+        if (primaryPerimeter != null && primaryPerimeter > 0d) {
+            preamble.append(String.format("%.2fm", primaryPerimeter)).append(" ");
+            preamble.append("(").append(extenso(primaryPerimeter)).append(")");
+        } else if (property != null && property.getTotalPerimeter() != null) {
             preamble.append(String.format("%.2fm", property.getTotalPerimeter())).append(" ");
             preamble.append("(").append(extenso(property.getTotalPerimeter().doubleValue())).append(")");
         } else {
@@ -92,7 +107,11 @@ public class LegalTemplateService {
         preamble.append(" e uma área territorial total de ");
         
         // ÁREA TOTAL REAL
-        if (property != null && property.getTotalArea() != null) {
+        Double primaryArea = calculatePrimaryArea(baseArea);
+        if (primaryArea != null && primaryArea > 0d) {
+            preamble.append(String.format("%.2fm²", primaryArea)).append(" ");
+            preamble.append("(").append(extensoArea(primaryArea)).append(")");
+        } else if (property != null && property.getTotalArea() != null) {
             preamble.append(String.format("%.2fm²", property.getTotalArea())).append(" ");
             preamble.append("(").append(extensoArea(property.getTotalArea().doubleValue())).append(")");
         } else {
@@ -120,6 +139,25 @@ public class LegalTemplateService {
         
         return coords.toString();
     }
+
+    private String generateOriginalTerrainCoordinates(MemorialProcessingContext.BaseAreaContext baseArea) {
+        if (baseArea == null || !baseArea.hasVertices()) {
+            return "P01 e demais vertices conforme levantamento planimetrico georreferenciado disponivel";
+        }
+
+        MemorialProcessingContext.BaseAreaPoint firstPoint = baseArea.vertices().get(0);
+        String label = firstPoint.label() != null && !firstPoint.label().isBlank()
+                ? firstPoint.label().trim()
+                : String.format(Locale.US, "AREA_TOTAL_P%02d", Math.max(1, firstPoint.orderNumber()));
+
+        return String.format(
+                Locale.US,
+                "%s (coordenadas locais X %.2fm e Y %.2fm), e demais vertices conforme contorno primario salvo em Operacoes",
+                label,
+                firstPoint.x(),
+                firstPoint.y()
+        );
+    }
     
     /**
      * Gera confrontações do terreno original
@@ -127,14 +165,15 @@ public class LegalTemplateService {
     private String generateOriginalConfrontations(PropertyDTO property) {
         StringBuilder conf = new StringBuilder();
         
-        String norte = property != null && property.getNorthBoundary() != null ? 
-                       property.getNorthBoundary() : "[CONFRONTANTE NORTE NAO INFORMADO]";
-        String sul = property != null && property.getSouthBoundary() != null ? 
-                     property.getSouthBoundary() : "[CONFRONTANTE SUL NAO INFORMADO]";
-        String leste = property != null && property.getEastBoundary() != null ? 
-                       property.getEastBoundary() : "[CONFRONTANTE LESTE NAO INFORMADO]";
-        String oeste = property != null && property.getWestBoundary() != null ? 
-                       property.getWestBoundary() : "[CONFRONTANTE OESTE NAO INFORMADO]";
+        String norte = normalizeBoundaryReference(property != null ? property.getNorthBoundary() : null);
+        String sul = normalizeBoundaryReference(property != null ? property.getSouthBoundary() : null);
+        String leste = normalizeBoundaryReference(property != null ? property.getEastBoundary() : null);
+        String oeste = normalizeBoundaryReference(property != null ? property.getWestBoundary() : null);
+
+        if (isUnknownBoundary(norte) && isUnknownBoundary(sul) && isUnknownBoundary(leste) && isUnknownBoundary(oeste)) {
+            conf.append("As confrontações do terreno original não foram informadas no cadastro da propriedade e devem ser confirmadas pelos documentos dominiais e pelo levantamento técnico.\n");
+            return conf.toString();
+        }
         
         conf.append("AO NORTE: confrontando com ").append(norte).append(", conforme levantamento técnico.\n");
         conf.append("AO SUL: confrontando com ").append(sul).append(", conforme levantamento técnico.\n");
@@ -142,6 +181,49 @@ public class LegalTemplateService {
         conf.append("AO OESTE: confrontando com ").append(oeste).append(", conforme levantamento técnico.\n");
         
         return conf.toString();
+    }
+
+    private String normalizeBoundaryReference(String value) {
+        if (value == null || value.isBlank()) {
+            return "não informado no cadastro";
+        }
+        return value.trim();
+    }
+
+    private boolean isUnknownBoundary(String value) {
+        return value == null || value.isBlank() || "não informado no cadastro".equalsIgnoreCase(value.trim());
+    }
+
+    private Double calculatePrimaryPerimeter(MemorialProcessingContext.BaseAreaContext baseArea) {
+        if (baseArea == null || baseArea.vertices() == null || baseArea.vertices().size() < 2) {
+            return null;
+        }
+
+        double perimeter = 0d;
+        List<MemorialProcessingContext.BaseAreaPoint> vertices = baseArea.vertices();
+        for (int index = 0; index < vertices.size(); index++) {
+            MemorialProcessingContext.BaseAreaPoint current = vertices.get(index);
+            MemorialProcessingContext.BaseAreaPoint next = vertices.get((index + 1) % vertices.size());
+            perimeter += Math.hypot(next.x() - current.x(), next.y() - current.y());
+        }
+        return perimeter > 0d ? perimeter : null;
+    }
+
+    private Double calculatePrimaryArea(MemorialProcessingContext.BaseAreaContext baseArea) {
+        if (baseArea == null || baseArea.vertices() == null || baseArea.vertices().size() < 3) {
+            return null;
+        }
+
+        double signedArea = 0d;
+        List<MemorialProcessingContext.BaseAreaPoint> vertices = baseArea.vertices();
+        for (int index = 0; index < vertices.size(); index++) {
+            MemorialProcessingContext.BaseAreaPoint current = vertices.get(index);
+            MemorialProcessingContext.BaseAreaPoint next = vertices.get((index + 1) % vertices.size());
+            signedArea += (current.x() * next.y()) - (next.x() * current.y());
+        }
+
+        double area = Math.abs(signedArea) / 2d;
+        return area > 0d ? area : null;
     }
     
     /**
@@ -336,9 +418,7 @@ public class LegalTemplateService {
         ProfessionalData profData = extractProfessionalData(property);
         
         declaration.append("_________________________________________________\n");
-        declaration.append(profData.nome);
-        declaration.append(" | CREA/").append(profData.estado).append(": ").append(profData.crea);
-        declaration.append(" | RNP: ").append(profData.rnp).append("\n\n");
+        declaration.append(buildProfessionalSignatureLine(profData)).append("\n\n");
         
         return declaration.toString();
     }
@@ -409,6 +489,38 @@ public class LegalTemplateService {
         }
         
         return data;
+    }
+
+    private String buildProfessionalSignatureLine(ProfessionalData profData) {
+        if (profData == null) {
+            return "Responsável técnico não informado no cadastro";
+        }
+
+        String nome = profData.nome != null && !profData.nome.isBlank()
+                ? profData.nome.trim()
+                : "Responsável técnico não informado no cadastro";
+
+        boolean hasRealCrea = profData.crea != null
+                && !profData.crea.isBlank()
+                && !"000000-D".equalsIgnoreCase(profData.crea.trim());
+        boolean hasRealRnp = profData.rnp != null
+                && !profData.rnp.isBlank()
+                && !"CE00000000000".equalsIgnoreCase(profData.rnp.trim());
+
+        StringBuilder signature = new StringBuilder(nome);
+        if (hasRealCrea) {
+            String estado = profData.estado != null && !profData.estado.isBlank() ? profData.estado.trim() : "UF";
+            signature.append(" | CREA/").append(estado).append(": ").append(profData.crea.trim());
+        }
+        if (hasRealRnp) {
+            signature.append(" | RNP: ").append(profData.rnp.trim());
+        }
+        if (!hasRealCrea && !hasRealRnp) {
+            return "Eng. Responsável Técnico".equalsIgnoreCase(nome)
+                    ? "Responsável técnico não informado no cadastro"
+                    : nome;
+        }
+        return signature.toString();
     }
 
     /**

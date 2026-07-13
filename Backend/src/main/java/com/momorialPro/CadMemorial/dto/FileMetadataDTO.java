@@ -24,6 +24,8 @@ public class FileMetadataDTO {
     private String diskPath;
     private UUID ownerId;
     private String ownerUsername;
+    private UUID propertyId;
+    private Boolean primaryForProperty;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

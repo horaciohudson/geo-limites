@@ -15,6 +15,7 @@ import java.util.UUID;
 public class TemplateCreateDTO {
     private String name;
     private String description;
+    private String templateContent;
     private String fileUrl;
     private String filePath;
     private UUID memorialStandardId;

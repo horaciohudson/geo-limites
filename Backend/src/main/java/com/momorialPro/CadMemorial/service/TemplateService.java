@@ -19,6 +19,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -53,6 +54,9 @@ public class TemplateService {
 
     @Value("${memorialpro.claude.endpoint}")
     private String claudeEndpoint;
+
+    @Value("${memorialpro.storage.templates-dir:templates}")
+    private String templatesDir;
 
 
     public List<TemplateDTO> findAll() {
@@ -108,11 +112,15 @@ public class TemplateService {
             throw new IllegalArgumentException("Já existe um template com este nome para este usuário");
         }
 
+        UUID templateId = UUID.randomUUID();
+        TemplateStorageData storageData = resolveTemplateStorageData(templateId, createDTO);
+
         Template template = Template.builder()
+                .id(templateId)
                 .name(createDTO.getName())
                 .description(createDTO.getDescription())
-                .fileUrl(createDTO.getFileUrl())
-                .filePath(createDTO.getFilePath())
+                .fileUrl(storageData.fileUrl())
+                .filePath(storageData.filePath())
                 .memorialStandardId(createDTO.getMemorialStandardId())
                 .municipality(createDTO.getMunicipality())
                 .abntNorm(createDTO.getAbntNorm())
@@ -133,10 +141,17 @@ public class TemplateService {
             throw new IllegalArgumentException("Você não tem permissão para editar este template");
         }
 
+        TemplateStorageData storageData = updateDTO.getTemplateContent() != null && !updateDTO.getTemplateContent().isBlank()
+                ? resolveTemplateStorageData(template.getId(), updateDTO)
+                : new TemplateStorageData(
+                        updateDTO.getFileUrl() != null && !updateDTO.getFileUrl().isBlank() ? updateDTO.getFileUrl() : template.getFileUrl(),
+                        updateDTO.getFilePath() != null && !updateDTO.getFilePath().isBlank() ? updateDTO.getFilePath() : template.getFilePath()
+                );
+
         template.setName(updateDTO.getName());
         template.setDescription(updateDTO.getDescription());
-        template.setFileUrl(updateDTO.getFileUrl());
-        template.setFilePath(updateDTO.getFilePath());
+        template.setFileUrl(storageData.fileUrl());
+        template.setFilePath(storageData.filePath());
         template.setMemorialStandardId(updateDTO.getMemorialStandardId());
         template.setMunicipality(updateDTO.getMunicipality());
         template.setAbntNorm(updateDTO.getAbntNorm());
@@ -243,12 +258,24 @@ public class TemplateService {
             } else {
                 jsonContent = generateTemplateWithAi(extractedText, request.getName(), request.getAbntNorm());
             }
-            log.info("Template processado com sucesso e retornado ao frontend.");
+            TemplateCreateDTO createDTO = new TemplateCreateDTO();
+            createDTO.setName(request.getName() != null && !request.getName().isBlank() ? request.getName() : baseName);
+            createDTO.setDescription(request.getDescription());
+            createDTO.setTemplateContent(jsonContent);
+            createDTO.setMemorialStandardId(request.getMemorialStandardId());
+            createDTO.setMunicipality(request.getMunicipality());
+            createDTO.setAbntNorm(request.getAbntNorm());
+            createDTO.setStatus(Template.TemplateStatus.ACTIVE);
+
+            TemplateDTO savedTemplate = create(createDTO, ownerId);
+            log.info("Template processado com sucesso, persistido no backend e retornado ao frontend.");
             
             return TemplateGenerationResponseDTO.builder()
-                    .id(UUID.randomUUID())
-                    .name(request.getName() != null ? request.getName() : baseName)
+                    .id(savedTemplate.getId())
+                    .name(savedTemplate.getName())
                     .templateContent(jsonContent)
+                    .fileUrl(savedTemplate.getFileUrl())
+                    .filePath(savedTemplate.getFilePath())
                     .message("Template processado com sucesso!")
                     .build();
                     
@@ -283,6 +310,7 @@ public class TemplateService {
         }
 
         try {
+            String openAiModel = apiSettingsService.resolveTemplateOpenAiModel();
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -294,10 +322,14 @@ public class TemplateService {
             log.info("Enviando requisição para OpenAI com a chave: {}", maskedKey);
 
             Map<String, Object> body = new HashMap<>();
-            body.put("model", "gpt-4o");
+            body.put("model", openAiModel);
             // Usando json_object garante que a resposta será um JSON válido.
             body.put("response_format", Map.of("type", "json_object"));
-            body.put("temperature", 0.1);
+            if (apiSettingsService.supportsCustomTemperatureForTemplateModel()) {
+                body.put("temperature", 0.1);
+            }
+
+            log.info("Gerando template com OpenAI usando modelo configurado: {}", openAiModel);
 
             body.put("messages", new Object[]{
                     Map.of("role", "system", "content", buildTemplateSystemPrompt()),
@@ -484,6 +516,75 @@ public class TemplateService {
         return templateRepository.existsByNameAndOwnerId(name, ownerId);
     }
 
+    public AppliedTemplateContext resolveAppliedTemplate(String templateBackendId, String fallbackTemplateName) {
+        String normalizedFallbackName = fallbackTemplateName != null && !fallbackTemplateName.isBlank()
+                ? fallbackTemplateName.trim()
+                : null;
+
+        if (templateBackendId == null || templateBackendId.isBlank()) {
+            return new AppliedTemplateContext(normalizedFallbackName, null);
+        }
+
+        try {
+            UUID templateId = UUID.fromString(templateBackendId.trim());
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
+            Optional<Template> templateOpt = templateRepository.findByIdAndTenantId(templateId, tenantId);
+            if (templateOpt.isEmpty()) {
+                log.warn("Template aplicado {} nao encontrado no tenant atual", templateBackendId);
+                return new AppliedTemplateContext(normalizedFallbackName, null);
+            }
+
+            Template template = templateOpt.get();
+            String resolvedName = template.getName() != null && !template.getName().isBlank()
+                    ? template.getName().trim()
+                    : normalizedFallbackName;
+            String templateContent = readTemplateContent(template.getFilePath());
+            return new AppliedTemplateContext(resolvedName, templateContent);
+        } catch (IllegalArgumentException e) {
+            log.warn("templateBackendId invalido recebido para memorial: {}", templateBackendId);
+            return new AppliedTemplateContext(normalizedFallbackName, null);
+        }
+    }
+
+    private TemplateStorageData resolveTemplateStorageData(UUID templateId, TemplateCreateDTO dto) {
+        if (dto.getTemplateContent() != null && !dto.getTemplateContent().isBlank()) {
+            return saveTemplateContent(templateId, dto.getName(), dto.getTemplateContent());
+        }
+
+        if (dto.getFileUrl() == null || dto.getFileUrl().isBlank() || dto.getFilePath() == null || dto.getFilePath().isBlank()) {
+            throw new IllegalArgumentException("Template sem conteudo JSON ou caminho de arquivo persistente.");
+        }
+
+        return new TemplateStorageData(dto.getFileUrl(), dto.getFilePath());
+    }
+
+    private TemplateStorageData saveTemplateContent(UUID templateId, String templateName, String templateContent) {
+        try {
+            String baseName = sanitizeTemplateName(templateName);
+            Path baseDirectory = Paths.get(templatesDir).toAbsolutePath().normalize();
+            Files.createDirectories(baseDirectory);
+
+            String fileName = baseName + "-" + templateId + ".json";
+            Path targetPath = baseDirectory.resolve(fileName);
+            String normalizedJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(new com.fasterxml.jackson.databind.ObjectMapper().readTree(templateContent));
+
+            Files.writeString(targetPath, normalizedJson);
+            return new TemplateStorageData("/api/templates/" + templateId + "/download", targetPath.toString());
+        } catch (IOException e) {
+            throw new RuntimeException("Erro ao persistir o arquivo JSON do template.", e);
+        }
+    }
+
+    private String sanitizeTemplateName(String templateName) {
+        if (templateName == null || templateName.trim().isEmpty()) {
+            return "template";
+        }
+
+        return templateName.trim().replaceAll("[^a-zA-Z0-9_-]", "_");
+    }
+
     private TemplateDTO convertToDTO(Template template) {
         UUID tenantId = AuthUtils.getCurrentTenantId();
         String ownerName = (tenantId == null
@@ -507,6 +608,30 @@ public class TemplateService {
                 .createdAt(template.getCreatedAt())
                 .updatedAt(template.getUpdatedAt())
                 .build();
+    }
+
+    private String readTemplateContent(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return null;
+        }
+
+        try {
+            Path path = Paths.get(filePath).toAbsolutePath().normalize();
+            if (!Files.exists(path)) {
+                log.warn("Arquivo do template aplicado nao encontrado: {}", path);
+                return null;
+            }
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.warn("Nao foi possivel ler o conteudo do template aplicado em {}: {}", filePath, e.getMessage());
+            return null;
+        }
+    }
+
+    private record TemplateStorageData(String fileUrl, String filePath) {
+    }
+
+    public record AppliedTemplateContext(String templateName, String templateContent) {
     }
 
     private UUID requireTenantId(UUID userId) {

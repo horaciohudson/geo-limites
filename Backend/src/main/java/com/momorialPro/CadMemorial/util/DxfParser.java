@@ -7,21 +7,38 @@ import java.util.*;
 
 public final class DxfParser {
 
-    public record Entity(String type, String layer, String fingerprint, 
-                        Double x, Double y, Double z, 
-                        Double x2, Double y2, Double z2, 
-                        Double radius, Double startAngle, Double endAngle, 
+    public record Entity(String type, String layer, String fingerprint,
+                        Double x, Double y, Double z,
+                        Double x2, Double y2, Double z2,
+                        Double radius, Double startAngle, Double endAngle,
                         String text, String textStyle, Double textHeight, Double textRotation,
-                        List<Point> vertices) {
+                        List<Point> vertices,
+                        Map<String, Object> properties) {
+
+        public Entity {
+            vertices = vertices != null ? List.copyOf(vertices) : List.of();
+            properties = properties != null ? new LinkedHashMap<>(properties) : new LinkedHashMap<>();
+        }
+
+        // Construtor para compatibilidade com código existente usando vertices
+        public Entity(String type, String layer, String fingerprint,
+                     Double x, Double y, Double z,
+                     Double x2, Double y2, Double z2,
+                     Double radius, Double startAngle, Double endAngle,
+                     String text, String textStyle, Double textHeight, Double textRotation,
+                     List<Point> vertices) {
+            this(type, layer, fingerprint, x, y, z, x2, y2, z2, radius, startAngle, endAngle,
+                 text, textStyle, textHeight, textRotation, vertices, null);
+        }
         
         // Construtor para compatibilidade com código existente
-        public Entity(String type, String layer, String fingerprint, 
-                     Double x, Double y, Double z, 
-                     Double x2, Double y2, Double z2, 
-                     Double radius, Double startAngle, Double endAngle, 
+        public Entity(String type, String layer, String fingerprint,
+                     Double x, Double y, Double z,
+                     Double x2, Double y2, Double z2,
+                     Double radius, Double startAngle, Double endAngle,
                      String text, String textStyle, Double textHeight, Double textRotation) {
-            this(type, layer, fingerprint, x, y, z, x2, y2, z2, radius, startAngle, endAngle, 
-                 text, textStyle, textHeight, textRotation, new ArrayList<>());
+            this(type, layer, fingerprint, x, y, z, x2, y2, z2, radius, startAngle, endAngle,
+                 text, textStyle, textHeight, textRotation, new ArrayList<>(), null);
         }
     }
     
@@ -33,10 +50,33 @@ public final class DxfParser {
         try {
             List<String> lines = Files.readAllLines(dxfPath);
             List<Entity> entities = new ArrayList<>();
+            boolean inEntitiesSection = false;
+
             for (int i = 0; i < lines.size() - 1; i++) {
-                // DXF: "0" na linha N indica início de entidade. Tipo na linha N+1
-                if ("0".equals(lines.get(i))) {
-                    String type = lines.get(i + 1).trim();
+                String currentCode = lines.get(i).trim();
+                if (!"0".equals(currentCode)) {
+                    continue;
+                }
+
+                String marker = lines.get(i + 1).trim();
+                if ("SECTION".equals(marker)) {
+                    if (i + 3 < lines.size() && "2".equals(lines.get(i + 2).trim())) {
+                        inEntitiesSection = "ENTITIES".equalsIgnoreCase(lines.get(i + 3).trim());
+                    }
+                    continue;
+                }
+
+                if ("ENDSEC".equals(marker)) {
+                    inEntitiesSection = false;
+                    continue;
+                }
+
+                if (!inEntitiesSection || "EOF".equals(marker)) {
+                    continue;
+                }
+
+                {
+                    String type = marker;
                     // coleta bloco até próximo "0"
                     int j = i + 2;
                     String layer = "0";
@@ -53,7 +93,7 @@ public final class DxfParser {
                     StringBuilder mtextContent = new StringBuilder();
                     List<Point> vertices = new ArrayList<>();
                     
-                    while (j < lines.size() && !"0".equals(lines.get(j))) {
+                    while (j < lines.size() && !"0".equals(lines.get(j).trim())) {
                         String code = lines.get(j).trim();
                         String val  = (j + 1 < lines.size()) ? lines.get(j + 1) : "";
                         block.add(code);
@@ -81,21 +121,31 @@ public final class DxfParser {
                             case "21" -> y2 = parseDouble(val); // Second Y coordinate
                             case "31" -> z2 = parseDouble(val); // Second Z coordinate
                             case "40" -> { // Radius (for circles, arcs) or Text height (for TEXT/MTEXT)
-                                if (radius == null) {
+                                if ("TEXT".equals(type) || "MTEXT".equals(type)) {
+                                    textHeight = parseDouble(val);
+                                } else if (radius == null) {
                                     radius = parseDouble(val);
                                 } else {
                                     textHeight = parseDouble(val);
                                 }
                             }
                             case "50" -> { // Start angle (for arcs) or Text rotation angle (for TEXT/MTEXT)
-                                if (startAngle == null) {
+                                if ("TEXT".equals(type) || "MTEXT".equals(type)) {
+                                    textRotation = parseDouble(val);
+                                } else if (startAngle == null) {
                                     startAngle = parseDouble(val);
                                 } else {
                                     textRotation = parseDouble(val);
                                 }
                             }
                             case "51" -> endAngle = parseDouble(val); // End angle (for arcs)
-                            case "1" -> text = val; // Text content (TEXT entity)
+                            case "1" -> {
+                                if ("MTEXT".equals(type) && mtextContent.length() > 0) {
+                                    mtextContent.append(val);
+                                } else {
+                                    text = val;
+                                }
+                            }
                             case "3" -> mtextContent.append(val); // MTEXT content (can be multiple lines)
                             case "7" -> textStyle = val; // Text style name
                         }

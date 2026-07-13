@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTenantOperationalAccess } from '@/hooks/useTenantOperationalAccess';
+import { useOperationContext } from '@/contexts/OperationContext';
 import api from '../services/api';
 import '../styles/PropertiesPresentation.css';
 
@@ -35,6 +36,21 @@ interface Property {
   documents?: any[];
   landmarks?: any[];
   boundaries?: any[];
+  dxfFiles?: Array<{
+    id?: string;
+    originalName?: string;
+    fileName?: string;
+    sizeBytes?: number;
+    contentType?: string;
+    primaryForProperty?: boolean;
+  }>;
+  otherFiles?: Array<{
+    id?: string;
+    originalName?: string;
+    fileName?: string;
+    sizeBytes?: number;
+    contentType?: string;
+  }>;
 }
 
 interface PropertyLandmark {
@@ -47,9 +63,26 @@ interface PropertyLandmark {
   description?: string;
 }
 
+const formatCoordinateSource = (source?: string): string => {
+  if (!source) {
+    return '';
+  }
+
+  return {
+    GPS_CAMPO: 'GPS de Campo',
+    MARCO_GEODESICO: 'Marco Geodesico',
+    LEVANTAMENTO_TOPOGRAFICO: 'Levantamento Topografico',
+    MEMORIAL_ORIGINAL: 'Memorial Original',
+    GOOGLE_EARTH: 'Google Earth',
+    IBGE_COORDENADAS: 'Base IBGE',
+    OUTRO: 'Outro'
+  }[source] || source;
+};
+
 const PropertiesPresentation: React.FC = () => {
   const navigate = useNavigate();
   const { isRestricted, restrictionMessage } = useTenantOperationalAccess();
+  const { activePropertyId, clearSelectedProperty, setSelectedProperty } = useOperationContext();
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
   const [selectedPropertyDetails, setSelectedPropertyDetails] = useState<Property | null>(null);
@@ -58,6 +91,14 @@ const PropertiesPresentation: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const normalizeId = (value: unknown): string => (value === null || value === undefined ? '' : String(value));
+
+  const getLinkedDxfCount = (property: Property | null): number =>
+    Array.isArray(property?.dxfFiles) ? property!.dxfFiles!.length : 0;
+
+  const getLinkedOtherFileCount = (property: Property | null): number =>
+    Array.isArray(property?.otherFiles) ? property!.otherFiles!.length : 0;
 
   // Buscar lista de imóveis
   const fetchPropertiesList = async (selectIdToLoad?: string) => {
@@ -68,13 +109,17 @@ const PropertiesPresentation: React.FC = () => {
       const list = response.data as Property[];
       setProperties(list);
 
-      if (selectIdToLoad && list.some((p) => (p.propertyId || p.id) === selectIdToLoad)) {
-        setSelectedPropertyId(selectIdToLoad);
-        await fetchPropertyDetails(selectIdToLoad, list);
-      } else {
-        setSelectedPropertyId('');
-        setSelectedPropertyDetails(null);
-        localStorage.removeItem('selectedPropertyForMemorial');
+      const normalizedToLoad = normalizeId(selectIdToLoad).trim();
+      if (normalizedToLoad) {
+        const exists = list.some((p) => normalizeId(p.propertyId || p.id) === normalizedToLoad);
+        if (exists) {
+          setSelectedPropertyId(normalizedToLoad);
+          await fetchPropertyDetails(normalizedToLoad, list);
+        } else {
+          setSelectedPropertyId('');
+          setSelectedPropertyDetails(null);
+          clearSelectedProperty();
+        }
       }
     } catch (err: any) {
       console.error('Erro ao carregar lista de imóveis:', err);
@@ -97,13 +142,15 @@ const PropertiesPresentation: React.FC = () => {
 
       // Atualizar o localStorage para fins de operação (memorial, visualizador)
       const listToSearch = currentList || properties;
-      const simpleProperty = listToSearch.find(p => (p.propertyId || p.id) === id) || details;
+      const normalizedId = normalizeId(id);
+      const simpleProperty = listToSearch.find(p => normalizeId(p.propertyId || p.id) === normalizedId) || details;
       
-      localStorage.setItem('selectedPropertyForMemorial', JSON.stringify({
+      setSelectedProperty({
         ...simpleProperty,
+        ...details,
         id: id,
         propertyId: id
-      }));
+      });
 
     } catch (err: any) {
       console.error('Erro ao buscar detalhes do imóvel:', err);
@@ -111,14 +158,15 @@ const PropertiesPresentation: React.FC = () => {
       
       // Fallback para os dados básicos da lista caso a chamada de detalhes falhe
       const listToSearch = currentList || properties;
-      const basic = listToSearch.find(p => (p.propertyId || p.id) === id);
+      const normalizedId = normalizeId(id);
+      const basic = listToSearch.find(p => normalizeId(p.propertyId || p.id) === normalizedId);
       if (basic) {
         setSelectedPropertyDetails(basic);
-        localStorage.setItem('selectedPropertyForMemorial', JSON.stringify({
+        setSelectedProperty({
           ...basic,
           id: id,
           propertyId: id
-        }));
+        });
       }
     } finally {
       setLoadingDetails(false);
@@ -133,7 +181,7 @@ const PropertiesPresentation: React.FC = () => {
       fetchPropertyDetails(val);
     } else {
       setSelectedPropertyDetails(null);
-      localStorage.removeItem('selectedPropertyForMemorial');
+      clearSelectedProperty();
     }
   };
 
@@ -145,7 +193,7 @@ const PropertiesPresentation: React.FC = () => {
       await api.delete(`/properties/${selectedPropertyId}`);
       
       // Limpar seleção se deletou o selecionado
-      localStorage.removeItem('selectedPropertyForMemorial');
+      clearSelectedProperty();
       setSelectedPropertyId('');
       setSelectedPropertyDetails(null);
       setDeleteConfirmOpen(false);
@@ -170,27 +218,33 @@ const PropertiesPresentation: React.FC = () => {
       && selectedPropertyDetails.landmarks.some((landmark: PropertyLandmark) =>
         landmark.coordinateX !== undefined && landmark.coordinateY !== undefined
       );
+    const hasLinkedDxf = getLinkedDxfCount(selectedPropertyDetails) > 0;
     
     // 1. Dados básicos cadastrados (Número de registro + Cidade preenchidos)
-    if (selectedPropertyDetails.registrationNumber && selectedPropertyDetails.city) score += 25;
+    if (selectedPropertyDetails.registrationNumber && selectedPropertyDetails.city) score += 20;
     
     // 2. Coordenadas de referência configuradas
-    if (hasReferenceCoordinates || (selectedPropertyDetails.sirgas_e && selectedPropertyDetails.sirgas_n)) score += 25;
+    if (hasReferenceCoordinates || (selectedPropertyDetails.sirgas_e && selectedPropertyDetails.sirgas_n)) score += 20;
     
     // 3. Proprietário cadastrado
-    if (selectedPropertyDetails.ownerName) score += 25;
+    if (selectedPropertyDetails.ownerName) score += 20;
     
     // 4. Documentos anexados
-    if (selectedPropertyDetails.documents && selectedPropertyDetails.documents.length > 0) score += 25;
+    if (selectedPropertyDetails.documents && selectedPropertyDetails.documents.length > 0) score += 20;
+
+    // 5. DXF tecnico vinculado ao cadastro
+    if (hasLinkedDxf) score += 20;
     
     return score;
   };
 
   const readiness = calculateReadiness();
+  const linkedDxfCount = getLinkedDxfCount(selectedPropertyDetails);
+  const linkedOtherFilesCount = getLinkedOtherFileCount(selectedPropertyDetails);
 
   // Inicialização
   useEffect(() => {
-    fetchPropertiesList();
+    fetchPropertiesList(normalizeId(activePropertyId) || undefined);
   }, []);
 
   return (
@@ -262,17 +316,39 @@ const PropertiesPresentation: React.FC = () => {
                 <span className="property-guidance-title">Status da Operacao</span>
               </div>
               <span className="property-guidance-status">
-                {selectedPropertyId ? 'Imóvel Definido' : 'Sem Seleção'}
+                {selectedPropertyId ? 'Imovel Definido' : 'Sem Selecao'}
               </span>
             </div>
             <p className="property-guidance-text">
               {selectedPropertyDetails ? (
-                `O imóvel "${selectedPropertyDetails.name || selectedPropertyDetails.registrationNumber}" está ativo para a geração de memoriais e visualização técnica de arquivos.`
+                linkedDxfCount > 0
+                  ? `O imovel "${selectedPropertyDetails.name || selectedPropertyDetails.registrationNumber}" esta ativo e ja possui ${linkedDxfCount} arquivo(s) tecnico(s) pronto(s) para operacao.`
+                  : `O imovel "${selectedPropertyDetails.name || selectedPropertyDetails.registrationNumber}" esta ativo, mas ainda precisa do DXF tecnico vinculado no cadastro para seguir completo para a operacao.`
               ) : (
                 'Escolha um imóvel no seletor para ativar a operação. Novos imóveis devem ser criados através do menu lateral "Cadastrar Imóvel".'
               )}
             </p>
           </div>
+
+          {selectedPropertyDetails && (
+            <div className="property-readiness-checklist">
+              <div className={`readiness-pill ${selectedPropertyDetails.registrationNumber && selectedPropertyDetails.city ? 'ready' : 'pending'}`}>
+                Identificacao
+              </div>
+              <div className={`readiness-pill ${(Array.isArray(selectedPropertyDetails.landmarks) && selectedPropertyDetails.landmarks.some((landmark: PropertyLandmark) => landmark.coordinateX !== undefined && landmark.coordinateY !== undefined)) || (selectedPropertyDetails.sirgas_e && selectedPropertyDetails.sirgas_n) ? 'ready' : 'pending'}`}>
+                Pontos
+              </div>
+              <div className={`readiness-pill ${selectedPropertyDetails.ownerName ? 'ready' : 'pending'}`}>
+                Proprietario
+              </div>
+              <div className={`readiness-pill ${selectedPropertyDetails.documents && selectedPropertyDetails.documents.length > 0 ? 'ready' : 'pending'}`}>
+                Documentos
+              </div>
+              <div className={`readiness-pill ${linkedDxfCount > 0 ? 'ready' : 'pending'}`}>
+                DXF Tecnico
+              </div>
+            </div>
+          )}
 
           {/* Barra de Progresso de Prontidão Operacional */}
           <div className="progress-info">
@@ -292,6 +368,14 @@ const PropertiesPresentation: React.FC = () => {
         <div className="quick-actions-bar">
           <div className="selected-property-label-bar">
             <span>Imóvel Atual: <strong>{selectedPropertyDetails.name || selectedPropertyDetails.registrationNumber}</strong></span>
+            <div className="selected-property-meta">
+              <span>{linkedDxfCount} DXF tecnico(s)</span>
+              <span>{Array.isArray(selectedPropertyDetails.landmarks) ? selectedPropertyDetails.landmarks.length : 0} ponto(s)</span>
+              <span>{selectedPropertyDetails.documents?.length || 0} documento(s)</span>
+              {selectedPropertyDetails.sirgas_source && (
+                <span>Fonte da coordenada: {formatCoordinateSource(selectedPropertyDetails.sirgas_source)}</span>
+              )}
+            </div>
           </div>
           <div className="selector-actions">
             <button 
@@ -455,65 +539,79 @@ const PropertiesPresentation: React.FC = () => {
           {/* CARD 2: Pontos de Referencia */}
           <div className="info-card sirgas-card">
             <div className="card-header">
-              <span className="card-icon">🎯</span>
-              <h3>Pontos e Estacas de Referencia</h3>
+              <span className="card-icon">📐</span>
+              <h3>Arquivo Tecnico e Pontos de Referencia</h3>
             </div>
             <div className="card-body">
+              {linkedDxfCount === 0 && (
+                <div className="sirgas-empty-warning">
+                  <span>⚠️ Nenhum DXF tecnico vinculado ao cadastro</span>
+                  <p>Envie o DXF principal na aba Arquivos do cadastro para liberar a operacao tecnica deste imovel.</p>
+                </div>
+              )}
+
+              {linkedDxfCount > 0 && (
+                <div className="linked-files-list">
+                  {selectedPropertyDetails.dxfFiles?.map((file, index) => (
+                    <div key={file.id || `${file.originalName || file.fileName || 'dxf'}-${index}`} className="linked-file-item">
+                      <span className="linked-file-name">
+                        📐 {file.originalName || file.fileName || `Arquivo tecnico ${index + 1}`}
+                        {file.primaryForProperty ? ' · Principal' : ''}
+                      </span>
+                      <span className="linked-file-meta">
+                        {file.sizeBytes ? `${(file.sizeBytes / 1024 / 1024).toFixed(2)} MB` : 'Tamanho nao informado'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {linkedOtherFilesCount > 0 && (
+                <div className="info-row" style={{ marginTop: '0.85rem' }}>
+                  <span className="info-label">Outros anexos tecnicos:</span>
+                  <span className="info-value">{linkedOtherFilesCount}</span>
+                </div>
+              )}
+
+              <hr />
               {Array.isArray(selectedPropertyDetails.landmarks) && selectedPropertyDetails.landmarks.length > 0 ? (
                 <>
-                  <div className="sirgas-badge valid">
-                    <span>✅ Pontos de referencia cadastrados</span>
-                  </div>
-                  <div style={{ overflowX: 'auto', marginTop: '12px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '640px' }}>
+                  <div className="landmarks-table-shell">
+                    <div className="landmarks-table-scroll">
+                      <table className="landmarks-table">
                       <thead>
                         <tr>
-                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Ponto</th>
-                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Tipo</th>
-                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Coordenada E/X</th>
-                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Coordenada N/Y</th>
-                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Observacao</th>
+                          <th>Ponto</th>
+                          <th>Tipo</th>
+                          <th>Coordenada E/X</th>
+                          <th>Coordenada N/Y</th>
+                          <th>Observacao</th>
                         </tr>
                       </thead>
                       <tbody>
                         {selectedPropertyDetails.landmarks.map((landmark: PropertyLandmark, index: number) => (
                           <tr key={landmark.id || `${landmark.landmarkName || 'ponto'}-${index}`}>
-                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                            <td>
                               {landmark.landmarkName || `Ponto ${index + 1}`}
                             </td>
-                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                            <td>
                               {landmark.landmarkType || 'Nao informado'}
                             </td>
-                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                            <td>
                               {landmark.coordinateX !== undefined ? `${landmark.coordinateX.toLocaleString('pt-BR')} m` : 'Nao informado'}
                             </td>
-                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                            <td>
                               {landmark.coordinateY !== undefined ? `${landmark.coordinateY.toLocaleString('pt-BR')} m` : 'Nao informado'}
                             </td>
-                            <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                            <td>
                               {landmark.description || '-'}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </div>
-                  {selectedPropertyDetails.sirgas_source && (
-                    <div className="info-row" style={{ marginTop: '12px' }}>
-                      <span className="info-label">Fonte:</span>
-                      <span className="info-value">
-                        {{
-                          'GPS_CAMPO': 'GPS de Campo',
-                          'MARCO_GEODESICO': 'Marco Geodesico',
-                          'LEVANTAMENTO_TOPOGRAFICO': 'Levantamento Topografico',
-                          'MEMORIAL_ORIGINAL': 'Memorial Original',
-                          'GOOGLE_EARTH': 'Google Earth',
-                          'IBGE_COORDENADAS': 'Base IBGE',
-                          'OUTRO': 'Outro'
-                        }[selectedPropertyDetails.sirgas_source || ''] || selectedPropertyDetails.sirgas_source}
-                      </span>
                     </div>
-                  )}
+                  </div>
                 </>
               ) : (
                 <div className="sirgas-empty-warning">
@@ -521,16 +619,6 @@ const PropertiesPresentation: React.FC = () => {
                   <p>Cadastre pontos ou estacas nomeados na tela de edicao para aproveitar coordenadas reais na operacao.</p>
                 </div>
               )}
-
-              <hr />
-              <div className="info-row">
-                <span className="info-label">Área do Terreno (DXF):</span>
-                <span className="info-value">{selectedPropertyDetails.totalArea ? `${selectedPropertyDetails.totalArea.toFixed(2)} m²` : 'Nenhum DXF processado'}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Perímetro (DXF):</span>
-                <span className="info-value">{selectedPropertyDetails.totalPerimeter ? `${selectedPropertyDetails.totalPerimeter.toFixed(2)} m` : 'Nenhum DXF processado'}</span>
-              </div>
             </div>
           </div>
 

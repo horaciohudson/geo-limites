@@ -10,6 +10,12 @@ import {
   setStoredToken,
   validateJwtLocally,
 } from './session';
+import {
+  MEMORIAL_SELECTION_DRAFT_BY_PROPERTY_KEY,
+  SELECTED_FILES_BY_PROPERTY_STORAGE_KEY,
+  SELECTED_MEMORIAL_NORMS_BY_PROPERTY_KEY,
+  SELECTED_TEMPLATE_BY_PROPERTY_KEY
+} from '@/utils/operationContext';
 
 interface AuthContextType {
   user: User | null;
@@ -104,7 +110,10 @@ const TRANSIENT_OPERATION_KEYS = [
   'selectedFiles',
   'selectedMemorialNorms',
   'selectedTemplate',
-  'selectedPropertyForMemorial',
+  SELECTED_FILES_BY_PROPERTY_STORAGE_KEY,
+  SELECTED_MEMORIAL_NORMS_BY_PROPERTY_KEY,
+  SELECTED_TEMPLATE_BY_PROPERTY_KEY,
+  MEMORIAL_SELECTION_DRAFT_BY_PROPERTY_KEY,
   'properties',
 ] as const;
 

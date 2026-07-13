@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.stream.Collectors;
 
 /**
  * Serviço especializado em extração de coordenadas reais do DXF
@@ -20,7 +21,13 @@ public class CoordinateExtractionService {
         "N\\s*(\\d{7,}[.,]?\\d*).*?E\\s*(\\d{6,}[.,]?\\d*)"
     );
     
-    private static final Pattern POINT_PATTERN = Pattern.compile("P(\\d{1,3})");
+    private static final Pattern POINT_PATTERN = Pattern.compile(
+        "(?i)\\b(?:P|PT|PONTO|V|VERTICE|VERTEX)\\s*[-_:/# ]*0*(\\d{1,4})\\b"
+    );
+    private static final Pattern LARGE_NUMBER_PATTERN = Pattern.compile("\\d{6,}[.,]?\\d*");
+    private static final Pattern HEADER_TEXT_PATTERN = Pattern.compile(
+        "(?i)(PONTOS?\\s+GEORREFERENCIADOS|VERTICE|VÉRTICE|COORDENADAS?|COORDENADA)"
+    );
 
     /**
      * Extrai coordenadas reais SIRGAS 2000 do DXF
@@ -48,35 +55,23 @@ public class CoordinateExtractionService {
      * FASE 1: Extração de textos DXF (mais precisa)
      */
     private void extractFromTexts(List<Map<String, Object>> entities, Map<String, RealCoordinate> coordinates) {
-        for (Map<String, Object> entity : entities) {
-            String type = (String) entity.get("type");
-            
-            if ("TEXT".equals(type) || "MTEXT".equals(type)) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> properties = (Map<String, Object>) entity.get("properties");
-                
-                String text = null;
-                if (properties != null) {
-                    text = (String) properties.get("text");
-                } else {
-                    // Fallback: tentar pegar texto diretamente da entidade
-                    text = (String) entity.get("text");
-                }
-                
-                if (text != null) {
-                    if (isSirgasCoordinateText(text)) {
-                        String pointName = extractPointName(text);
-                        RealCoordinate coord = parseSirgasCoordinates(text);
-                        
-                        if (pointName != null && coord != null) {
-                            coordinates.put(pointName, coord);
-                        } else if (coord != null) {
-                            // Se não conseguiu extrair nome do ponto, usar um genérico
-                            String genericName = "T" + String.format("%02d", coordinates.size() + 1);
-                            coordinates.put(genericName, coord);
-                        }
-                    }
-                }
+        List<TextCell> textCells = extractTextCells(entities);
+        extractFromTableRows(textCells, coordinates);
+
+        for (TextCell cell : textCells) {
+            String text = cell.text();
+            if (!isSirgasCoordinateText(text)) {
+                continue;
+            }
+
+            String pointName = extractPointName(text);
+            RealCoordinate coord = parseSirgasCoordinates(text);
+
+            if (pointName != null && coord != null) {
+                coordinates.putIfAbsent(pointName, coord);
+            } else if (coord != null) {
+                String genericName = buildGenericPointName(coordinates);
+                coordinates.putIfAbsent(genericName, coord);
             }
         }
     }
@@ -332,6 +327,275 @@ public class CoordinateExtractionService {
         
         return null;
     }
+
+    private List<TextCell> extractTextCells(List<Map<String, Object>> entities) {
+        List<TextCell> cells = new ArrayList<>();
+
+        for (Map<String, Object> entity : entities) {
+            String type = (String) entity.get("type");
+            if (!"TEXT".equals(type) && !"MTEXT".equals(type)) {
+                continue;
+            }
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> properties = (Map<String, Object>) entity.get("properties");
+            String text = properties != null ? (String) properties.get("text") : (String) entity.get("text");
+            if (text == null || text.trim().isEmpty()) {
+                continue;
+            }
+
+            Double x = null;
+            Double y = null;
+            Double height = null;
+            if (properties != null) {
+                x = firstNonNullDouble(
+                        getDoubleValue(properties.get("x")),
+                        getDoubleValue(properties.get("alignmentX")),
+                        getDoubleValue(properties.get("x1"))
+                );
+                y = firstNonNullDouble(
+                        getDoubleValue(properties.get("y")),
+                        getDoubleValue(properties.get("alignmentY")),
+                        getDoubleValue(properties.get("y1"))
+                );
+                height = firstNonNullDouble(
+                        getDoubleValue(properties.get("height")),
+                        getDoubleValue(properties.get("textHeight"))
+                );
+            }
+
+            if (x == null) {
+                x = firstNonNullDouble(
+                        getDoubleValue(entity.get("x")),
+                        getDoubleValue(entity.get("alignmentX")),
+                        getDoubleValue(entity.get("x1"))
+                );
+            }
+            if (y == null) {
+                y = firstNonNullDouble(
+                        getDoubleValue(entity.get("y")),
+                        getDoubleValue(entity.get("alignmentY")),
+                        getDoubleValue(entity.get("y1"))
+                );
+            }
+
+            if (x != null && y != null) {
+                cells.add(new TextCell(text.trim(), x, y, height != null ? height : 1.0));
+            }
+        }
+
+        return cells;
+    }
+
+    private void extractFromTableRows(List<TextCell> textCells, Map<String, RealCoordinate> coordinates) {
+        List<TextCell> relevantCells = textCells.stream()
+                .filter(cell -> containsPotentialPointData(cell.text()))
+                .sorted(Comparator
+                        .comparingDouble(TextCell::y).reversed()
+                        .thenComparingDouble(TextCell::x))
+                .collect(Collectors.toList());
+
+        if (relevantCells.isEmpty()) {
+            return;
+        }
+
+        double rowTolerance = determineRowTolerance(relevantCells);
+        List<List<TextCell>> rows = clusterRows(relevantCells, rowTolerance);
+
+        for (List<TextCell> row : rows) {
+            if (row.isEmpty() || isHeaderRow(row)) {
+                continue;
+            }
+
+            String pointName = row.stream()
+                    .map(cell -> extractPointName(cell.text()))
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+
+            if (pointName == null || coordinates.containsKey(pointName)) {
+                continue;
+            }
+
+            RealCoordinate rowCoordinate = parseCoordinateRow(row);
+            if (rowCoordinate != null) {
+                coordinates.put(pointName, rowCoordinate);
+            }
+        }
+    }
+
+    private boolean containsPotentialPointData(String text) {
+        return extractPointName(text) != null
+                || isSirgasCoordinateText(text)
+                || LARGE_NUMBER_PATTERN.matcher(text.replace(",", ".")).find();
+    }
+
+    private boolean isHeaderRow(List<TextCell> row) {
+        return row.stream().anyMatch(cell -> HEADER_TEXT_PATTERN.matcher(cell.text()).find());
+    }
+
+    private double determineRowTolerance(List<TextCell> cells) {
+        List<Double> heights = cells.stream()
+                .map(TextCell::height)
+                .filter(Objects::nonNull)
+                .filter(height -> height > 0)
+                .sorted()
+                .collect(Collectors.toList());
+
+        if (heights.isEmpty()) {
+            return 1.5;
+        }
+
+        double medianHeight = heights.get(heights.size() / 2);
+        return Math.max(1.2, medianHeight * 0.9);
+    }
+
+    private List<List<TextCell>> clusterRows(List<TextCell> cells, double tolerance) {
+        List<List<TextCell>> rows = new ArrayList<>();
+        List<TextCell> currentRow = new ArrayList<>();
+        double currentBaseline = Double.NaN;
+
+        for (TextCell cell : cells) {
+            if (currentRow.isEmpty()) {
+                currentRow.add(cell);
+                currentBaseline = cell.y();
+                continue;
+            }
+
+            if (Math.abs(cell.y() - currentBaseline) <= tolerance) {
+                currentRow.add(cell);
+                currentBaseline = currentRow.stream().mapToDouble(TextCell::y).average().orElse(currentBaseline);
+            } else {
+                rows.add(currentRow.stream()
+                        .sorted(Comparator.comparingDouble(TextCell::x))
+                        .collect(Collectors.toList()));
+                currentRow = new ArrayList<>();
+                currentRow.add(cell);
+                currentBaseline = cell.y();
+            }
+        }
+
+        if (!currentRow.isEmpty()) {
+            rows.add(currentRow.stream()
+                    .sorted(Comparator.comparingDouble(TextCell::x))
+                    .collect(Collectors.toList()));
+        }
+
+        return rows;
+    }
+
+    private RealCoordinate parseCoordinateRow(List<TextCell> row) {
+        for (TextCell cell : row) {
+            RealCoordinate combined = parseSirgasCoordinates(cell.text());
+            if (combined != null) {
+                return new RealCoordinate(combined.getE(), combined.getN(), "TABLE_ROW");
+            }
+        }
+
+        Double easting = null;
+        Double northing = null;
+
+        for (TextCell cell : row) {
+            CoordinateParts parts = extractCoordinateParts(cell.text());
+            if (easting == null && parts.easting() != null) {
+                easting = parts.easting();
+            }
+            if (northing == null && parts.northing() != null) {
+                northing = parts.northing();
+            }
+        }
+
+        if (easting != null && northing != null && isValidSirgasCoordinate(easting, northing)) {
+            return new RealCoordinate(easting, northing, "TABLE_ROW");
+        }
+
+        return null;
+    }
+
+    private CoordinateParts extractCoordinateParts(String text) {
+        String cleanText = text == null ? "" : text.trim().toUpperCase().replace(",", ".");
+        Double easting = extractPrefixedCoordinate(cleanText, "E");
+        if (easting == null) {
+            easting = extractPrefixedCoordinate(cleanText, "X");
+        }
+
+        Double northing = extractPrefixedCoordinate(cleanText, "N");
+        if (northing == null) {
+            northing = extractPrefixedCoordinate(cleanText, "Y");
+        }
+
+        List<Double> numbers = extractLargeNumbers(cleanText);
+        for (Double value : numbers) {
+            if (easting == null && isPotentialEasting(value)) {
+                easting = value;
+                continue;
+            }
+            if (northing == null && isPotentialNorthing(value)) {
+                northing = value;
+            }
+        }
+
+        return new CoordinateParts(easting, northing);
+    }
+
+    private Double extractPrefixedCoordinate(String text, String prefix) {
+        Pattern prefixedPattern = Pattern.compile("\\b" + prefix + "\\s*(\\d{6,}[.,]?\\d*)");
+        Matcher matcher = prefixedPattern.matcher(text);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        try {
+            return Double.parseDouble(matcher.group(1).replace(",", "."));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private List<Double> extractLargeNumbers(String text) {
+        List<Double> numbers = new ArrayList<>();
+        Matcher matcher = LARGE_NUMBER_PATTERN.matcher(text);
+        while (matcher.find()) {
+            try {
+                numbers.add(Double.parseDouble(matcher.group().replace(",", ".")));
+            } catch (NumberFormatException ex) {
+                // Ignora valores invalidos
+            }
+        }
+        return numbers;
+    }
+
+    private boolean isPotentialEasting(double value) {
+        return value >= 200000 && value <= 800000;
+    }
+
+    private boolean isPotentialNorthing(double value) {
+        return value >= 9000000 && value <= 10000000;
+    }
+
+    private String buildGenericPointName(Map<String, RealCoordinate> coordinates) {
+        int index = coordinates.size() + 1;
+        String candidate = "T" + String.format("%02d", index);
+        while (coordinates.containsKey(candidate)) {
+            index++;
+            candidate = "T" + String.format("%02d", index);
+        }
+        return candidate;
+    }
+
+    @SafeVarargs
+    private final <T> T firstNonNullDouble(T... values) {
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private record TextCell(String text, double x, double y, Double height) {}
+
+    private record CoordinateParts(Double easting, Double northing) {}
 
     /**
      * Classe para representar coordenadas reais

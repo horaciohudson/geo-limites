@@ -2,6 +2,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { FileMetadata } from '@/types/files';
 import type { DXFData } from '@/utils/dxfParser';
+import { useOperationContext } from '@/contexts/OperationContext';
+import {
+  SELECTED_FILES_BY_PROPERTY_STORAGE_KEY,
+  SELECTED_FILES_STORAGE_KEY,
+  readJsonStorage,
+  readScopedStorageMap,
+  writeScopedStorageMap
+} from '@/utils/operationContext';
 
 // Estrutura para armazenar dados DXF em memória
 interface DXFFileData {
@@ -31,53 +39,72 @@ interface FileContextType {
 
 const FileContext = createContext<FileContextType | undefined>(undefined);
 
+const dedupeFiles = (files: FileMetadata[]): FileMetadata[] =>
+  files.filter((file, index, self) =>
+    index === self.findIndex((candidate) => candidate.id === file.id)
+  );
+
+const readPropertySelections = (): Record<string, FileMetadata[]> => {
+  return readScopedStorageMap<FileMetadata[]>(SELECTED_FILES_BY_PROPERTY_STORAGE_KEY);
+};
+
+const writePropertySelections = (nextSelections: Record<string, FileMetadata[]>) => {
+  writeScopedStorageMap(SELECTED_FILES_BY_PROPERTY_STORAGE_KEY, nextSelections);
+};
+
+const getStoredSelectionForProperty = (activePropertyId: string | null): FileMetadata[] => {
+  const propertySelections = readPropertySelections();
+
+  if (activePropertyId && Array.isArray(propertySelections[activePropertyId])) {
+    return dedupeFiles(propertySelections[activePropertyId]);
+  }
+
+  try {
+    const savedMultiple = readJsonStorage<FileMetadata[]>(SELECTED_FILES_STORAGE_KEY);
+    if (!savedMultiple) {
+      return [];
+    }
+
+    return dedupeFiles(savedMultiple);
+  } catch {
+    return [];
+  }
+};
+
 export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { activePropertyId } = useOperationContext();
   const [selectedFiles, setSelectedFiles] = useState<FileMetadata[]>([]);
   const [dxfFiles, setDxfFiles] = useState<Map<string, DXFFileData>>(new Map());
 
-  // Carrega os arquivos do localStorage na inicialização
   useEffect(() => {
-    const validateStoredFiles = async () => {
-      try {
-        const savedMultiple = localStorage.getItem('selectedFiles');
-        
-        if (savedMultiple) {
-          const parsedFiles = JSON.parse(savedMultiple);
-
-          // LIMPAR DUPLICATAS AO CARREGAR DO LOCALSTORAGE
-          const uniqueFiles = parsedFiles.filter((file: FileMetadata, index: number, self: FileMetadata[]) => 
-            index === self.findIndex(f => f.id === file.id)
-          );
-
-          if (uniqueFiles.length !== parsedFiles.length) {
-            // Salvar arquivos únicos de volta no localStorage
-            localStorage.setItem('selectedFiles', JSON.stringify(uniqueFiles));
-          }
-          
-          // Para desenvolvimento, não validar no backend se estiver indisponível
-          // Apenas carregar os arquivos únicos salvos localmente
-          setSelectedFiles(uniqueFiles);
-        }
-      } catch (error) {
-        console.error('❌ Erro ao carregar arquivos do localStorage:', error);
-        localStorage.removeItem('selectedFiles');
-      }
-    };
-
-    validateStoredFiles();
-  }, []);
+    try {
+      const restoredSelection = getStoredSelectionForProperty(activePropertyId);
+      localStorage.setItem(SELECTED_FILES_STORAGE_KEY, JSON.stringify(restoredSelection));
+      setSelectedFiles(restoredSelection);
+    } catch (error) {
+      console.error('❌ Erro ao carregar arquivos do localStorage:', error);
+      localStorage.removeItem(SELECTED_FILES_STORAGE_KEY);
+      setSelectedFiles([]);
+    }
+  }, [activePropertyId]);
 
   const handleSetSelectedFiles = (files: FileMetadata[]) => {
-    // REMOVER DUPLICATAS ANTES DE SALVAR
-    const uniqueFiles = files.filter((file, index, self) => 
-      index === self.findIndex(f => f.id === file.id)
-    );
+    const uniqueFiles = dedupeFiles(files);
 
     setSelectedFiles(uniqueFiles);
     
-    // Salva no localStorage apenas os metadados únicos (não o conteúdo DXF)
     try {
-      localStorage.setItem('selectedFiles', JSON.stringify(uniqueFiles));
+      localStorage.setItem(SELECTED_FILES_STORAGE_KEY, JSON.stringify(uniqueFiles));
+
+      if (activePropertyId) {
+        const propertySelections = readPropertySelections();
+        if (uniqueFiles.length > 0) {
+          propertySelections[activePropertyId] = uniqueFiles;
+        } else {
+          delete propertySelections[activePropertyId];
+        }
+        writePropertySelections(propertySelections);
+      }
     } catch (error) {
       console.error('❌ Erro ao salvar arquivos múltiplos no localStorage:', error);
     }
@@ -114,7 +141,13 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearAllSelections = () => {
     setSelectedFiles([]);
-    localStorage.removeItem('selectedFiles');
+    localStorage.removeItem(SELECTED_FILES_STORAGE_KEY);
+
+    if (activePropertyId) {
+      const propertySelections = readPropertySelections();
+      delete propertySelections[activePropertyId];
+      writePropertySelections(propertySelections);
+    }
   };
 
   const isFileSelected = (file: FileMetadata): boolean => {

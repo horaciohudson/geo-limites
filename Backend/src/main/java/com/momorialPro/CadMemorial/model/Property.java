@@ -163,6 +163,10 @@ public class Property {
     @Builder.Default
     private List<PropertyDocument> documents = new ArrayList<>();
 
+    @OneToMany(mappedBy = "property", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<FileMetadata> files = new ArrayList<>();
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id")
     private Tenant tenant;

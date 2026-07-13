@@ -32,4 +32,7 @@ public class DxfEntityChangeDTO {
     
     // Vértices para polylines (LWPOLYLINE, POLYLINE)
     private java.util.List<java.util.Map<String, Double>> vertices; // Lista de vértices com x, y
+
+    // Metadados adicionais vindos do frontend (hints de lote, flags de parcial, etc.)
+    private java.util.Map<String, Object> properties;
 }

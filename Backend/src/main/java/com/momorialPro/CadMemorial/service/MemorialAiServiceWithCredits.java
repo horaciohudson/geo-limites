@@ -2,6 +2,7 @@ package com.momorialPro.CadMemorial.service;
 
 import com.momorialPro.CadMemorial.dto.DxfCompareResultDTO;
 import com.momorialPro.CadMemorial.dto.SelectedConfrontationTextDTO;
+import com.momorialPro.CadMemorial.dto.SelectedReferencePointDTO;
 import com.momorialPro.CadMemorial.exception.NotEnoughCreditsException;
 import com.momorialPro.CadMemorial.exception.OpenAiQuotaExceededException;
 import com.momorialPro.CadMemorial.exception.OpenAiRateLimitException;
@@ -33,7 +34,12 @@ public class MemorialAiServiceWithCredits {
      */
     public String generateMemorialWithCredits(DxfCompareResultDTO r, UUID standardId, UUID userId, UUID propertyId,
                                               Integer lotCountOverride, Integer billableLotCount, Boolean chargeCredits,
-                                              List<String> selectedLayers, List<SelectedConfrontationTextDTO> selectedConfrontationTexts) {
+                                              List<String> selectedLayers, List<SelectedConfrontationTextDTO> selectedConfrontationTexts,
+                                              List<SelectedReferencePointDTO> selectedReferencePoints,
+                                              String technicalSummaryJson,
+                                              String documentSummaryJson,
+                                              String templateName,
+                                              String templateBackendId) {
         long startTime = System.currentTimeMillis();
         boolean chargedCredits = false;
         
@@ -51,15 +57,19 @@ public class MemorialAiServiceWithCredits {
             }
             
             // ===== ETAPA 2: GERAÇÃO DO MEMORIAL =====
-            // Chama o serviço original para gerar o memorial
-            String memorial = originalMemorialService.generate(
+            String memorial = dispatchMemorialGeneration(
                     r,
                     standardId,
                     userId,
                     propertyId,
                     lotCountOverride,
                     selectedLayers,
-                    selectedConfrontationTexts
+                    selectedConfrontationTexts,
+                    selectedReferencePoints,
+                    technicalSummaryJson,
+                    documentSummaryJson,
+                    templateName,
+                    templateBackendId
             );
 
             return memorial;
@@ -86,6 +96,50 @@ public class MemorialAiServiceWithCredits {
             
             throw new RuntimeException("Erro na geração do memorial: " + e.getMessage(), e);
         }
+    }
+
+    private String dispatchMemorialGeneration(
+            DxfCompareResultDTO compareResult,
+            UUID standardId,
+            UUID userId,
+            UUID propertyId,
+            Integer lotCountOverride,
+            List<String> selectedLayers,
+            List<SelectedConfrontationTextDTO> selectedConfrontationTexts,
+            List<SelectedReferencePointDTO> selectedReferencePoints,
+            String technicalSummaryJson,
+            String documentSummaryJson,
+            String templateName,
+            String templateBackendId) {
+        if (hasTechnicalSummaryJson(technicalSummaryJson)) {
+            return originalMemorialService.generateFromTechnicalSummary(
+                    compareResult,
+                    standardId,
+                    userId,
+                    propertyId,
+                    lotCountOverride,
+                    selectedLayers,
+                    technicalSummaryJson,
+                    documentSummaryJson,
+                    templateName,
+                    templateBackendId
+            );
+        }
+
+        return originalMemorialService.generate(
+                compareResult,
+                standardId,
+                userId,
+                propertyId,
+                lotCountOverride,
+                selectedLayers,
+                selectedConfrontationTexts,
+                selectedReferencePoints
+        );
+    }
+
+    private boolean hasTechnicalSummaryJson(String technicalSummaryJson) {
+        return technicalSummaryJson != null && !technicalSummaryJson.isBlank();
     }
 
     /**

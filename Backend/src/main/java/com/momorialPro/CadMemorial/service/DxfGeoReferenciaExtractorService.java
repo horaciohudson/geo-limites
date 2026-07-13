@@ -393,6 +393,28 @@ public class DxfGeoReferenciaExtractorService {
 
     public GeoreferencingTransform buildTransformFromLandmarks(List<Map<String, Object>> entidades, PropertyDTO property) {
         if (property == null || property.getLandmarks() == null || property.getLandmarks().isEmpty()) {
+            log.info("TRACE GEOREF: propriedade sem landmarks; transformacao nao sera criada");
+            return null;
+        }
+
+        long validPropertyLandmarks = property.getLandmarks().stream()
+                .filter(Objects::nonNull)
+                .filter(landmark -> landmark.getLandmarkName() != null && !landmark.getLandmarkName().isBlank())
+                .filter(landmark -> landmark.getCoordinateX() != null && landmark.getCoordinateY() != null)
+                .count();
+        log.info("TRACE GEOREF: landmarks validos no cadastro={}", validPropertyLandmarks);
+        property.getLandmarks().stream()
+                .filter(Objects::nonNull)
+                .forEach(landmark -> log.info(
+                        "TRACE GEOREF: cadastro label={} canonical={} E={} N={} ordem={}",
+                        landmark.getLandmarkName(),
+                        canonicalizeReferenceLabel(landmark.getLandmarkName()),
+                        landmark.getCoordinateX(),
+                        landmark.getCoordinateY(),
+                        landmark.getSequenceOrder()
+                ));
+        if (validPropertyLandmarks < 2) {
+            log.warn("Georreferenciamento por pontos requer no minimo 2 pontos cadastrados validos; encontrados {}", validPropertyLandmarks);
             return null;
         }
 
@@ -403,8 +425,17 @@ public class DxfGeoReferenciaExtractorService {
                         (first, second) -> first,
                         LinkedHashMap::new
                 ));
+        log.info("TRACE GEOREF: ancoras reconhecidas no DXF={}", anchorsByLabel.size());
+        anchorsByLabel.values().forEach(anchor -> log.info(
+                "TRACE GEOREF: ancora dxf rawLabel={} canonical={} x={} y={}",
+                anchor.rawLabel(),
+                anchor.canonicalLabel(),
+                String.format(Locale.US, "%.3f", anchor.x()),
+                String.format(Locale.US, "%.3f", anchor.y())
+        ));
 
         if (anchorsByLabel.isEmpty()) {
+            log.warn("TRACE GEOREF: nenhuma ancora textual foi reconhecida no DXF para casar com os landmarks");
             return null;
         }
 
@@ -414,28 +445,79 @@ public class DxfGeoReferenciaExtractorService {
                 .map(landmark -> matchLandmark(landmark, anchorsByLabel))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+        log.info("TRACE GEOREF: correspondencias validas cadastro<->DXF={}", matches.size());
+        matches.forEach(match -> log.info(
+                "TRACE GEOREF: match propertyLabel={} dxfLabel={} canonical={} localX={} localY={} realE={} realN={} ordem={}",
+                match.propertyLabel(),
+                match.dxfLabel(),
+                match.canonicalLabel(),
+                String.format(Locale.US, "%.3f", match.localX()),
+                String.format(Locale.US, "%.3f", match.localY()),
+                String.format(Locale.US, "%.3f", match.realE()),
+                String.format(Locale.US, "%.3f", match.realN()),
+                match.sequenceOrder()
+        ));
 
-        if (matches.isEmpty()) {
+        if (matches.size() < 2) {
+            log.warn("Georreferenciamento por pontos requer no minimo 2 correspondencias validas entre cadastro e DXF; encontradas {}", matches.size());
             return null;
         }
 
-        if (matches.size() == 1) {
-            MatchedReferencePoint single = matches.get(0);
-            double translateX = single.realE() - single.localX();
-            double translateY = single.realN() - single.localY();
-            return new GeoreferencingTransform(
-                    0.0,
-                    1.0,
-                    translateX,
-                    translateY,
-                    0.0,
-                    "PROPERTY_LANDMARK_1_POINT",
-                    matches
-            );
+        GeoreferencingTransform bestTransform = null;
+        double bestRotationRadians = 0.0d;
+
+        for (int i = 0; i < matches.size() - 1; i++) {
+            for (int j = i + 1; j < matches.size(); j++) {
+                TransformCandidate candidate = buildTransformCandidate(matches.get(i), matches.get(j), matches);
+                if (candidate == null) {
+                    continue;
+                }
+                if (bestTransform == null || candidate.transform().averageResidualMeters() < bestTransform.averageResidualMeters()) {
+                    bestTransform = candidate.transform();
+                    bestRotationRadians = candidate.rotationRadians();
+                }
+            }
         }
 
-        MatchedReferencePoint first = matches.get(0);
-        MatchedReferencePoint second = matches.get(1);
+        if (bestTransform == null) {
+            log.warn("TRACE GEOREF: nenhuma combinacao valida de pares produziu transformacao confiavel");
+            return null;
+        }
+
+        log.info(
+                "TRACE GEOREF: transform criado source={} rotacaoGraus={} escala={} translateX={} translateY={} residuoMedio={} matches={}",
+                bestTransform.source(),
+                String.format(Locale.US, "%.6f", Math.toDegrees(bestRotationRadians)),
+                String.format(Locale.US, "%.9f", bestTransform.scale()),
+                String.format(Locale.US, "%.3f", bestTransform.translateX()),
+                String.format(Locale.US, "%.3f", bestTransform.translateY()),
+                String.format(Locale.US, "%.6f", bestTransform.averageResidualMeters()),
+                matches.size()
+        );
+
+        return bestTransform;
+    }
+
+    public double[] transform(double x, double y, GeoreferencingTransform transform) {
+        if (transform == null) {
+            return new double[]{x, y};
+        }
+        return transform(x, y, transform.scale(), Math.toRadians(transform.rotationDegrees()), transform.translateX(), transform.translateY());
+    }
+
+    private double[] transform(double x, double y, double scale, double rotationRadians, double translateX, double translateY) {
+        double cos = Math.cos(rotationRadians);
+        double sin = Math.sin(rotationRadians);
+        double transformedX = scale * (x * cos - y * sin) + translateX;
+        double transformedY = scale * (x * sin + y * cos) + translateY;
+        return new double[]{transformedX, transformedY};
+    }
+
+    private TransformCandidate buildTransformCandidate(
+            MatchedReferencePoint first,
+            MatchedReferencePoint second,
+            List<MatchedReferencePoint> matches
+    ) {
         double localDx = second.localX() - first.localX();
         double localDy = second.localY() - first.localY();
         double realDx = second.realE() - first.realE();
@@ -461,30 +543,17 @@ public class DxfGeoReferenciaExtractorService {
             residualSum += Math.hypot(projected[0] - match.realE(), projected[1] - match.realN());
         }
 
-        return new GeoreferencingTransform(
+        double averageResidual = residualSum / matches.size();
+        GeoreferencingTransform transform = new GeoreferencingTransform(
                 Math.toDegrees(rotationRadians),
                 scale,
                 translateX,
                 translateY,
-                residualSum / matches.size(),
-                "PROPERTY_LANDMARK_2_POINTS",
+                averageResidual,
+                "PROPERTY_LANDMARK_BEST_PAIR",
                 matches
         );
-    }
-
-    public double[] transform(double x, double y, GeoreferencingTransform transform) {
-        if (transform == null) {
-            return new double[]{x, y};
-        }
-        return transform(x, y, transform.scale(), Math.toRadians(transform.rotationDegrees()), transform.translateX(), transform.translateY());
-    }
-
-    private double[] transform(double x, double y, double scale, double rotationRadians, double translateX, double translateY) {
-        double cos = Math.cos(rotationRadians);
-        double sin = Math.sin(rotationRadians);
-        double transformedX = scale * (x * cos - y * sin) + translateX;
-        double transformedY = scale * (x * sin + y * cos) + translateY;
-        return new double[]{transformedX, transformedY};
+        return new TransformCandidate(transform, rotationRadians);
     }
 
     private MatchedReferencePoint matchLandmark(PropertyLandmarkDTO landmark, Map<String, ReferenceAnchor> anchorsByLabel) {
@@ -539,8 +608,22 @@ public class DxfGeoReferenciaExtractorService {
                 continue;
             }
 
-            Double x = getDouble(entity, "x", null);
-            Double y = getDouble(entity, "y", null);
+            Double x = firstNonNullDouble(
+                    getDouble(properties, "x", null),
+                    getDouble(properties, "alignmentX", null),
+                    getDouble(properties, "x1", null),
+                    getDouble(entity, "x", null),
+                    getDouble(entity, "alignmentX", null),
+                    getDouble(entity, "x1", null)
+            );
+            Double y = firstNonNullDouble(
+                    getDouble(properties, "y", null),
+                    getDouble(properties, "alignmentY", null),
+                    getDouble(properties, "y1", null),
+                    getDouble(entity, "y", null),
+                    getDouble(entity, "alignmentY", null),
+                    getDouble(entity, "y1", null)
+            );
             if (x == null || y == null) {
                 continue;
             }
@@ -548,7 +631,47 @@ public class DxfGeoReferenciaExtractorService {
             anchors.add(new ReferenceAnchor(rawText, canonical, x, y));
         }
 
-        return anchors;
+        return filterSuspiciousTableAnchors(anchors);
+    }
+
+    private List<ReferenceAnchor> filterSuspiciousTableAnchors(List<ReferenceAnchor> anchors) {
+        if (anchors.size() < 5) {
+            return anchors;
+        }
+
+        Map<String, Long> xFrequency = anchors.stream()
+                .collect(Collectors.groupingBy(anchor -> roundedAxisKey(anchor.x()), Collectors.counting()));
+        Map<String, Long> yFrequency = anchors.stream()
+                .collect(Collectors.groupingBy(anchor -> roundedAxisKey(anchor.y()), Collectors.counting()));
+
+        List<ReferenceAnchor> filtered = anchors.stream()
+                .filter(anchor -> !isLikelyTableAnchor(anchor, xFrequency, yFrequency))
+                .toList();
+
+        if (filtered.size() < 2) {
+            return anchors;
+        }
+
+        long removedCount = anchors.size() - filtered.size();
+        if (removedCount > 0) {
+            log.info("TRACE GEOREF: ancoras textuais suspeitas de tabela removidas={}", removedCount);
+        }
+
+        return filtered;
+    }
+
+    private boolean isLikelyTableAnchor(
+            ReferenceAnchor anchor,
+            Map<String, Long> xFrequency,
+            Map<String, Long> yFrequency
+    ) {
+        long sameX = xFrequency.getOrDefault(roundedAxisKey(anchor.x()), 0L);
+        long sameY = yFrequency.getOrDefault(roundedAxisKey(anchor.y()), 0L);
+        return sameX >= 5 || sameY >= 5;
+    }
+
+    private String roundedAxisKey(double value) {
+        return String.format(Locale.US, "%.3f", value);
     }
 
     private String canonicalizeReferenceLabel(String rawLabel) {
@@ -575,15 +698,35 @@ public class DxfGeoReferenciaExtractorService {
             return prefix + ":" + String.format(Locale.US, "%02d", number);
         }
 
-        return normalized;
+        return "";
     }
 
     private Double getDouble(Map<?, ?> map, String key, Double defaultValue) {
+        if (map == null) {
+            return defaultValue;
+        }
         Object value = map.get(key);
         if (value instanceof Number) {
             return ((Number) value).doubleValue();
         }
+        if (value instanceof String stringValue) {
+            try {
+                return Double.parseDouble(stringValue.replace(",", "."));
+            } catch (NumberFormatException ignored) {
+                return defaultValue;
+            }
+        }
         return defaultValue;
+    }
+
+    @SafeVarargs
+    private final <T> T firstNonNullDouble(T... values) {
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     /**
@@ -641,6 +784,11 @@ public class DxfGeoReferenciaExtractorService {
             double averageResidualMeters,
             String source,
             List<MatchedReferencePoint> matchedPoints
+    ) {}
+
+    private record TransformCandidate(
+            GeoreferencingTransform transform,
+            double rotationRadians
     ) {}
 
     private record ReferenceAnchor(

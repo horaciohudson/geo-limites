@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import type { AsyncPropertyData } from '@/services/polling-memorial';
+import { getSelectedOperationProperty, setSelectedOperationProperty } from '@/utils/operationContext';
 import '../../styles/PropertyGrid.css';
 
 interface Property {
@@ -66,13 +67,9 @@ const PropertyGrid: React.FC<PropertyGridProps> = ({ onPropertySelect }) => {
       setProperties(propertiesData);
       
       // Verificar se há uma propriedade já selecionada no localStorage
-      const selectedForMemorial = localStorage.getItem('selectedPropertyForMemorial');
+      const selectedForMemorial = getSelectedOperationProperty<SelectedPropertyForMemorial>();
       if (selectedForMemorial) {
-        try {
-          const selected = JSON.parse(selectedForMemorial) as SelectedPropertyForMemorial;
-          setSelectedPropertyId(selected.propertyId || selected.id || '');
-        } catch {
-        }
+        setSelectedPropertyId(selectedForMemorial.propertyId || selectedForMemorial.id || '');
       }
       
     } catch (err: unknown) {
@@ -86,7 +83,7 @@ const PropertyGrid: React.FC<PropertyGridProps> = ({ onPropertySelect }) => {
   // Selecionar propriedade para memorial
   const selectPropertyForMemorial = (property: Property) => {
     // Salvar no localStorage
-    localStorage.setItem('selectedPropertyForMemorial', JSON.stringify(property));
+    setSelectedOperationProperty(property);
     
     // Atualizar estado local
     setSelectedPropertyId(property.propertyId || property.id);

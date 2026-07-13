@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:desktop": "tsc && vite build --mode desktop",
+    "desktop:smoke": "npm run build:desktop && npm --prefix platforms/electron-shell run start:local-build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "validate:technical-summary-payload": "node ./node_modules/esbuild/bin/esbuild scripts/validateTechnicalSummaryPayload.ts --bundle --platform=node --format=esm --tsconfig=tsconfig.json --outfile=.tmp/validateTechnicalSummaryPayload.mjs && node .tmp/validateTechnicalSummaryPayload.mjs"
   },
   "dependencies": {
     "@stomp/stompjs": "^7.2.1",

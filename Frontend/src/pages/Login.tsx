@@ -12,11 +12,6 @@ interface LoginLocationState {
 }
 
 const Login: React.FC = () => {
-  const [tenantCode, setTenantCode] = useState(() => (localStorage.getItem('tenantCode') || '').toUpperCase());
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
   const { login, isAuthenticated, loginMessage, loginError, clearMessages } = useAuth();
   const location = useLocation();
   const locationState = (location.state as LoginLocationState | null) || null;
@@ -25,19 +20,23 @@ const Login: React.FC = () => {
   const registerMessage = locationState?.message;
   const prefilledUsername = locationState?.username;
   const prefilledTenantCode = locationState?.tenantCode;
+  const [tenantCode, setTenantCode] = useState(() => String(prefilledTenantCode || '').toUpperCase());
+  const [username, setUsername] = useState(() => String(prefilledUsername || ''));
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Preencher username se veio do cadastro
   React.useEffect(() => {
-    if (prefilledUsername && !username) {
+    if (prefilledUsername) {
       setUsername(prefilledUsername);
     }
-  }, [prefilledUsername, username]);
+  }, [prefilledUsername]);
 
   React.useEffect(() => {
-    if (prefilledTenantCode && !tenantCode) {
+    if (prefilledTenantCode) {
       setTenantCode(String(prefilledTenantCode).toUpperCase());
     }
-  }, [prefilledTenantCode, tenantCode]);
+  }, [prefilledTenantCode]);
 
   // Redirecionar se já estiver autenticado
   if (isAuthenticated) {

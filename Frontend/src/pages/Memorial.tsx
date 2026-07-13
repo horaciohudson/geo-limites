@@ -1,44 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Loading } from '@/components';
+import { useNavigate } from 'react-router-dom';
+import Loading from '@/components/Loading';
 import GenerationProgress from '@/components/GenerationProgress';
-import { useAsyncMemorial } from '@/hooks/useAsyncMemorial';
-import api from '@/services/api';
-import { parseDXF } from '@/utils/dxfParser';
-import type { DXFData } from '@/utils/dxfParser';
+import { useDocumentGenerationState } from '@/hooks/useDocumentGenerationState';
+import { useDocumentGenerationActions } from '@/hooks/useDocumentGenerationActions';
 import type { MemorialStandard } from '@/types/memorial-standard';
-import type { AsyncCompareResult, AsyncPropertyData } from '@/services/polling-memorial';
+import type { AsyncPropertyData } from '@/services/polling-memorial';
 import type { FileMetadata, TemplateOption } from '@/types';
 import { useFileContext } from '@/contexts/FileContext';
-import jsPDF from 'jspdf';
+import { useOperationContext } from '@/contexts/OperationContext';
+import {
+  SELECTED_MEMORIAL_NORMS_BY_PROPERTY_KEY,
+  SELECTED_TEMPLATE_BY_PROPERTY_KEY,
+  getPropertyScopedValue,
+} from '@/utils/operationContext';
+import {
+  buildCurrentTechnicalSummarySelectionValue,
+  getAppliedTechnicalSummarySelection,
+  getStoredTechnicalSummary,
+  parseAppliedTechnicalSummarySelection,
+  setAppliedTechnicalSummarySelection
+} from '@/utils/technicalSummaryStorage';
 
-interface PropertyLinkedFile {
-  fileName: string;
-  fileType: string;
-}
+const loadJsPdf = async () => (await import('jspdf')).default;
 
 interface PropertySelection extends AsyncPropertyData {
   id: string;
-  dxfFiles?: PropertyLinkedFile[];
-}
-
-interface PropertySummaryResponse {
-  id?: string;
-  property_id?: string;
-  registration_number?: string;
-  name?: string;
-  full_address?: string;
-  owner_name?: string;
-  owner_document?: string;
-  property_type?: string;
-  dxf_files_list?: string;
-  dxfFiles?: PropertyLinkedFile[];
+  propertyId?: string;
 }
 
 interface StoredTemplateSelection {
   template_id?: string;
   name?: string;
   descricao?: string;
+  backendTemplateId?: string;
 }
 
 interface ErrorLike {
@@ -50,23 +45,32 @@ interface ErrorLike {
   };
 }
 
-const normalizePropertySummary = (summary: PropertySummaryResponse): PropertySelection => {
-  const [streetPart = '', neighborhoodPart = '', cityStatePart = ''] = (summary.full_address || '').split(' - ');
-  const [cityPart = '', statePart = ''] = cityStatePart.split(', ');
+const parseStoredTemplateSelectionId = (rawValue: string | null): string => {
+  if (!rawValue) {
+    return '';
+  }
 
-  return {
-    id: summary.id || summary.property_id || '',
-    registrationNumber: summary.registration_number || '',
-    name: summary.name || '',
-    street: streetPart,
-    neighborhood: neighborhoodPart.split(',')[0]?.trim() || '',
-    city: cityPart.trim(),
-    state: statePart.split(' -')[0]?.trim() || '',
-    ownerName: summary.owner_name || '',
-    ownerDocument: summary.owner_document || '',
-    propertyType: summary.property_type || '',
-    dxfFiles: summary.dxfFiles || [],
-  };
+  try {
+    const parsedTemplate = JSON.parse(rawValue) as unknown;
+
+    if (typeof parsedTemplate === 'string') {
+      return parsedTemplate.trim();
+    }
+
+    if (parsedTemplate && typeof parsedTemplate === 'object' && !Array.isArray(parsedTemplate)) {
+      const templateRecord = parsedTemplate as { template_id?: unknown; name?: unknown };
+      if (typeof templateRecord.template_id === 'string' && templateRecord.template_id.trim()) {
+        return templateRecord.template_id.trim();
+      }
+      if (typeof templateRecord.name === 'string' && templateRecord.name.trim()) {
+        return templateRecord.name.trim();
+      }
+    }
+  } catch (error) {
+    console.error('❌ Erro ao interpretar template salvo do memorial:', error);
+  }
+
+  return '';
 };
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
@@ -107,108 +111,286 @@ const deduplicateLeadingMemorialHeaders = (content: string): string => {
     .trim();
 };
 
-const Memorial: React.FC = () => {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { getDXFData, selectedFiles, clearDXFData, clearAllSelections } = useFileContext();
-  
-  const fileId = searchParams.get('fileId');
-  const fileIds = searchParams.get('fileIds');
-  const projectName = searchParams.get('projectName') || '';
-  const projectDescription = searchParams.get('projectDescription') || '';
+const TECHNICAL_SUMMARY_STORAGE_PREFIX = 'technicalSummaryJson:';
 
+const hasFileScopedTechnicalSummary = (fileId?: string | null): boolean => {
+  if (!fileId?.trim()) {
+    return false;
+  }
+
+  const storedValue = localStorage.getItem(`${TECHNICAL_SUMMARY_STORAGE_PREFIX}${fileId.trim()}`);
+  return Boolean(storedValue && storedValue.trim());
+};
+
+const buildVirtualSourceFile = (fileId: string, analyzedFile: string): FileMetadata => {
+  const fallbackName = analyzedFile.trim() || 'ResumoTecnico.dxf';
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: fileId,
+    originalName: fallbackName,
+    storedName: fallbackName,
+    extension: fallbackName.split('.').pop()?.toLowerCase() || 'dxf',
+    contentType: 'application/dxf',
+    sizeBytes: 0,
+    createdAt: nowIso,
+    updatedAt: nowIso
+  };
+};
+
+const buildVirtualAppliedSummaryFile = (
+  selectionKind: 'current' | 'example' | null,
+  sourceFileId: string,
+  analyzedFile: string
+): FileMetadata | null => {
+  if (!selectionKind) {
+    return null;
+  }
+
+  if (selectionKind === 'example') {
+    return buildVirtualSourceFile(
+      sourceFileId || 'applied-technical-summary-example',
+      analyzedFile || 'ResumoTecnicoBase.json'
+    );
+  }
+
+  if (sourceFileId) {
+    return buildVirtualSourceFile(sourceFileId, analyzedFile || 'ResumoTecnicoAtual.dxf');
+  }
+
+  return null;
+};
+
+const Memorial: React.FC = () => {
+  const navigate = useNavigate();
+  const { selectedFiles } = useFileContext();
+  const {
+    selectedProperty,
+    activePropertyId,
+  } = useOperationContext();
+  
   const [files, setFiles] = useState<FileMetadata[]>([]);
-  const [dxfDataList, setDxfDataList] = useState<DXFData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [memorial, setMemorial] = useState('');
-  const [memorialError, setMemorialError] = useState('');
   
   // Estados para normas e templates
   const [selectedNorms, setSelectedNorms] = useState<MemorialStandard[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateOption | null>(null);
   const [propertyData, setPropertyData] = useState<PropertySelection | null>(null);
-  const [availableProperties, setAvailableProperties] = useState<PropertySelection[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);
 
-  // Hook para geração assíncrona de memorial
-  const [asyncState, asyncActions] = useAsyncMemorial();
+  const {
+    memorial,
+    memorialError,
+    isGeneratingMemorial,
+    memorialTimeElapsed,
+    generationProgress,
+    memorialCurrentStep,
+    setMemorial,
+    setMemorialError,
+    beginGeneration,
+    updateGeneration,
+    completeGeneration,
+    failGeneration
+  } = useDocumentGenerationState();
 
-  // Carregar propriedades disponíveis e dados do localStorage
-  useEffect(() => {
-    const loadProperties = async () => {
+  const currentFile = files[currentFileIndex] || files[0] || null;
+  const candidatePropertyIds = [
+    activePropertyId,
+    selectedProperty?.propertyId,
+    selectedProperty?.id
+  ].filter((value, index, self): value is string => typeof value === 'string' && value.trim().length > 0 && self.indexOf(value) === index);
+  const persistedNorms = candidatePropertyIds
+    .map((propertyId) => getPropertyScopedValue<MemorialStandard[]>(SELECTED_MEMORIAL_NORMS_BY_PROPERTY_KEY, propertyId))
+    .find((norms): norms is MemorialStandard[] => Array.isArray(norms) && norms.length > 0)
+    || (() => {
       try {
-        // Primeiro, verificar se há propriedade selecionada no localStorage
-        const savedProperty = localStorage.getItem('selectedPropertyForMemorial');
-        if (savedProperty) {
-          try {
-            const parsedProperty = JSON.parse(savedProperty);
-            setPropertyData(parsedProperty);
-            setSelectedPropertyId(parsedProperty.id);
-                      } catch (error) {
-            console.error('❌ Erro ao parsear propriedade do localStorage:', error);
-          }
+        const savedNorms = localStorage.getItem('selectedMemorialNorms');
+        if (!savedNorms) {
+          return null;
         }
-        
-        // Carregar lista de propriedades disponíveis
-        const response = await api.get('/properties/summary');
-        const properties = (response.data as PropertySummaryResponse[]).map(normalizePropertySummary);
-        
-        if (properties && properties.length > 0) {
-          setAvailableProperties(properties);
-          
-          // Se não há propriedade do localStorage, tentar encontrar correspondência por arquivos
-          if (!savedProperty) {
-            const currentFileNames = files.map(f => f.originalName.toLowerCase());
-            const matchingProperty = properties.find((prop) => {
-              const rawSummary = response.data.find((item: PropertySummaryResponse) =>
-                (item.id || item.property_id || '') === prop.id
-              );
 
-              if (rawSummary?.dxf_files_list) {
-                const propFiles = rawSummary.dxf_files_list.toLowerCase().split(', ');
-                return propFiles.some((propFile: string) => 
-                  currentFileNames.includes(propFile)
-                );
-              }
-              return false;
-            });
-            
-            if (matchingProperty) {
-              setPropertyData(matchingProperty);
-              setSelectedPropertyId(matchingProperty.id);
-                          }
-          }
-          
-                  }
-      } catch (error: unknown) {
-        console.error('Erro ao carregar propriedades:', error);
-              }
-    };
+        const parsedNorms = JSON.parse(savedNorms) as unknown;
+        return Array.isArray(parsedNorms) ? parsedNorms as MemorialStandard[] : null;
+      } catch {
+        return null;
+      }
+    })();
+  const persistedTemplateSelection = candidatePropertyIds
+    .map((propertyId) => getPropertyScopedValue<StoredTemplateSelection>(SELECTED_TEMPLATE_BY_PROPERTY_KEY, propertyId))
+    .find((template): template is StoredTemplateSelection => Boolean(template))
+    || (() => {
+      try {
+        const savedTemplate = localStorage.getItem('selectedTemplate');
+        if (!savedTemplate) {
+          return null;
+        }
 
-    loadProperties();
-  }, [files]);
+        return JSON.parse(savedTemplate) as StoredTemplateSelection;
+      } catch {
+        return null;
+      }
+    })();
+  const currentNorm = selectedNorms[0] || persistedNorms?.[0] || null;
+  const currentTemplateName = (
+    selectedTemplate?.name?.trim()
+    || persistedTemplateSelection?.name?.trim()
+    || persistedTemplateSelection?.template_id?.trim()
+    || ''
+  );
+  const currentTemplateDescription = (
+    selectedTemplate?.description?.trim()
+    || persistedTemplateSelection?.descricao?.trim()
+    || ''
+  );
+  const scopedTechnicalSummaryCandidates = candidatePropertyIds.map((propertyId) => ({
+    propertyId,
+    storedTechnicalSummary: getStoredTechnicalSummary(propertyId),
+    appliedSelection: parseAppliedTechnicalSummarySelection(getAppliedTechnicalSummarySelection(propertyId))
+  }));
+  const preferredScopedSelectionCandidate = scopedTechnicalSummaryCandidates.find(
+    (candidate) => Boolean(candidate.appliedSelection)
+  ) || scopedTechnicalSummaryCandidates.find(
+    (candidate) => Boolean(candidate.storedTechnicalSummary)
+  ) || null;
+  const scopedStoredTechnicalSummary = preferredScopedSelectionCandidate?.storedTechnicalSummary
+    || scopedTechnicalSummaryCandidates.find(
+      (candidate) => Boolean(candidate.storedTechnicalSummary)
+    )?.storedTechnicalSummary
+    || null;
+  const globalStoredTechnicalSummary = getStoredTechnicalSummary();
+  const storedTechnicalSummary = scopedStoredTechnicalSummary || globalStoredTechnicalSummary;
+  const scopedAppliedTechnicalSummarySelection = preferredScopedSelectionCandidate?.appliedSelection || null;
+  const globalAppliedTechnicalSummarySelection = parseAppliedTechnicalSummarySelection(
+    getAppliedTechnicalSummarySelection()
+  );
+  const promotedCurrentSelection = (
+    (() => {
+      if (scopedAppliedTechnicalSummarySelection || globalAppliedTechnicalSummarySelection) {
+        return null;
+      }
 
-  // Atualizar memorial quando a geração assíncrona completar
+      const selectedFileWithSummary = selectedFiles.find((selectedFile) => hasFileScopedTechnicalSummary(selectedFile.id)) || null;
+      const effectiveCurrentFileId = (
+        scopedStoredTechnicalSummary?.sourceFileId?.trim()
+        || storedTechnicalSummary?.sourceFileId?.trim()
+        || selectedFileWithSummary?.id
+        || ''
+      );
+
+      if (!effectiveCurrentFileId) {
+        return null;
+      }
+
+      return parseAppliedTechnicalSummarySelection(
+        buildCurrentTechnicalSummarySelectionValue(effectiveCurrentFileId)
+      );
+    })()
+  );
+  const appliedTechnicalSummarySelection = scopedAppliedTechnicalSummarySelection
+    || globalAppliedTechnicalSummarySelection
+    || promotedCurrentSelection;
+  const appliedSelectionKind = appliedTechnicalSummarySelection?.kind || null;
+  const selectedFileWithScopedTechnicalSummary = selectedFiles.find(
+    (selectedFile) => hasFileScopedTechnicalSummary(selectedFile.id)
+  ) || null;
+  const effectiveCurrentSummaryFileId = (
+    promotedCurrentSelection?.fileId?.trim()
+    || scopedStoredTechnicalSummary?.sourceFileId?.trim()
+    || storedTechnicalSummary?.sourceFileId?.trim()
+    || selectedFileWithScopedTechnicalSummary?.id
+    || ''
+  );
+  const hasEffectiveCurrentTechnicalSummary = Boolean(
+    storedTechnicalSummary?.summaryJson?.trim()
+    || (effectiveCurrentSummaryFileId && hasFileScopedTechnicalSummary(effectiveCurrentSummaryFileId))
+  );
+  const effectiveTechnicalSummaryScopeId = candidatePropertyIds[0] || null;
+  const effectiveAppliedSelectionKind = appliedSelectionKind || (hasEffectiveCurrentTechnicalSummary ? 'current' : null);
+  const explicitAppliedSourceFileId = (
+    appliedTechnicalSummarySelection?.kind === 'current' && appliedTechnicalSummarySelection.fileId?.trim()
+      ? appliedTechnicalSummarySelection.fileId.trim()
+      : appliedTechnicalSummarySelection?.kind === 'example' && appliedTechnicalSummarySelection.exampleId?.trim()
+        ? `example:${appliedTechnicalSummarySelection.exampleId.trim()}`
+        : ''
+  );
+  const appliedSourceFileId = (
+    effectiveAppliedSelectionKind === 'example'
+      ? explicitAppliedSourceFileId
+      : effectiveCurrentSummaryFileId
+    || (
+      appliedTechnicalSummarySelection?.kind === 'current' && appliedTechnicalSummarySelection.fileId?.trim()
+        ? appliedTechnicalSummarySelection.fileId.trim()
+        : storedTechnicalSummary?.sourceFileId?.trim() || (storedTechnicalSummary ? 'stored-technical-summary' : '')
+    )
+  );
+  const appliedSourceFileName = (
+    selectedFiles.find((selectedFile) => selectedFile.id === appliedSourceFileId)?.originalName?.trim()
+    || storedTechnicalSummary?.analyzedFile?.trim()
+    || ''
+  );
+  const missingConfigurationItems = [
+    !currentNorm ? 'Norma' : null,
+    !currentTemplateName ? 'Template selecionado' : null,
+    !currentTemplateDescription ? 'Modelo base' : null
+  ].filter((item): item is string => Boolean(item));
+  const {
+    generateMemorial: generateStableMemorial
+  } = useDocumentGenerationActions({
+    file: currentFile,
+    files,
+    currentFileIndex,
+    dxfData: null,
+    selectedProperty: propertyData,
+    activePropertyId,
+    setCurrentFileIndex,
+    setMemorialError,
+    beginGeneration,
+    updateGeneration,
+    completeGeneration,
+    failGeneration,
+    getErrorMessage
+  });
+
   useEffect(() => {
-    if (asyncState.memorial) {
-      setMemorial(deduplicateLeadingMemorialHeaders(asyncState.memorial));
-      setMemorialError('');
-    } else if (asyncState.error) {
-      setMemorialError(asyncState.error);
-      setMemorial('');
-    }
-  }, [asyncState.memorial, asyncState.error]);
+    const currentProperty = selectedProperty as PropertySelection | null;
+    setPropertyData(currentProperty);
+  }, [activePropertyId, selectedProperty]);
 
-  // Função para fechar memorial e limpar dados
-  const closeMemorial = () => {
-        clearDXFData(); // Limpa todos os dados DXF da memória
-    clearAllSelections(); // Limpa seleções de arquivos
-    setMemorial('');
-    setMemorialError('');
-    asyncActions.clearState(); // Limpar estado assíncrono
-    navigate('/files'); // Volta para a página de arquivos
-  };
+  useEffect(() => {
+    if (
+      !hasEffectiveCurrentTechnicalSummary
+      || !effectiveCurrentSummaryFileId
+      || appliedTechnicalSummarySelection?.kind === 'example'
+    ) {
+      return;
+    }
+
+    const promotedSelectionValue = buildCurrentTechnicalSummarySelectionValue(effectiveCurrentSummaryFileId);
+    if (appliedTechnicalSummarySelection?.rawValue === promotedSelectionValue) {
+      return;
+    }
+
+    setAppliedTechnicalSummarySelection(promotedSelectionValue, effectiveTechnicalSummaryScopeId);
+  }, [
+    appliedTechnicalSummarySelection?.rawValue,
+    appliedTechnicalSummarySelection?.kind,
+    effectiveCurrentSummaryFileId,
+    effectiveTechnicalSummaryScopeId,
+    hasEffectiveCurrentTechnicalSummary,
+    storedTechnicalSummary
+  ]);
+
+  useEffect(() => {
+    if (!memorial) {
+      return;
+    }
+
+    const normalizedMemorial = deduplicateLeadingMemorialHeaders(memorial);
+    if (normalizedMemorial !== memorial) {
+      setMemorial(normalizedMemorial);
+    }
+  }, [memorial, setMemorial]);
 
   // Removido carregamento automático da norma padrão para evitar erros quando backend não disponível
   // useEffect(() => {
@@ -229,9 +411,10 @@ const Memorial: React.FC = () => {
 
   // Carregar normas e templates do localStorage
   useEffect(() => {
-        try {
+    try {
       // Carregar normas selecionadas
-      const savedNorms = localStorage.getItem('selectedMemorialNorms');
+      const scopedNorms = getPropertyScopedValue<MemorialStandard[]>(SELECTED_MEMORIAL_NORMS_BY_PROPERTY_KEY, activePropertyId);
+      const savedNorms = scopedNorms ? JSON.stringify(scopedNorms) : localStorage.getItem('selectedMemorialNorms');
             
       if (savedNorms) {
         const parsedNorms = JSON.parse(savedNorms);
@@ -240,7 +423,8 @@ const Memorial: React.FC = () => {
               }
 
       // Carregar template selecionado
-      const savedTemplateRaw = localStorage.getItem('selectedTemplate');
+      const scopedTemplate = getPropertyScopedValue<StoredTemplateSelection>(SELECTED_TEMPLATE_BY_PROPERTY_KEY, activePropertyId);
+      const savedTemplateRaw = scopedTemplate ? JSON.stringify(scopedTemplate) : localStorage.getItem('selectedTemplate');
       if (savedTemplateRaw) {
         let parsedTemplate: StoredTemplateSelection | null = null;
 
@@ -252,7 +436,7 @@ const Memorial: React.FC = () => {
           };
         }
 
-        const selectedTemplateId = parsedTemplate?.template_id || parsedTemplate?.name || '';
+        const selectedTemplateId = parseStoredTemplateSelectionId(savedTemplateRaw);
 
         // Buscar o template completo pelo ID
         const templateIndex = [
@@ -307,209 +491,96 @@ const Memorial: React.FC = () => {
     } catch (error) {
       console.error('❌ Erro ao carregar dados do localStorage:', error);
     }
-  }, []);
+  }, [activePropertyId]);
 
-  useEffect(() => {
-    const loadFilesAndDXF = async () => {
-      if (!fileId && !fileIds && selectedFiles.length === 0) {
+  const loadSourceFiles = async (): Promise<FileMetadata[]> => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const fileFromSelection = appliedSourceFileId
+        ? selectedFiles.find((selectedFile) => selectedFile.id === appliedSourceFileId) || null
+        : null;
+      const fallbackSelectedFile = selectedFiles[0] || null;
+      const virtualAppliedSummaryFile = buildVirtualAppliedSummaryFile(
+        effectiveAppliedSelectionKind,
+        appliedSourceFileId,
+        appliedSourceFileName
+      );
+      const resolvedFile = (
+        effectiveAppliedSelectionKind === 'example'
+          ? virtualAppliedSummaryFile
+          : fileFromSelection
+      )
+        || (effectiveCurrentSummaryFileId
+          ? selectedFiles.find((selectedFile) => selectedFile.id === effectiveCurrentSummaryFileId) || null
+          : null)
+        || fallbackSelectedFile
+        || virtualAppliedSummaryFile;
+      const loadedFiles = resolvedFile ? [resolvedFile] : [];
+
+      if (loadedFiles.length === 0) {
         setFiles([]);
-        setDxfDataList([]);
-        setError('Nenhum arquivo especificado');
-        setIsLoading(false);
-        return;
+        return [];
       }
 
-      try {
-        setIsLoading(true);
-        setError('');
+      setFiles(loadedFiles);
 
-        let loadedFiles: FileMetadata[] = [];
-        let loadedDxfData: DXFData[] = [];
-
-        if (selectedFiles.length > 0) {
-          loadedFiles = selectedFiles;
-
-          for (const selectedFile of selectedFiles) {
-            const contextData = getDXFData(selectedFile.id);
-            if (contextData?.dxfData) {
-              loadedDxfData.push(contextData.dxfData);
-              continue;
-            }
-
-            try {
-              const response = await api.get(`/dxf/${selectedFile.id}/download`, {
-                responseType: 'text',
-              });
-              loadedDxfData.push(parseDXF(response.data as string));
-            } catch (fileError: unknown) {
-              console.error(`Erro ao carregar DXF do arquivo ${selectedFile.originalName}:`, fileError);
-            }
-          }
-        } else {
-          if (fileIds) {
-            const ids = fileIds.split(',').map((id) => id.trim()).filter((id) => id.length > 0);
-            const fileResponses = await Promise.all(ids.map((id) => api.get(`/dxf/${id}`)));
-            loadedFiles = fileResponses.map((response) => response.data as FileMetadata);
-          } else if (fileId) {
-            const response = await api.get(`/dxf/${fileId}`);
-            loadedFiles = [response.data as FileMetadata];
-          }
-
-          const dxfResults = await Promise.all(
-            loadedFiles.map(async (loadedFile) => {
-              try {
-                const response = await api.get(`/dxf/${loadedFile.id}/download`, {
-                  responseType: 'text',
-                });
-                return parseDXF(response.data as string);
-              } catch (fileError: unknown) {
-                console.error(`Erro ao carregar DXF do arquivo ${loadedFile.originalName}:`, fileError);
-                return null;
-              }
-            })
-          );
-
-          loadedDxfData = dxfResults.filter((data): data is DXFData => data !== null);
-        }
-
-        setFiles(loadedFiles);
-        setDxfDataList(loadedDxfData);
-
-        if (loadedFiles.length === 0) {
-          setError('Nenhum arquivo especificado');
-        } else if (loadedDxfData.length === 0) {
-          setError('Nenhum dado DXF válido encontrado nos arquivos selecionados');
-        }
-      } catch (err: unknown) {
-        console.error('Erro ao carregar arquivos:', err);
-        setFiles([]);
-        setDxfDataList([]);
-        setError(getErrorMessage(err, 'Erro ao carregar arquivos'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadFilesAndDXF();
-  }, [fileId, fileIds, selectedFiles]);
-
-  // Gerar memorial automaticamente quando os dados estiverem prontos - COMENTADO PARA EVITAR LOOP
-  // useEffect(() => {
-  //   if (files.length > 0 && dxfDataList.length > 0 && !isGenerating && !memorial) {
-  //     generateMemorial();
-  //   }
-  // }, [files, dxfDataList]);
+      setError('');
+      return loadedFiles;
+    } catch (err: unknown) {
+      console.error('Erro ao carregar arquivos:', err);
+      setFiles([]);
+      setError(getErrorMessage(err, 'Erro ao carregar arquivos'));
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const generateMemorial = async () => {
-        if (files.length === 0 || dxfDataList.length === 0) {
-      setMemorialError('Dados dos arquivos não disponíveis');
+    setMemorial('');
+    setMemorialError('');
+
+    if (missingConfigurationItems.length > 0) {
+      setMemorialError(
+        `Revise "Operacao > Configurar Memorial". Falta configurar: ${missingConfigurationItems.join(', ')}.`
+      );
+      return;
+    }
+
+    const resolvedFiles = files.length > 0 ? files : await loadSourceFiles();
+    const currentFiles = resolvedFiles.length > 0 ? resolvedFiles : files;
+
+    if (currentFiles.length === 0) {
+      setMemorialError('Nenhum Resumo Tecnico aplicado foi encontrado para este memorial. Em "Operacao > Configurar Memorial", selecione o JSON desejado e clique em "Aplicar Escolhas".');
       return;
     }
 
     try {
-      // Limpar estados anteriores
-      setMemorialError('');
-      setMemorial('');
-      asyncActions.clearState();
-
-      // Verificar se os dados DXF já estão processados e otimizados
-      const allEntities = dxfDataList.flatMap(dxfData => dxfData.entities || []);
-      
-            if (allEntities.length === 0) {
-        setMemorialError('Nenhuma entidade DXF encontrada nos arquivos selecionados');
-        return;
-      }
-
-      // Verificar qualidade dos dados (se têm coordenadas válidas)
-      const entitiesWithCoords = allEntities.filter(entity => {
-        const props = entity.properties;
-        return props.x !== undefined || props.y !== undefined || 
-               props.x1 !== undefined || props.y1 !== undefined ||
-               props.centerX !== undefined || props.centerY !== undefined ||
-               (props.vertices && props.vertices.length > 0);
-      });
-
-      if (entitiesWithCoords.length === 0) {
-        setMemorialError('Os dados DXF não contêm coordenadas válidas para gerar o memorial');
-        return;
-      }
-      
-      const fileNames = files.map(file => file.originalName).join(', ');
-
-      // Verificar se há norma selecionada
-                  
-      let normsToUse = selectedNorms;
-      
-      // Se o estado selectedNorms está vazio, tentar carregar diretamente do localStorage
-      if (!normsToUse || normsToUse.length === 0) {
-        const savedNorms = localStorage.getItem('selectedMemorialNorms');
-        if (savedNorms) {
-          try {
-            normsToUse = JSON.parse(savedNorms);
-                        setSelectedNorms(normsToUse); // Atualizar o estado também
-          } catch (error) {
-            console.error('❌ Erro ao parsear normas do localStorage:', error);
-          }
-        }
-      }
-      
-      if (!normsToUse || normsToUse.length === 0) {
-        setMemorialError('❌ ERRO: Nenhuma norma do memorial foi selecionada. Defina essa escolha em "Operacao > Normas do Memorial" antes de gerar.');
-        return;
-      }
-
-      const standardIdToUse = normsToUse[0].id;
+      const standardIdToUse = currentNorm?.id || '';
             
       // Validar se é um UUID válido
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(standardIdToUse)) {
         console.error('❌ ERRO: standardId não é um UUID válido:', standardIdToUse);
-        setMemorialError('❌ ERRO: ID da norma inválido. Ajuste a selecao em "Operacao > Normas do Memorial" ou revise o cadastro em "Configuracao".');
+        setMemorialError('❌ ERRO: ID da norma inválido. Ajuste a selecao em "Operacao > Configurar Memorial" ou revise o cadastro em "Configuracao".');
         return;
       }
 
-      const requestData = {
-        entities: allEntities,
-        fileName: files.map(f => f.originalName).join(', '),
-        projectName: propertyData?.registrationNumber || projectName || propertyData?.name || 'Memorial Descritivo',
-        projectDescription: projectDescription || `Memorial descritivo da propriedade ${propertyData?.registrationNumber || 'não identificada'}`,
-        standardId: standardIdToUse,
-        // Dados da propriedade para preenchimento automático
-        propertyData: propertyData ? {
-          registrationNumber: propertyData.registrationNumber,
-          name: propertyData.name,
-          street: propertyData.street,
-          number: propertyData.number,
-          neighborhood: propertyData.neighborhood,
-          city: propertyData.city,
-          state: propertyData.state,
-          zipCode: propertyData.zipCode,
-          ownerName: propertyData.ownerName,
-          ownerDocument: propertyData.ownerDocument,
-          propertyType: propertyData.propertyType
-        } : null
-      };
-
-      // Usar geração assíncrona
-      const asyncRequest = {
-        compareResult: requestData as AsyncCompareResult,
-        standardId: standardIdToUse,
-        fileName: fileNames
-      };
-
-            // Iniciar geração assíncrona
-      await asyncActions.generateMemorial(asyncRequest);
+      setCurrentFileIndex(0);
+      await generateStableMemorial(null, currentFiles[0] || null);
 
     } catch (err: unknown) {
-      console.error('❌ Erro ao iniciar geração assíncrona:', err);
+      console.error('❌ Erro ao iniciar geração do memorial:', err);
       setMemorialError(getErrorMessage(err, 'Erro ao iniciar geração do memorial'));
     }
   };
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!memorial) return;
 
-    const pdf = new jsPDF();
+    const JsPdf = await loadJsPdf();
+    const pdf = new JsPdf();
     const pageWidth = pdf.internal.pageSize.getWidth();
     const margin = 20;
     const maxWidth = pageWidth - 2 * margin;
@@ -525,11 +596,13 @@ const Memorial: React.FC = () => {
       pdf.setFont('helvetica', 'normal');
       yPosition = 50;
 
-      if (projectName) {
+      const resolvedProjectName = propertyData?.name || propertyData?.registrationNumber || files[0]?.originalName || '';
+
+      if (resolvedProjectName) {
         pdf.setFont('helvetica', 'bold');
         pdf.text('Projeto:', margin, yPosition);
         pdf.setFont('helvetica', 'normal');
-        pdf.text(projectName, margin + 25, yPosition);
+        pdf.text(resolvedProjectName, margin + 25, yPosition);
         yPosition += 10;
       }
 
@@ -561,7 +634,7 @@ const Memorial: React.FC = () => {
     }
 
     // Nome do arquivo
-    const fileName = `Memorial_Descritivo_${projectName || 'Projeto'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const fileName = `Memorial_Descritivo_${propertyData?.name || propertyData?.registrationNumber || 'Projeto'}_${new Date().toISOString().split('T')[0]}.pdf`;
     pdf.save(fileName);
   };
 
@@ -576,12 +649,43 @@ const Memorial: React.FC = () => {
     }
   };
 
+  const pageStyle = {
+    minHeight: '100vh',
+    overflow: 'auto',
+    backgroundColor: '#f4f7fb',
+    padding: '1.5rem'
+  };
+
+  const heroCardStyle = {
+    background: 'linear-gradient(135deg, #ffffff 0%, #eef5ff 100%)',
+    border: '1px solid #d8e5f5',
+    borderRadius: '18px',
+    padding: '1.5rem 1.75rem',
+    marginBottom: '1.25rem',
+    boxShadow: '0 10px 30px rgba(44, 62, 80, 0.08)'
+  };
+
+  const panelStyle = {
+    backgroundColor: '#ffffff',
+    border: '1px solid #e3ebf5',
+    borderRadius: '16px',
+    padding: '1.25rem',
+    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.05)'
+  };
+
+  const smallCardStyle = {
+    backgroundColor: '#f8fbff',
+    border: '1px solid #dbe7f3',
+    borderRadius: '12px',
+    padding: '0.9rem 1rem'
+  };
+
   if (isLoading) {
     return (
       <div className="memorial-page">
         <div className="memorial-loading">
           <Loading />
-          <p>Carregando arquivos e processando dados DXF...</p>
+          <p>Carregando o arquivo-fonte do Resumo Tecnico...</p>
         </div>
       </div>
     );
@@ -602,251 +706,135 @@ const Memorial: React.FC = () => {
   }
 
   return (
-    <div className="memorial-page" style={{ height: '100vh', overflow: 'auto' }}>
-      <div className="memorial-header">
-        <h1>Memorial</h1>
-        <p>Etapa final da operacao para gerar, revisar e exportar o resultado deste trabalho</p>
-        <button 
-          onClick={closeMemorial}
-          className="btn-close-memorial"
-          title="Fechar o memorial atual e voltar ao fluxo"
-        >
-          ✕ Fechar Memorial
-        </button>
-      </div>
-
-      <div className="memorial-info">
-        <div
-          className="operation-summary"
-          style={{
-            backgroundColor: '#f8fbff',
-            border: '1px solid #d7e8fb',
-            borderRadius: '12px',
-            padding: '1rem 1.25rem',
-            marginBottom: '1.5rem'
-          }}
-        >
-          <h3 style={{ margin: '0 0 0.85rem 0', color: '#2c3e50' }}>
-            Confirmacao do trabalho atual
-          </h3>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '0.75rem'
-            }}
-          >
-            <div style={{ backgroundColor: 'white', border: '1px solid #e4edf6', borderRadius: '10px', padding: '0.85rem 1rem' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                Projeto
-              </div>
-              <div style={{ fontSize: '0.95rem', color: '#2c3e50', fontWeight: 600 }}>
-                {projectName || propertyData?.name || 'Nao especificado'}
-              </div>
+    <div className="memorial-page" style={pageStyle}>
+      <div style={heroCardStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#5f6b7a', marginBottom: '0.4rem' }}>
+              Fechamento do Memorial
             </div>
-            <div style={{ backgroundColor: 'white', border: '1px solid #e4edf6', borderRadius: '10px', padding: '0.85rem 1rem' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                Imovel Atual
-              </div>
-              <div style={{ fontSize: '0.95rem', color: '#2c3e50', fontWeight: 600 }}>
-                {propertyData?.registrationNumber || propertyData?.name || 'Nenhum imovel selecionado'}
-              </div>
-            </div>
-            <div style={{ backgroundColor: 'white', border: '1px solid #e4edf6', borderRadius: '10px', padding: '0.85rem 1rem' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                Norma Atual
-              </div>
-              <div style={{ fontSize: '0.95rem', color: '#2c3e50', fontWeight: 600 }}>
-                {selectedNorms[0]?.name || 'Nenhuma norma selecionada'}
-              </div>
-            </div>
-            <div style={{ backgroundColor: 'white', border: '1px solid #e4edf6', borderRadius: '10px', padding: '0.85rem 1rem' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                Template Atual
-              </div>
-              <div style={{ fontSize: '0.95rem', color: '#2c3e50', fontWeight: 600 }}>
-                {selectedTemplate?.name || 'Nenhum template selecionado'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="project-info">
-          <h3>Informacoes do Projeto</h3>
-          <p><strong>Projeto:</strong> {projectName || propertyData?.name || 'Nao especificado'}</p>
-          <p><strong>Arquivos:</strong> {files.map(f => f.originalName).join(', ')}</p>
-          <p><strong>Total de entidades:</strong> {dxfDataList.reduce((total, dxf) => total + (dxf.entities?.length || 0), 0)}</p>
-          
-          {availableProperties.length > 0 && (
-            <div className="property-selector">
-              <h4>🏠 Confirmar Imovel</h4>
-              <select 
-                value={selectedPropertyId} 
-                onChange={(e) => {
-                  const propId = e.target.value;
-                  setSelectedPropertyId(propId);
-                  const selectedProp = availableProperties.find(p => p.id === propId);
-                  setPropertyData(selectedProp || null);
-                  if (selectedProp) {
-                    localStorage.setItem('selectedPropertyForMemorial', JSON.stringify(selectedProp));
-                  } else {
-                    localStorage.removeItem('selectedPropertyForMemorial');
-                  }
-                }}
-                style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-              >
-                <option value="">Selecione um imovel...</option>
-                {availableProperties.map(prop => (
-                  <option key={prop.id} value={prop.id}>
-                    {prop.registrationNumber} - {prop.name} ({prop.city})
-                    {(prop.dxfFiles?.length ?? 0) > 0 && ` - ${(prop.dxfFiles?.length ?? 0)} arquivo(s) DXF`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {propertyData && (
-            <div className="property-info">
-              <h4>📋 Imovel Confirmado para Este Memorial</h4>
-              <p><strong>Registro:</strong> {propertyData.registrationNumber}</p>
-              <p><strong>Nome:</strong> {propertyData.name}</p>
-              <p><strong>Endereço:</strong> {propertyData.street}, {propertyData.number} - {propertyData.neighborhood}</p>
-              <p><strong>Cidade:</strong> {propertyData.city} - {propertyData.state}</p>
-              <p><strong>Proprietário:</strong> {propertyData.ownerName}</p>
-              <p><strong>Documento:</strong> {propertyData.ownerDocument}</p>
-              
-              {propertyData.dxfFiles && propertyData.dxfFiles.length > 0 && (
-                <div className="dxf-files-info">
-                  <p><strong>Arquivos DXF/DWG associados:</strong></p>
-                  <ul>
-                    {propertyData.dxfFiles.map((dxfFile, index: number) => (
-                      <li key={index}>
-                        📐 {dxfFile.fileName} ({dxfFile.fileType})
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {!propertyData && (
-            <div className="no-property-warning">
-              <p>⚠️ <strong>Nenhum imovel foi confirmado para este trabalho.</strong></p>
-              <p>Volte em "Preparacao {'>'} Imoveis" para selecionar ou cadastrar a base do memorial.</p>
-              <button 
-                onClick={() => navigate('/property-register')}
-                className="btn-register-property"
-              >
-                📝 Ir para Imoveis
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="norms-templates">
-          <div
-            style={{
-              backgroundColor: '#f8fbff',
-              border: '1px solid #d7e8fb',
-              borderRadius: '12px',
-              padding: '1rem 1.25rem',
-              marginBottom: '1.5rem'
-            }}
-          >
-            <h3 style={{ margin: '0 0 0.75rem 0', color: '#2c3e50' }}>
-              Fechamento da operacao
-            </h3>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '0.75rem',
-                marginBottom: '0.75rem'
-              }}
-            >
-              <div style={{ backgroundColor: 'white', border: '1px solid #e4edf6', borderRadius: '10px', padding: '0.85rem 1rem' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                  1. Gerar
-                </div>
-                <div style={{ fontSize: '0.92rem', color: '#2c3e50' }}>
-                  Monte ou atualize o memorial com a base ja preparada.
-                </div>
-              </div>
-              <div style={{ backgroundColor: 'white', border: '1px solid #e4edf6', borderRadius: '10px', padding: '0.85rem 1rem' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                  2. Revisar
-                </div>
-                <div style={{ fontSize: '0.92rem', color: '#2c3e50' }}>
-                  Confira texto, contexto e coerencia antes de concluir.
-                </div>
-              </div>
-              <div style={{ backgroundColor: 'white', border: '1px solid #e4edf6', borderRadius: '10px', padding: '0.85rem 1rem' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                  3. Exportar
-                </div>
-                <div style={{ fontSize: '0.92rem', color: '#2c3e50' }}>
-                  Baixe o PDF ou copie o texto final para o destino desejado.
-                </div>
-              </div>
-            </div>
-            <p style={{ margin: 0, color: '#5f6b7a', fontSize: '0.92rem' }}>
-              Esta tela concentra o fechamento do trabalho atual. Se algo estrutural estiver errado, volte para `Preparacao` ou `Operacao` antes de exportar.
+            <h1 style={{ margin: 0, fontSize: '2rem', color: '#1f2d3d' }}>
+              MEMORIAL
+            </h1>
+            <p style={{ margin: '0.65rem 0 0 0', maxWidth: '760px', color: '#51606f', lineHeight: 1.6 }}>
+              Confira o contexto do trabalho, gere o memorial a partir do Resumo Tecnico aplicado e revise o texto final antes de exportar.
             </p>
           </div>
+          <div style={{ ...smallCardStyle, minWidth: '220px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#5f6b7a', marginBottom: '0.35rem' }}>
+              Estado Atual
+            </div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1f2d3d' }}>
+              {memorial
+                  ? 'Memorial gerado'
+                  : isGeneratingMemorial
+                    ? 'Gerando memorial'
+                    : 'Aguardando geracao'}
+            </div>
+          </div>
+        </div>
+      </div>
 
-          <div className="form-group">
-            <h3>📋 Norma do Trabalho Atual ({selectedNorms.length})</h3>
-            {selectedNorms.length > 0 ? (
-              <ul className="selected-norms-list">
-                {selectedNorms.map((norm, index) => (
-                  <li key={index} className="norm-item">
-                    <strong>{norm.id}</strong> - {norm.name}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="no-selection error-message">
-                <p>❌ Nenhuma norma do memorial foi selecionada</p>
-                <p style={{ fontSize: '0.9em', color: '#666' }}>
-                  Volte em "Operacao {'>'} Normas do Memorial" para concluir essa etapa antes de gerar.
+      <div className="memorial-info" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 0.9fr)', gap: '1.25rem', alignItems: 'start' }}>
+        <div style={panelStyle}>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#223548' }}>
+            Contexto do trabalho
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', marginBottom: '1rem' }}>
+            <div style={smallCardStyle}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Imovel ativo</div>
+              <div style={{ fontSize: '0.98rem', color: '#1f2d3d', fontWeight: 600 }}>{propertyData?.registrationNumber || propertyData?.name || 'Nao confirmado'}</div>
+            </div>
+          </div>
+
+          <div className="project-info" style={{ ...smallCardStyle, backgroundColor: '#ffffff' }}>
+            <h3 style={{ margin: '0 0 0.85rem 0', color: '#223548' }}>Informacoes do trabalho</h3>
+            <p><strong>Projeto:</strong> {propertyData?.name || propertyData?.registrationNumber || 'Nao especificado'}</p>
+            <p><strong>Base do memorial:</strong> {propertyData?.registrationNumber || propertyData?.name || 'Nao confirmada'}</p>
+
+            {propertyData && (
+              <div className="property-info" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e6edf5' }}>
+                <h4 style={{ margin: '0 0 0.65rem 0', color: '#223548' }}>Apresentacao do imovel ativo</h4>
+                <p>
+                  <strong>Imovel ativo:</strong>{' '}
+                  {propertyData.registrationNumber || 'Sem registro'} - {propertyData.name || 'Sem nome'}
+                  {propertyData.city ? ` (${propertyData.city})` : ''}
                 </p>
+                <p><strong>Registro:</strong> {propertyData.registrationNumber}</p>
+                <p><strong>Nome:</strong> {propertyData.name}</p>
+                <p><strong>Endereco:</strong> {propertyData.street}, {propertyData.number} - {propertyData.neighborhood}</p>
+                <p><strong>Cidade:</strong> {propertyData.city} - {propertyData.state}</p>
+                <p><strong>Proprietario:</strong> {propertyData.ownerName}</p>
+                <p><strong>Documento:</strong> {propertyData.ownerDocument}</p>
+              </div>
+            )}
+
+            {!propertyData && (
+              <div className="no-property-warning" style={{ marginTop: '1rem', backgroundColor: '#fff8f1', border: '1px solid #f0d7bb', borderRadius: '12px', padding: '1rem' }}>
+                <p>⚠️ <strong>Nenhum imovel foi confirmado para este trabalho.</strong></p>
+                <p>Volte em "Preparacao {'>'} Imoveis" para selecionar ou cadastrar a base do memorial.</p>
+                <button
+                  onClick={() => navigate('/property-register')}
+                  className="btn-register-property"
+                >
+                  Ir para Imoveis
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="norms-templates" style={{ display: 'grid', gap: '1rem' }}>
+          <div style={panelStyle}>
+            <h3 style={{ margin: '0 0 0.9rem 0', color: '#223548' }}>Acao principal</h3>
+            <div style={{ display: 'grid', gap: '0.75rem' }}>
+              <div style={smallCardStyle}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.25rem' }}>1. Gerar</div>
+                <div style={{ color: '#334155' }}>Monte ou atualize o memorial usando apenas o Resumo Tecnico aplicado.</div>
+              </div>
+              <div style={smallCardStyle}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.25rem' }}>2. Revisar</div>
+                <div style={{ color: '#334155' }}>Confira o texto e a coerencia do documento antes da saida final.</div>
+              </div>
+              <div style={smallCardStyle}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#5f6b7a', textTransform: 'uppercase', marginBottom: '0.25rem' }}>3. Exportar</div>
+                <div style={{ color: '#334155' }}>Baixe o PDF ou copie o texto final quando a revisao estiver concluida.</div>
+              </div>
+            </div>
+            <button
+              onClick={generateMemorial}
+              disabled={isGeneratingMemorial}
+              className="btn-regenerate"
+              style={{ width: '100%', marginTop: '1rem' }}
+            >
+              {isGeneratingMemorial ? 'Gerando Memorial...' : 'Gerar Memorial'}
+            </button>
+
+            {(memorialError || memorialCurrentStep) && (
+              <div
+                style={{
+                  marginTop: '0.85rem',
+                  padding: '0.85rem 1rem',
+                  borderRadius: '12px',
+                  border: memorialError ? '1px solid #efc3c3' : '1px solid #dbe7f3',
+                  backgroundColor: memorialError ? '#fff5f5' : '#f8fbff',
+                  color: memorialError ? '#8a2d2d' : '#334155'
+                }}
+              >
+                <strong>{memorialError ? 'Status da geracao:' : 'Ultima atualizacao:'}</strong>{' '}
+                {memorialError || memorialCurrentStep}
               </div>
             )}
           </div>
 
-          <div className="form-group">
-            <h3>📄 Template do Trabalho Atual</h3>
-            {selectedTemplate ? (
-              <div className="selected-template">
-                <p className="template-name">
-                  <strong>{selectedTemplate.name}</strong>
-                </p>
-                <p className="template-description">{selectedTemplate.description}</p>
-              </div>
-            ) : (
-              <p className="no-selection">Nenhum template selecionado para este memorial</p>
-            )}
-          </div>
-
-          <button 
-            onClick={generateMemorial} 
-            disabled={asyncState.isGenerating}
-            className="btn-regenerate"
-          >
-            {asyncState.isGenerating ? 'Gerando Memorial...' : 'Gerar ou Atualizar Memorial'}
-          </button>
         </div>
       </div>
 
       <GenerationProgress
-        isGenerating={asyncState.isGenerating}
-        progress={asyncState.progress}
-        currentStep={asyncState.currentStep}
-        timeElapsed={asyncState.timeElapsed}
-        sessionId={asyncState.sessionId || undefined}
-        onCancel={asyncActions.cancelGeneration}
+        isGenerating={isGeneratingMemorial}
+        progress={generationProgress}
+        currentStep={memorialCurrentStep}
+        timeElapsed={memorialTimeElapsed}
       />
 
       {memorialError && (
@@ -856,7 +844,7 @@ const Memorial: React.FC = () => {
       )}
 
       {memorial && (
-        <div className="memorial-content">
+        <div className="memorial-content" style={{ ...panelStyle, marginTop: '1.25rem' }}>
           <div
             style={{
               backgroundColor: '#f6fbf7',
@@ -894,9 +882,9 @@ const Memorial: React.FC = () => {
         </div>
       )}
 
-      <div className="memorial-footer">
+      <div className="memorial-footer" style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-start' }}>
         <button onClick={() => navigate(-1)} className="btn-back">
-          ← Voltar ao Fluxo
+          Voltar ao Fluxo
         </button>
       </div>
     </div>

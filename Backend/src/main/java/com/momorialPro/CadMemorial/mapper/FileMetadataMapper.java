@@ -24,6 +24,8 @@ public class FileMetadataMapper {
                 .diskPath(entity.getDiskPath())
                 .ownerId(entity.getOwner() != null ? entity.getOwner().getId() : null)
                 .ownerUsername(entity.getOwner() != null ? entity.getOwner().getUsername() : null)
+                .propertyId(entity.getProperty() != null ? entity.getProperty().getPropertyId() : null)
+                .primaryForProperty(Boolean.TRUE.equals(entity.getPrimaryForProperty()))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

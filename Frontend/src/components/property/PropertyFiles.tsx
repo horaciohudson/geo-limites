@@ -1,13 +1,44 @@
 import React, { useRef } from 'react';
+import type { PropertyFormFile } from '@/types/property';
 
 interface PropertyFilesProps {
-  files: File[];
+  files: PropertyFormFile[];
   validation: Record<string, string>;
-  onChange: (files: File[]) => void;
+  onChange: (files: PropertyFormFile[]) => void;
+  importStatusText?: string;
 }
 
-const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
+const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, validation: _validation, onChange, importStatusText }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isTechnicalFile = (fileName: string): boolean => {
+    const normalized = fileName.toLowerCase();
+    return normalized.endsWith('.dxf') || normalized.endsWith('.dwg');
+  };
+
+  const normalizePrimaryTechnicalSelection = (nextFiles: PropertyFormFile[]): PropertyFormFile[] => {
+    const technicalIndexes = nextFiles.reduce<number[]>((indexes, file, index) => {
+      if (isTechnicalFile(file.name)) {
+        indexes.push(index);
+      }
+      return indexes;
+    }, []);
+
+    if (technicalIndexes.length === 0) {
+      return nextFiles.map((file) => ({
+        ...file,
+        primaryTechnical: false
+      }));
+    }
+
+    const explicitPrimaryIndex = technicalIndexes.find((index) => nextFiles[index].primaryTechnical);
+    const primaryIndex = explicitPrimaryIndex ?? technicalIndexes[0];
+
+    return nextFiles.map((file, index) => ({
+      ...file,
+      primaryTechnical: isTechnicalFile(file.name) ? index === primaryIndex : false
+    }));
+  };
   
   // Verificar se files é um array válido e filtrar objetos File corrompidos
   const safeFiles = React.useMemo(() => {
@@ -61,7 +92,15 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
       return true;
     });
     
-    onChange([...safeFiles, ...validFiles]);
+    const preparedFiles: PropertyFormFile[] = validFiles.map((file) => ({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified,
+      rawFile: file
+    }));
+
+    onChange(normalizePrimaryTechnicalSelection([...safeFiles, ...preparedFiles]));
     
     // Limpar input
     if (fileInputRef.current) {
@@ -71,6 +110,16 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
 
   const removeFile = (index: number) => {
     const updatedFiles = safeFiles.filter((_, i) => i !== index);
+    onChange(normalizePrimaryTechnicalSelection(updatedFiles));
+  };
+
+  const setPrimaryTechnicalFile = (index: number) => {
+    const updatedFiles = normalizePrimaryTechnicalSelection(
+      safeFiles.map((file, currentIndex) => ({
+        ...file,
+        primaryTechnical: currentIndex === index
+      }))
+    );
     onChange(updatedFiles);
   };
 
@@ -131,11 +180,16 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
   try {
     return (
       <div className="property-files">
-      <div className="section-header">
-        <h2>🗂️ Arquivos de Apoio do Imovel</h2>
+      <div className="files-section-header">
+        <h2>🗂️ Arquivos Tecnicos do Imovel</h2>
         <p className="section-description">
-          Reuna aqui plantas, imagens e documentos que ajudam a deixar o imovel pronto para a operacao.
+          Adicione aqui o DXF principal e os demais arquivos vinculados ao cadastro.
         </p>
+        {importStatusText && (
+          <p className="file-import-status">
+            {importStatusText}
+          </p>
+        )}
       </div>
 
       {/* Área de Upload */}
@@ -143,15 +197,14 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
         <div className="upload-zone" onClick={() => fileInputRef.current?.click()}>
           <div className="upload-content">
             <div className="upload-icon">📁</div>
-            <h3>Clique para adicionar arquivos de apoio</h3>
-            <p>ou arraste e solte aqui</p>
+            <h3>Adicionar arquivos tecnicos</h3>
+            <p>Clique ou arraste aqui</p>
             <div className="file-types">
-              <span>Tipos permitidos:</span>
               <div className="type-tags">
                 <span className="type-tag">📐 DXF/DWG</span>
                 <span className="type-tag">📄 PDF</span>
-                <span className="type-tag">🖼️ Imagens</span>
-                <span className="type-tag">📝 Documentos</span>
+                <span className="type-tag">🖼️ Imagem</span>
+                <span className="type-tag">📝 Documento</span>
               </div>
             </div>
             <p className="size-limit">Maximo 50MB por arquivo</p>
@@ -171,7 +224,7 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
       {/* Lista de Arquivos */}
       {safeFiles.length > 0 && (
         <div className="files-list">
-          <h3>📋 Arquivos Preparados no Imovel ({safeFiles.length})</h3>
+          <h3>📋 Arquivos Vinculados ({safeFiles.length})</h3>
           
           <div className="files-grid">
             {safeFiles.map((file, index) => (
@@ -187,6 +240,14 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
                         }
                       </h4>
                       <p className="file-type">{getFileTypeLabel(file.name)}</p>
+                      {isTechnicalFile(file.name) && file.primaryTechnical && (
+                        <p
+                          className="file-type"
+                          style={{ color: '#2563eb', fontWeight: 700 }}
+                        >
+                          DXF principal
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -199,6 +260,17 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
                 </div>
                 
                 <div className="file-actions">
+                  {isTechnicalFile(file.name) && !file.primaryTechnical && (
+                    <button
+                      onClick={() => setPrimaryTechnicalFile(index)}
+                      className="btn-secondary"
+                      type="button"
+                      title="Definir como DXF principal"
+                      style={{ marginRight: '0.5rem' }}
+                    >
+                      Principal
+                    </button>
+                  )}
                   <button 
                     onClick={() => removeFile(index)}
                     className="btn-remove"
@@ -216,33 +288,37 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
       {/* Resumo dos Arquivos */}
       {safeFiles.length > 0 && (
         <div className="files-summary">
-          <h4>📊 Resumo da Preparacao de Arquivos</h4>
+          <h4>📊 Resumo dos Arquivos</h4>
           <div className="summary-grid">
             <div className="summary-item">
-              <span className="label">Total de Arquivos:</span>
+              <span className="label">Total</span>
               <span className="value">{safeFiles.length}</span>
             </div>
             <div className="summary-item">
-              <span className="label">Tamanho Total:</span>
+              <span className="label">Tamanho</span>
               <span className="value">
                 {formatFileSize(safeFiles.reduce((total, file) => total + (file.size || 0), 0))}
               </span>
             </div>
             <div className="summary-item">
-              <span className="label">Arquivos DXF/DWG:</span>
+              <span className="label">DXF/DWG</span>
               <span className="value">
                 {safeFiles.filter(f => 
-                  f.name && (f.name.toLowerCase().endsWith('.dxf') || 
-                  f.name.toLowerCase().endsWith('.dwg'))
+                  f.name && isTechnicalFile(f.name)
                 ).length}
               </span>
             </div>
             <div className="summary-item">
-              <span className="label">Documentos/Imagens:</span>
+              <span className="label">Principal</span>
+              <span className="value value-text" title={safeFiles.find((file) => isTechnicalFile(file.name) && file.primaryTechnical)?.name || 'Nao definido'}>
+                {safeFiles.find((file) => isTechnicalFile(file.name) && file.primaryTechnical)?.name || 'Nao definido'}
+              </span>
+            </div>
+            <div className="summary-item">
+              <span className="label">Outros</span>
               <span className="value">
                 {safeFiles.filter(f => 
-                  f.name && (!f.name.toLowerCase().endsWith('.dxf') && 
-                  !f.name.toLowerCase().endsWith('.dwg'))
+                  f.name && !isTechnicalFile(f.name)
                 ).length}
               </span>
             </div>
@@ -253,9 +329,8 @@ const PropertyFiles: React.FC<PropertyFilesProps> = ({ files, onChange }) => {
       {safeFiles.length === 0 && (
         <div className="empty-state">
           <div className="empty-icon">📁</div>
-          <h3>Nenhum arquivo de apoio adicionado</h3>
-          <p>Esses arquivos sao opcionais, mas ajudam a deixar o imovel melhor preparado.</p>
-          <p>Plantas DXF/DWG sao especialmente uteis para a etapa operacional do memorial.</p>
+          <h3>Nenhum arquivo tecnico adicionado</h3>
+          <p>Envie o DXF principal e os arquivos de apoio do cadastro.</p>
         </div>
       )}
       </div>

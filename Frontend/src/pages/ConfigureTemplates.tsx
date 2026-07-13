@@ -1,15 +1,20 @@
-// src/pages/ConfigureTemplates.tsx
-import React, { useState, useEffect } from 'react';
-import { useConfig } from '@/contexts/ConfigContext';
-import { Input } from '@/components';
-import { memorialStandardsService } from '@/services/memorial-standards';
+import React, { useEffect, useMemo, useState } from 'react';
+import GenerationProgress from '@/components/GenerationProgress';
 import { templatesService } from '@/services/templates';
-import type { MemorialStandard } from '@/types/memorial-standard';
-import './ConfigureTemplates.css';
+import type { Template } from '@/types/template';
+import { memorialStandardsService } from '@/services/memorial-standards';
+import type { MemorialStandardCreate, MemorialStandard } from '@/types/memorial-standard';
+import {
+  deleteTechnicalSummaryExample,
+  listTechnicalSummaryExamples,
+  saveTechnicalSummaryExample,
+  type TechnicalSummaryExampleRecord
+} from '@/utils/technicalSummaryExamples';
+import { saveTextWithPicker } from '@/utils/fileSave';
 
-
-interface DirectoryPickerHandle {
-  name: string;
+interface ErrorLike {
+  name?: string;
+  message?: string;
 }
 
 interface WritableFileHandle {
@@ -21,11 +26,12 @@ interface SaveFileHandle {
   createWritable: () => Promise<WritableFileHandle>;
 }
 
+interface PreparedTemplateSaveTarget {
+  handle: SaveFileHandle | null;
+  status: 'ready' | 'cancelled' | 'unavailable';
+}
+
 interface FileSystemAccessWindow extends Window {
-  showDirectoryPicker?: (options?: {
-    mode?: 'read' | 'readwrite';
-    startIn?: string;
-  }) => Promise<DirectoryPickerHandle>;
   showSaveFilePicker?: (options?: {
     suggestedName?: string;
     startIn?: string;
@@ -36,11 +42,42 @@ interface FileSystemAccessWindow extends Window {
   }) => Promise<SaveFileHandle>;
 }
 
-interface ErrorLike {
+interface LocalTemplateRecord {
+  template_id?: string;
   name?: string;
-  message?: string;
-  stack?: string;
+  descricao?: string;
+  createdAt?: string;
+  [key: string]: unknown;
 }
+
+interface TemplateListItem {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+  source: 'backend' | 'local';
+}
+
+const LOCAL_TEMPLATES_KEY = 'createdTemplates';
+const LOCAL_STANDARDS_KEY = 'createdMemorialStandards';
+
+const buildDefaultPrompt = (standardName: string): string => `Gere um memorial descritivo seguindo rigorosamente a norma ${standardName}.
+
+Requisitos:
+- respeitar a estrutura tecnica da norma
+- usar terminologia formal e cartorial
+- preservar coerencia entre area, perimetro, confrontacoes e coordenadas
+- nao inventar coordenadas nem informacoes ausentes
+- sinalizar quando o texto da norma precisar de revisao complementar`;
+
+const sanitizeTemplateName = (rawName: string): string =>
+  rawName
+    .trim()
+    .replace(/\.[^/.]+$/, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^\w-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase() || 'template';
 
 const getErrorName = (error: unknown): string | undefined => {
   if (typeof error === 'object' && error !== null && 'name' in error) {
@@ -50,582 +87,1024 @@ const getErrorName = (error: unknown): string | undefined => {
   return undefined;
 };
 
-const ConfigureTemplates: React.FC = () => {
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return (error as ErrorLike).message || fallback;
+  }
 
-  const { templatesFolder, setTemplatesFolder, isTemplatesFolderConfigured, clearTemplatesFolder } = useConfig();
-  
-  // Estados para configuração da pasta
-  const [folderPath, setFolderPath] = useState(templatesFolder || '');
-  const [isEditing, setIsEditing] = useState(!isTemplatesFolderConfigured);
-  const [saving, setSaving] = useState(false);
-  const [isSelectingFolder, setIsSelectingFolder] = useState(false);
+  return fallback;
+};
 
-  // Estados para normas
-  const [memorialStandards, setMemorialStandards] = useState<MemorialStandard[]>([]);
-  const [loadingStandards, setLoadingStandards] = useState(true);
+const extractTemplateJson = (rawContent: string): string => {
+  const trimmed = rawContent.trim();
+  if (!trimmed) {
+    throw new Error('O conteudo do template veio vazio.');
+  }
 
-  // Estados para criação de template
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [templateData, setTemplateData] = useState({
-    name: '',
-    municipality: '',
-    memorialStandardId: '',
-    description: ''
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const jsonCandidate = fencedMatch?.[1]?.trim() || trimmed;
+  return jsonCandidate;
+};
+
+const parseLocalTemplates = (): LocalTemplateRecord[] => {
+  try {
+    const raw = localStorage.getItem(LOCAL_TEMPLATES_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as LocalTemplateRecord[]) : [];
+  } catch (error) {
+    console.error('Erro ao ler templates locais:', error);
+    return [];
+  }
+};
+
+const parseLocalStandards = (): MemorialStandard[] => {
+  try {
+    const raw = localStorage.getItem(LOCAL_STANDARDS_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as MemorialStandard[]) : [];
+  } catch (error) {
+    console.error('Erro ao ler normas locais:', error);
+    return [];
+  }
+};
+
+const persistLocalStandard = (standard: MemorialStandard) => {
+  const currentStandards = parseLocalStandards();
+  const nextStandards = currentStandards.filter((item) => item.id !== standard.id && item.name !== standard.name);
+  nextStandards.push(standard);
+  localStorage.setItem(LOCAL_STANDARDS_KEY, JSON.stringify(nextStandards));
+};
+
+const removeLocalStandard = (standard: MemorialStandard) => {
+  const currentStandards = parseLocalStandards();
+  const nextStandards = currentStandards.filter((item) => item.id !== standard.id && item.name !== standard.name);
+  localStorage.setItem(LOCAL_STANDARDS_KEY, JSON.stringify(nextStandards));
+};
+
+const mergeStandards = (backendStandards: MemorialStandard[], localStandards: MemorialStandard[]): MemorialStandard[] => {
+  const merged: MemorialStandard[] = [];
+  const seen = new Set<string>();
+
+  [...backendStandards, ...localStandards].forEach((standard) => {
+    const key = `${standard.id}::${standard.name}`;
+    const secondaryKey = standard.name.trim().toLowerCase();
+    if (seen.has(key) || seen.has(secondaryKey)) {
+      return;
+    }
+
+    seen.add(key);
+    seen.add(secondaryKey);
+    merged.push(standard);
   });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [creatingTemplate, setCreatingTemplate] = useState(false);
 
-  // Carregar normas e exemplos disponíveis
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Carregar normas
-        setLoadingStandards(true);
-        const standards = await memorialStandardsService.getAll();
-        setMemorialStandards(standards);
-      } catch (error) {
-        console.error('❌ Erro ao carregar dados:', error);
-        setMemorialStandards([]);
-      } finally {
-        setLoadingStandards(false);
-      }
-    };
+  return merged.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+};
 
-    loadData();
-  }, [templatesFolder, isTemplatesFolderConfigured]);
+const filterPlaceholderStandards = (items: MemorialStandard[]): MemorialStandard[] =>
+  items.filter((item) => !item.id.startsWith('mock-') && item.ownerId !== 'mock-user');
 
-  const handleSave = async () => {
-    if (!folderPath.trim()) {
-      alert('Por favor, informe o caminho da pasta de templates.');
+const removeLocalTemplate = (templateName: string) => {
+  const currentTemplates = parseLocalTemplates();
+  const filteredTemplates = currentTemplates.filter((item) => {
+    const currentName = item.template_id || item.name || '';
+    return currentName !== templateName;
+  });
+
+  localStorage.setItem(LOCAL_TEMPLATES_KEY, JSON.stringify(filteredTemplates));
+};
+
+const serializeLegacyTemplateRecord = (template: LocalTemplateRecord): string => {
+  const { createdAt, ...templateWithoutMetadata } = template;
+  return JSON.stringify(templateWithoutMetadata, null, 2);
+};
+
+const buildTemplateSummary = (backendTemplates: Template[], localTemplates: LocalTemplateRecord[]): TemplateListItem[] => {
+  const items: TemplateListItem[] = [];
+  const seenNames = new Set<string>();
+
+  backendTemplates.forEach((template) => {
+    const normalizedName = template.name?.trim();
+    if (!normalizedName || seenNames.has(normalizedName)) {
       return;
     }
 
-    const fullPath = folderPath.trim();
+    seenNames.add(normalizedName);
+    items.push({
+      id: template.id,
+      name: normalizedName,
+      description: template.description,
+      createdAt: template.createdAt,
+      source: 'backend'
+    });
+  });
+
+  localTemplates.forEach((template, index) => {
+    const normalizedName = (template.template_id || template.name || '').trim();
+    if (!normalizedName || seenNames.has(normalizedName)) {
+      return;
+    }
+
+    seenNames.add(normalizedName);
+    items.push({
+      id: `local-${index}-${normalizedName}`,
+      name: normalizedName,
+      description: template.descricao,
+      createdAt: template.createdAt,
+      source: 'local'
+    });
+  });
+
+  return items.sort((left, right) => (right.createdAt || '').localeCompare(left.createdAt || ''));
+};
+
+const migrateLegacyLocalTemplates = async (backendTemplates: Template[], localTemplates: LocalTemplateRecord[]) => {
+  const backendNames = new Set(
+    backendTemplates
+      .map((template) => template.name?.trim())
+      .filter((name): name is string => Boolean(name))
+  );
+
+  const failedTemplates: LocalTemplateRecord[] = [];
+  let migratedAny = false;
+
+  for (const template of localTemplates) {
+    const templateName = (template.template_id || template.name || '').trim();
+    if (!templateName) {
+      continue;
+    }
+
+    if (backendNames.has(templateName)) {
+      removeLocalTemplate(templateName);
+      migratedAny = true;
+      continue;
+    }
 
     try {
-      setSaving(true);
-      setTemplatesFolder(fullPath);
-      
-      setFolderPath(''); // Limpar o campo após salvar
-      setIsEditing(false);
+      await templatesService.create({
+        name: templateName,
+        description: template.descricao,
+        templateContent: serializeLegacyTemplateRecord(template)
+      });
+      backendNames.add(templateName);
+      removeLocalTemplate(templateName);
+      migratedAny = true;
     } catch (error) {
-      console.error('Erro ao salvar configuração:', error);
-      alert('Erro ao salvar configuração. Tente novamente.');
-    } finally {
-      setSaving(false);
+      console.error(`Erro ao migrar template legado "${templateName}" para o backend:`, error);
+      failedTemplates.push(template);
     }
-  };
+  }
 
-  const handleEdit = () => {
-    setIsEditing(true);
-    setFolderPath(templatesFolder || '');
+  return {
+    migratedAny,
+    failedTemplates
   };
+};
 
-  const handleCancel = () => {
-    setIsEditing(false);
-    setFolderPath(templatesFolder || '');
-  };
-
-  const handleClear = () => {
-    if (confirm('Tem certeza que deseja remover a configuração da pasta de templates?')) {
-      clearTemplatesFolder();
-      setFolderPath('');
-      setIsEditing(true);
+const buildJsonSavePickerOptions = (suggestedName: string) => ({
+  suggestedName,
+  startIn: 'documents',
+  types: [
+    {
+      description: 'Arquivo JSON',
+      accept: {
+        'application/json': ['.json']
+      }
     }
-  };
+  ]
+});
 
-  const handleSelectFolder = async () => {
+const prepareTemplateSaveTarget = async (suggestedName: string): Promise<PreparedTemplateSaveTarget> => {
+  const fileSystemWindow = window as FileSystemAccessWindow;
+
+  if (!fileSystemWindow.showSaveFilePicker) {
+    return {
+      handle: null,
+      status: 'unavailable'
+    };
+  }
+
+  try {
+    const handle = await fileSystemWindow.showSaveFilePicker(buildJsonSavePickerOptions(suggestedName));
+    return {
+      handle,
+      status: 'ready'
+    };
+  } catch (error) {
+    if (getErrorName(error) === 'AbortError') {
+      return {
+        handle: null,
+        status: 'cancelled'
+      };
+    }
+
+    if (getErrorName(error) === 'SecurityError') {
+      return {
+        handle: null,
+        status: 'unavailable'
+      };
+    }
+
+    throw error;
+  }
+};
+
+const saveTemplateWithBrowserDialog = async (
+  templateContent: string,
+  suggestedName: string,
+  preparedTarget?: PreparedTemplateSaveTarget
+) => {
+  if (preparedTarget?.status === 'ready' && preparedTarget.handle) {
+    const writable = await preparedTarget.handle.createWritable();
+    await writable.write(templateContent);
+    await writable.close();
+    return 'saved';
+  }
+
+  if (preparedTarget?.status === 'cancelled') {
+    return 'cancelled';
+  }
+
+  const saved = await saveTextWithPicker({
+    suggestedName,
+    contents: templateContent,
+    contentType: 'application/json;charset=utf-8',
+    pickerTypeDescription: 'Arquivo JSON',
+    accept: {
+      'application/json': ['.json']
+    }
+  });
+
+  return saved ? 'saved' : 'cancelled';
+};
+
+const normalizeTemplateContent = (rawContent: string): string => {
+  const extractedJson = extractTemplateJson(rawContent);
+  return JSON.stringify(JSON.parse(extractedJson), null, 2);
+};
+
+const helpButtonStyle: React.CSSProperties = {
+  width: '1.4rem',
+  height: '1.4rem',
+  border: '1px solid #cbd5e1',
+  borderRadius: '999px',
+  background: '#eef2ff',
+  color: '#4f46e5',
+  fontSize: '0.8rem',
+  fontWeight: 700,
+  lineHeight: 1,
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'all 0.2s ease'
+};
+
+const helpTextStyle: React.CSSProperties = {
+  fontSize: '0.8rem',
+  color: '#475569',
+  background: '#eef2ff',
+  border: '1px solid #c7d2fe',
+  borderRadius: '8px',
+  padding: '0.75rem 0.9rem',
+  lineHeight: 1.4,
+  marginTop: '0.75rem'
+};
+
+const ConfigureTemplates: React.FC = () => {
+  const [standards, setStandards] = useState<MemorialStandard[]>([]);
+  const [loadingStandards, setLoadingStandards] = useState(true);
+  const [uploadingStandard, setUploadingStandard] = useState(false);
+  const [templates, setTemplates] = useState<TemplateListItem[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [uploadingModel, setUploadingModel] = useState(false);
+  const [technicalSummaryExamples, setTechnicalSummaryExamples] = useState<TechnicalSummaryExampleRecord[]>([]);
+  const [loadingTechnicalSummaryExamples, setLoadingTechnicalSummaryExamples] = useState(true);
+  const [uploadingTechnicalSummaryExample, setUploadingTechnicalSummaryExample] = useState(false);
+  const [processingSeconds, setProcessingSeconds] = useState(0);
+  const [processingLabel, setProcessingLabel] = useState('');
+  const [processingFileName, setProcessingFileName] = useState('');
+  const [showStandardsHelp, setShowStandardsHelp] = useState(false);
+  const [showTemplatesHelp, setShowTemplatesHelp] = useState(false);
+  const [showTechnicalSummaryHelp, setShowTechnicalSummaryHelp] = useState(false);
+  const modelProgress = useMemo(() => Math.min(92, Math.max(12, 12 + processingSeconds * 7)), [processingSeconds]);
+
+  const loadTemplates = async () => {
     try {
-      setIsSelectingFolder(true);
-      
-      // Verificar se o navegador suporta a API de seleção de diretório
-      const fileSystemWindow = window as FileSystemAccessWindow;
+      setLoadingTemplates(true);
+      let backendTemplates: Template[] = [];
 
-      if (fileSystemWindow.showDirectoryPicker) {
-        // API moderna para seleção de diretório
-        const directoryHandle = await fileSystemWindow.showDirectoryPicker({
-          mode: 'readwrite',
-          startIn: 'documents'
-        });
-        
-        // A API não fornece o caminho completo, então vamos pedir para o usuário digitar
-        const userPath = prompt(
-          `📁 Pasta "${directoryHandle.name}" selecionada!\n\n` +
-          `Digite o caminho COMPLETO da pasta que você selecionou:\n\n` +
-          `Exemplo: C:\\Desenvolvimento\\GeoLimites\\Templates`,
-          `C:\\Desenvolvimento\\GeoLimites\\${directoryHandle.name}`
-        );
-        
-        if (userPath && userPath.trim()) {
-          setFolderPath(userPath.trim());
+      try {
+        backendTemplates = await templatesService.getAll();
+      } catch (error) {
+        console.error('Erro ao carregar templates do backend:', error);
+      }
+
+      const localTemplates = parseLocalTemplates();
+      const { migratedAny, failedTemplates } = await migrateLegacyLocalTemplates(backendTemplates, localTemplates);
+
+      if (migratedAny) {
+        try {
+          backendTemplates = await templatesService.getAll();
+        } catch (error) {
+          console.error('Erro ao recarregar templates do backend apos migracao:', error);
         }
-        
       }
-      
-    } catch (error: unknown) {
-      if (getErrorName(error) !== 'AbortError') {
-        console.error('Erro ao selecionar pasta:', error);
-      }
+
+      setTemplates(buildTemplateSummary(backendTemplates, failedTemplates));
     } finally {
-      setIsSelectingFolder(false);
+      setLoadingTemplates(false);
     }
   };
 
-  const handleTemplateInputChange = (field: string, value: string) => {
-    setTemplateData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const loadStandards = async () => {
+    try {
+      setLoadingStandards(true);
+      let backendStandards: MemorialStandard[] = [];
+
+      try {
+        backendStandards = await memorialStandardsService.getAll();
+      } catch (error) {
+        console.error('Erro ao carregar normas do backend:', error);
+      }
+
+      const localStandards = parseLocalStandards();
+      setStandards(mergeStandards(filterPlaceholderStandards(backendStandards), localStandards));
+    } catch (error) {
+      console.error('Erro ao carregar normas:', error);
+      setStandards([]);
+    } finally {
+      setLoadingStandards(false);
+    }
   };
 
-  const handleCreateTemplate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const loadTechnicalSummaryExamples = async () => {
+    try {
+      setLoadingTechnicalSummaryExamples(true);
+      setTechnicalSummaryExamples(await listTechnicalSummaryExamples());
+    } catch (error) {
+      console.error('Erro ao carregar resumos tecnicos base:', error);
+      setTechnicalSummaryExamples([]);
+    } finally {
+      setLoadingTechnicalSummaryExamples(false);
+    }
+  };
 
-    if (!templateData.name.trim()) {
-      alert('Por favor, informe o nome do template.');
+  useEffect(() => {
+    loadStandards();
+    loadTemplates();
+    void loadTechnicalSummaryExamples();
+  }, []);
+
+  useEffect(() => {
+    if (!uploadingModel) {
+      setProcessingSeconds(0);
       return;
     }
 
-    if (!templateData.memorialStandardId) {
-      alert('Por favor, selecione uma norma.');
+    setProcessingSeconds(0);
+    const intervalId = window.setInterval(() => {
+      setProcessingSeconds((current) => current + 1);
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [uploadingModel]);
+
+  const handleNormUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
       return;
     }
 
-    if (!selectedFile) {
-      alert('Por favor, selecione um arquivo de exemplo PDF.');
-      return;
-    }
+    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    const isPdf = file.type === 'application/pdf' || fileExtension === '.pdf';
+    const isTxt = file.type === 'text/plain' || fileExtension === '.txt';
 
-    if (!isTemplatesFolderConfigured) {
-      alert('Configure a pasta de templates primeiro.');
+    if (!isPdf && !isTxt) {
+      alert('Selecione apenas arquivos PDF ou TXT para a norma.');
+      event.target.value = '';
       return;
     }
 
     try {
-      setCreatingTemplate(true);
+      setUploadingStandard(true);
+      setProcessingFileName(file.name);
+      setProcessingLabel('Importando norma base...');
 
-      // Buscar dados da norma selecionada
-      const selectedStandard = memorialStandards.find(s => s.id === templateData.memorialStandardId);
-      
-      if (!selectedStandard) {
-        alert('Norma selecionada não encontrada.');
+      const standardName = file.name.replace(/\.[^/.]+$/, '').trim() || 'Norma sem nome';
+      const standardText = isTxt
+        ? await file.text()
+        : `Norma importada do arquivo ${file.name}.\n\nO texto integral do PDF precisa de revisao complementar se necessario.`;
+
+      const payload: MemorialStandardCreate = {
+        name: standardName,
+        description: `Norma base importada de ${file.name}`,
+        standardText,
+        promptTemplate: buildDefaultPrompt(standardName),
+        isDefault: false
+      };
+
+      const createdStandard = await memorialStandardsService.create(payload);
+      persistLocalStandard(createdStandard);
+      await loadStandards();
+      alert(`✅ Norma "${standardName}" carregada com sucesso.`);
+    } catch (error: unknown) {
+      console.error('Erro ao carregar norma:', error);
+      alert(`❌ Falha ao carregar a norma: ${getErrorMessage(error, 'Erro desconhecido.')}`);
+    } finally {
+      setUploadingStandard(false);
+      setProcessingLabel('');
+      setProcessingFileName('');
+      event.target.value = '';
+    }
+  };
+
+  const handleModelUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    const isJson = file.type === 'application/json' || fileExtension === '.json';
+    const isPdf = file.type === 'application/pdf' || fileExtension === '.pdf';
+    const isTxt = file.type === 'text/plain' || fileExtension === '.txt';
+
+    if (!isJson && !isPdf && !isTxt) {
+      alert('Selecione apenas arquivos JSON, PDF ou TXT.');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      setUploadingModel(true);
+      setProcessingFileName(file.name);
+      setProcessingLabel(isJson ? 'Importando modelo base...' : 'Gerando modelo base com a IA...');
+
+      let requestName = sanitizeTemplateName(file.name);
+      let requestDescription = `Modelo base criado a partir do arquivo ${file.name}`;
+      const suggestedSaveName = `${requestName || 'template'}.json`;
+      let preparedSaveTarget: PreparedTemplateSaveTarget | undefined;
+
+      if (isJson) {
+        const rawJson = await file.text();
+        const parsedJson = JSON.parse(rawJson) as LocalTemplateRecord;
+        requestName = sanitizeTemplateName((parsedJson.template_id || parsedJson.name || requestName).toString());
+        requestDescription = (parsedJson.descricao || requestDescription).toString();
+        const normalizedTemplateContent = normalizeTemplateContent(rawJson);
+        await templatesService.create({
+          name: requestName,
+          description: requestDescription,
+          templateContent: normalizedTemplateContent
+        });
+        await loadTemplates();
+        alert(`✅ Modelo "${requestName}" importado com sucesso.`);
         return;
       }
 
-      // Chama a API real do backend para gerar o template usando IA
-      const response = await templatesService.generateTemplate(selectedFile, {
-        name: templateData.name,
-        description: templateData.description,
-        municipality: templateData.municipality,
-        memorialStandardId: templateData.memorialStandardId,
-        targetFolderPath: templatesFolder || ''
+      preparedSaveTarget = await prepareTemplateSaveTarget(suggestedSaveName);
+
+      const response = await templatesService.generateTemplate(file, {
+        name: requestName,
+        description: requestDescription
       });
 
-      // O backend retorna o JSON gerado no campo templateContent (agora é content)
-      const templateContent = (response as any).content || (response as any).templateContent || '';
-
-      // Criar objeto do template para listagem local
-      const newTemplate = {
-        id: response.id || Date.now().toString(),
-        name: templateData.name,
-        description: templateData.description,
-        municipality: templateData.municipality,
-        memorialStandardId: templateData.memorialStandardId,
-        memorialStandardName: selectedStandard.name,
-        exampleFileName: selectedFile.name,
-        targetFolder: templatesFolder,
-        createdAt: new Date().toISOString(),
-        content: templateContent
-      };
-
-      // Salvar no localStorage para controle interno
-      const existingTemplates = JSON.parse(localStorage.getItem('createdTemplates') || '[]');
-      existingTemplates.push(newTemplate);
-      localStorage.setItem('createdTemplates', JSON.stringify(existingTemplates));
-
-      // Reset form
-      setTemplateData({
-        name: '',
-        municipality: '',
-        memorialStandardId: '',
-        description: ''
-      });
-      setSelectedFile(null);
-      setShowCreateForm(false);
-      
-      // Mostrar onde o template foi salvo
-      alert(`✅ Template JSON "${templateData.name}" criado com sucesso!\n\n📁 O arquivo foi salvo automaticamente na pasta configurada:\n${templatesFolder}\n\n📄 Template contém:\n• Estrutura completa do memorial\n• Placeholders ({{proprietario}}, {{area_total}}, etc.)\n• Norma ${selectedStandard.name}\n• Observações técnicas\n\n💡 O template já está disponível para uso.`);
-
-    } catch (error: unknown) {
-      console.error('❌ Erro detalhado ao criar template:', error);
-      if (typeof error === 'object' && error !== null && 'stack' in error) {
-        console.error('Stack trace:', (error as ErrorLike).stack);
+      const templateContent = response.templateContent || '';
+      if (!templateContent) {
+        throw new Error('A IA nao retornou o conteudo do template em JSON.');
       }
-      alert('Erro ao criar template. Tente novamente.');
+
+      const normalizedTemplateContent = normalizeTemplateContent(templateContent);
+
+      try {
+        const saveResult = await saveTemplateWithBrowserDialog(
+          normalizedTemplateContent,
+          suggestedSaveName,
+          preparedSaveTarget
+        );
+
+        if (saveResult === 'cancelled') {
+          await loadTemplates();
+          alert(`✅ Modelo "${requestName}" processado e salvo no sistema. O arquivo local nao foi salvo porque a escolha do local foi cancelada.`);
+          return;
+        }
+
+        await loadTemplates();
+
+      } catch (error) {
+        throw error;
+      }
+
+      alert(`✅ Modelo "${requestName}" processado com sucesso.`);
+    } catch (error: unknown) {
+      console.error('Erro ao processar modelo:', error);
+      alert(`❌ Falha ao processar o modelo: ${getErrorMessage(error, 'Erro desconhecido.')}`);
     } finally {
-      setCreatingTemplate(false);
+      setUploadingModel(false);
+      setProcessingLabel('');
+      setProcessingFileName('');
+      event.target.value = '';
     }
   };
 
-  const handleCancelCreate = () => {
-    setShowCreateForm(false);
-    setTemplateData({
-      name: '',
-      municipality: '',
-      memorialStandardId: '',
-      description: ''
-    });
-    setSelectedFile(null);
+  const handleDeleteTemplate = async (template: TemplateListItem) => {
+    if (!window.confirm(`Deseja excluir o modelo "${template.name}"?`)) {
+      return;
+    }
+
+    try {
+      if (template.source === 'backend') {
+        await templatesService.delete(template.id);
+      }
+
+      removeLocalTemplate(template.name);
+      await loadTemplates();
+      alert(`✅ Modelo "${template.name}" excluido com sucesso.`);
+    } catch (error: unknown) {
+      console.error('Erro ao excluir modelo:', error);
+      alert(`❌ Falha ao excluir o modelo: ${getErrorMessage(error, 'Erro desconhecido.')}`);
+    }
+  };
+
+  const handleDeleteStandard = async (standard: MemorialStandard) => {
+    if (!window.confirm(`Deseja excluir a norma "${standard.name}"?`)) {
+      return;
+    }
+
+    try {
+      await memorialStandardsService.delete(standard.id);
+      removeLocalStandard(standard);
+      await loadStandards();
+      alert(`✅ Norma "${standard.name}" excluida com sucesso.`);
+    } catch (error: unknown) {
+      console.error('Erro ao excluir norma:', error);
+      alert(`❌ Falha ao excluir a norma: ${getErrorMessage(error, 'Erro desconhecido.')}`);
+    }
+  };
+
+  const handleTechnicalSummaryUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    const isJson = file.type === 'application/json' || fileExtension === '.json';
+
+    if (!isJson) {
+      alert('Selecione apenas arquivos JSON para o Resumo Tecnico base.');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      setUploadingTechnicalSummaryExample(true);
+      await saveTechnicalSummaryExample(file);
+      await loadTechnicalSummaryExamples();
+      alert(`✅ Resumo Tecnico "${file.name}" carregado com sucesso.`);
+    } catch (error: unknown) {
+      console.error('Erro ao carregar resumo tecnico base:', error);
+      alert(`❌ Falha ao carregar o resumo tecnico base: ${getErrorMessage(error, 'Erro desconhecido.')}`);
+    } finally {
+      setUploadingTechnicalSummaryExample(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleDeleteTechnicalSummaryExample = async (record: TechnicalSummaryExampleRecord) => {
+    if (!window.confirm(`Deseja excluir o resumo tecnico base "${record.fileName}"?`)) {
+      return;
+    }
+
+    try {
+      await deleteTechnicalSummaryExample(record.id);
+      await loadTechnicalSummaryExamples();
+      alert(`✅ Resumo Tecnico "${record.fileName}" excluido com sucesso.`);
+    } catch (error: unknown) {
+      console.error('Erro ao excluir resumo tecnico base:', error);
+      alert(`❌ Falha ao excluir o resumo tecnico base: ${getErrorMessage(error, 'Erro desconhecido.')}`);
+    }
   };
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ color: '#2c3e50', fontSize: '2rem', fontWeight: 'bold' }}>
-          🎨 Configurar Templates
-        </h1>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          {isTemplatesFolderConfigured && (
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              style={{ 
-                backgroundColor: showCreateForm ? '#e74c3c' : '#3498db',
-                color: 'white',
-                padding: '0.75rem 1.5rem',
-                borderRadius: '8px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '1rem',
-                fontWeight: '500'
-              }}
-            >
-              {showCreateForm ? 'Cancelar' : '📝 Novo Template'}
-            </button>
-          )}
+      <GenerationProgress
+        isGenerating={uploadingModel}
+        progress={modelProgress}
+        currentStep={processingFileName ? `Arquivo: ${processingFileName}` : 'Preparando processamento do modelo'}
+        timeElapsed={processingSeconds}
+        title="Processando Modelo Base"
+        subtitle={processingLabel || 'Aguarde enquanto a IA prepara o template em JSON.'}
+        tips={
+          <>
+            <p>O modelo esta sendo transformado em template estruturado para uso no memorial.</p>
+            <p>Ao concluir, o sistema abre a janela para voce salvar o arquivo JSON.</p>
+          </>
+        }
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1rem' }}>
+        <div>
+          <h1 style={{ color: '#2c3e50', fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>
+            ⚙️ Normas e Exemplos
+          </h1>
         </div>
       </div>
 
-      {/* Configuração da Pasta */}
-      <div style={{
-        backgroundColor: '#f8f9fa',
-        padding: '2rem',
-        borderRadius: '12px',
-        marginBottom: '2rem',
-        border: '1px solid #e9ecef'
-      }}>
-        <h2 style={{ color: '#2c3e50', marginBottom: '1.5rem', fontSize: '1.5rem' }}>
-          📁 Configuração da Pasta Local de Templates
-        </h2>
-        
-        <div style={{ 
-          backgroundColor: isTemplatesFolderConfigured ? '#d4edda' : '#fff3cd', 
-          border: `1px solid ${isTemplatesFolderConfigured ? '#c3e6cb' : '#ffeaa7'}`, 
-          borderRadius: '8px', 
-          padding: '1rem', 
-          marginBottom: '1.5rem',
-          color: isTemplatesFolderConfigured ? '#155724' : '#856404'
-        }}>
-          <strong>Status:</strong> {isTemplatesFolderConfigured ? (
-            <>✅ Pasta configurada: <code style={{ backgroundColor: '#c3e6cb', padding: '0.25rem 0.5rem', borderRadius: '4px' }}>{templatesFolder}</code></>
-          ) : (
-            '⚠️ Pasta não configurada'
-          )}
-        </div>
-
-        <div style={{ display: 'grid', gap: '1.5rem' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#2c3e50' }}>
-              📂 Caminho Completo da Pasta Local de Templates
-            </label>
-            {/* Campo de edição - largura total */}
-            <div style={{ marginBottom: '1rem' }}>
-              <Input
-                type="text"
-                value={folderPath}
-                onChange={(value) => setFolderPath(value)}
-                placeholder="Ex: C:\Desenvolvimento\GeoLimites\Templates"
-                disabled={!isEditing}
-                style={{ 
-                  width: '100%', 
-                  padding: '0.75rem', 
-                  border: '1px solid #ddd', 
-                  borderRadius: '8px',
-                  fontSize: '0.95rem',
-                  fontFamily: 'monospace'
-                }}
-              />
-            </div>
-            
-            {/* Botões quando editando */}
-            {isEditing && (
-              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
-                <button
-                  onClick={handleSelectFolder}
-                  disabled={isSelectingFolder}
-                  style={{
-                    backgroundColor: '#16a34a',
-                    color: 'white',
-                    border: 'none',
-                    padding: '0.75rem 1rem',
-                    borderRadius: '8px',
-                    cursor: isSelectingFolder ? 'not-allowed' : 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {isSelectingFolder ? '⏳ Selecionando...' : '📁 Selecionar'}
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  style={{
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    padding: '0.75rem 1rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    cursor: saving ? 'not-allowed' : 'pointer',
-                    opacity: saving ? 0.7 : 1,
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {saving ? 'Salvando...' : '💾 Salvar'}
-                </button>
-              </div>
-            )}
-            <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: '#6c757d' }}>
-              <p>💡 <strong>Dica:</strong> Digite o caminho completo manualmente</p>
-              <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '4px', fontSize: '0.8rem' }}>
-                <strong>Exemplo:</strong> <code>C:\Desenvolvimento\GeoLimites\Templates</code>
-              </div>
-            </div>
-            
-            {/* Campo para mostrar o endereço salvo - abaixo da dica */}
-            {isTemplatesFolderConfigured && (
-              <div style={{ 
-                marginTop: '1rem', 
-                padding: '0.75rem', 
-                backgroundColor: '#e8f5e8', 
-                border: '1px solid #c3e6cb', 
-                borderRadius: '8px',
-                fontSize: '0.9rem'
-              }}>
-                <div style={{ color: '#155724', fontWeight: '500', marginBottom: '0.5rem' }}>
-                  📂 Pasta configurada:
-                </div>
-                <div style={{ 
-                  fontFamily: 'monospace', 
-                  fontSize: '0.9rem', 
-                  color: '#2c3e50',
-                  wordBreak: 'break-all',
-                  backgroundColor: 'white',
-                  padding: '0.5rem',
-                  borderRadius: '4px',
-                  border: '1px solid #c3e6cb'
-                }}>
-                  {templatesFolder}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {!isEditing && (
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <button
-                onClick={handleEdit}
-                style={{
-                  backgroundColor: '#3498db',
-                  color: 'white',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                ✏️ Editar
-              </button>
-              <button
-                onClick={handleClear}
-                style={{
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                🗑️ Remover
-              </button>
-            </div>
-          )}
-          
-          {isEditing && (
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              {isTemplatesFolderConfigured && (
-                <button
-                  onClick={handleCancel}
-                  disabled={saving}
-                  style={{
-                    backgroundColor: '#6c757d',
-                    color: 'white',
-                    padding: '0.75rem 1rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ❌ Cancelar
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Formulário de Criação de Template */}
-      {showCreateForm && isTemplatesFolderConfigured && (
-        <div style={{
-          backgroundColor: '#f8f9fa',
-          padding: '2rem',
+      <div
+        style={{
+          backgroundColor: 'white',
           borderRadius: '12px',
-          marginBottom: '2rem',
-          border: '1px solid #e9ecef'
-        }}>
-          <h2 style={{ color: '#2c3e50', marginBottom: '1.5rem', fontSize: '1.5rem' }}>
-            📝 Criar Novo Template
-          </h2>
-          
-          <div style={{ 
-            backgroundColor: '#e8f4fd', 
-            border: '1px solid #bee5eb', 
-            borderRadius: '8px', 
-            padding: '1rem', 
-            marginBottom: '1.5rem',
-            fontSize: '0.9rem'
-          }}>
-            <strong>💡 Dica:</strong> Preencha os dados do template que sera gerado pela plataforma com base na norma selecionada e no modelo exemplo escolhido.
-          </div>
-          
-          <form onSubmit={handleCreateTemplate}>
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">
-                  📋 Nome do Template *
-                  <span className="label-hint">
-                    (Ex: Memorial Padrão Fortaleza, Template Desmembramento SP)
-                  </span>
-                </label>
-                <Input
-                  type="text"
-                  value={templateData.name}
-                  onChange={(value) => handleTemplateInputChange('name', value)}
-                  placeholder="Digite o nome do template"
-                  required
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">
-                    🏛️ Município
-                    <span className="label-hint">
-                      (Opcional - para templates específicos)
-                    </span>
-                  </label>
-                  <Input
-                    type="text"
-                    value={templateData.municipality}
-                    onChange={(value) => handleTemplateInputChange('municipality', value)}
-                    placeholder="Ex: Fortaleza, São Paulo"
-                    className="form-input"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">
-                    ⚙️ Norma Base *
-                    <span className="label-hint">
-                      (Norma que será seguida pelo template)
-                    </span>
-                  </label>
-                  {loadingStandards ? (
-                    <div className="loading-text">
-                      ⏳ Carregando normas...
-                    </div>
-                  ) : (
-                    <select
-                      value={templateData.memorialStandardId}
-                      onChange={(e) => handleTemplateInputChange('memorialStandardId', e.target.value)}
-                      required
-                      className="form-select"
-                    >
-                      <option value="">Selecione uma norma...</option>
-                      {memorialStandards.map((standard) => (
-                        <option key={standard.id} value={standard.id}>
-                          {standard.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">
-                  📄 Arquivo de Exemplo (PDF) *
-                  <span className="label-hint">
-                    (Envie o PDF do memorial que servirá como referência para a IA)
-                  </span>
-                </label>
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                  required
-                  className="form-input"
-                  style={{ padding: '0.5rem', backgroundColor: '#fff' }}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">
-                  📝 Descrição
-                  <span className="label-hint">
-                    (Opcional - descreva o propósito do template)
-                  </span>
-                </label>
-                <textarea
-                  value={templateData.description}
-                  onChange={(e) => handleTemplateInputChange('description', e.target.value)}
-                  placeholder="Ex: Template para memoriais de loteamento seguindo norma municipal de Fortaleza"
-                  rows={3}
-                  className="form-textarea"
-                />
-              </div>
-
-              <div className="form-actions">
-                <button
-                  type="button"
-                  onClick={handleCancelCreate}
-                  className="action-btn btn-secondary"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingTemplate}
-                  className="action-btn btn-success"
-                >
-                  {creatingTemplate ? 'Gerando template...' : 'Criar Template'}
-                </button>
-              </div>
+          border: '1px solid #e9ecef',
+          overflow: 'hidden',
+          marginBottom: '1.5rem'
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: '#f8f9fa',
+            padding: '1rem 1.5rem',
+            borderBottom: '1px solid #e9ecef',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '1rem'
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h2 style={{ color: '#2c3e50', margin: 0, fontSize: '1.2rem' }}>
+                📘 Normas Base ({standards.length})
+              </h2>
+              <button
+                type="button"
+                aria-label="Ajuda sobre normas base"
+                aria-expanded={showStandardsHelp}
+                onClick={() => setShowStandardsHelp((prev) => !prev)}
+                style={helpButtonStyle}
+              >
+                ?
+              </button>
             </div>
-          </form>
+            {showStandardsHelp && (
+              <div style={helpTextStyle}>
+                Use esta area para importar a norma base que servira de referencia tecnica.
+                O sistema aceita `PDF` ou `TXT` e cadastra essa norma para reutilizacao nos proximos trabalhos.
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => document.getElementById('standardUploadDirect')?.click()}
+            disabled={uploadingStandard}
+            style={{
+              backgroundColor: uploadingStandard ? '#95a5a6' : '#8e44ad',
+              color: 'white',
+              padding: '0.75rem 1.25rem',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: uploadingStandard ? 'not-allowed' : 'pointer',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              opacity: uploadingStandard ? 0.7 : 1,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {uploadingStandard ? '⏳ Processando...' : 'Buscar Norma'}
+          </button>
         </div>
-      )}
 
+        <input
+          id="standardUploadDirect"
+          type="file"
+          accept=".pdf,.txt"
+          style={{ display: 'none' }}
+          onChange={handleNormUpload}
+        />
 
+        <div style={{ padding: '1.5rem' }}>
+          {loadingStandards ? (
+            <div style={{ color: '#5f6b7a' }}>Carregando normas...</div>
+          ) : standards.length === 0 ? (
+            <div style={{ color: '#5f6b7a' }}>
+              Nenhuma norma cadastrada ainda. Use `Buscar Norma` para adicionar a primeira.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: '0.9rem' }}>
+              {standards.map((standard) => (
+                <div
+                  key={standard.id}
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '10px',
+                    padding: '1rem',
+                    backgroundColor: '#fff'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: '0.25rem' }}>
+                        {standard.name}
+                      </div>
+                      {standard.description && (
+                        <div style={{ color: '#5f6b7a', fontSize: '0.92rem' }}>{standard.description}</div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      {standard.isDefault && (
+                        <div
+                          style={{
+                            backgroundColor: '#dcfce7',
+                            color: '#166534',
+                            borderRadius: '999px',
+                            padding: '0.35rem 0.7rem',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          Padrão
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleDeleteStandard(standard)}
+                        style={{
+                          backgroundColor: '#dc2626',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '0.5rem 0.85rem',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <input
+        id="templateUploadDirect"
+        type="file"
+        accept=".json,.pdf,.txt"
+        style={{ display: 'none' }}
+        onChange={handleModelUpload}
+      />
+
+      <input
+        id="technicalSummaryUploadDirect"
+        type="file"
+        accept=".json"
+        style={{ display: 'none' }}
+        onChange={handleTechnicalSummaryUpload}
+      />
+
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e9ecef',
+          overflow: 'hidden',
+          marginBottom: '1.5rem'
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: '#f8f9fa',
+            padding: '1rem 1.5rem',
+            borderBottom: '1px solid #e9ecef',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '1rem'
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h2 style={{ color: '#2c3e50', margin: 0, fontSize: '1.2rem' }}>
+                📄 Modelos Base ({templates.length})
+              </h2>
+              <button
+                type="button"
+                aria-label="Ajuda sobre modelos base"
+                aria-expanded={showTemplatesHelp}
+                onClick={() => setShowTemplatesHelp((prev) => !prev)}
+                style={helpButtonStyle}
+              >
+                ?
+              </button>
+            </div>
+            {showTemplatesHelp && (
+              <div style={helpTextStyle}>
+                Use esta area para trazer um `JSON` de template pronto ou um exemplo em `PDF/TXT`.
+                Se for `JSON`, o sistema importa o template. Se for `PDF/TXT`, o sistema gera um modelo/template com IA e persiste para reutilizacao.
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => document.getElementById('templateUploadDirect')?.click()}
+            disabled={uploadingModel}
+            style={{
+              backgroundColor: uploadingModel ? '#95a5a6' : '#8e44ad',
+              color: 'white',
+              padding: '0.75rem 1.25rem',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: uploadingModel ? 'not-allowed' : 'pointer',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              opacity: uploadingModel ? 0.7 : 1,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {uploadingModel ? '⏳ Processando...' : 'Buscar Modelo/Template'}
+          </button>
+        </div>
+
+        <div style={{ padding: '1.5rem' }}>
+          {loadingTemplates ? (
+            <div style={{ color: '#5f6b7a' }}>Carregando modelos...</div>
+          ) : templates.length === 0 ? (
+            <div style={{ color: '#5f6b7a' }}>
+              Nenhum modelo encontrado ainda. Use `Buscar Modelo/Template` para adicionar o primeiro.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: '0.9rem' }}>
+              {templates.map((template) => (
+                <div
+                  key={template.id}
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '10px',
+                    padding: '1rem',
+                    backgroundColor: '#fff'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: '0.25rem' }}>
+                        {template.name}
+                      </div>
+                      {template.description && (
+                        <div style={{ color: '#5f6b7a', fontSize: '0.92rem' }}>{template.description}</div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <button
+                        onClick={() => handleDeleteTemplate(template)}
+                        style={{
+                          backgroundColor: '#dc2626',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '0.5rem 0.85rem',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e9ecef',
+          overflow: 'hidden',
+          marginBottom: '1.5rem'
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: '#f8f9fa',
+            padding: '1rem 1.5rem',
+            borderBottom: '1px solid #e9ecef',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '1rem'
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h2 style={{ color: '#2c3e50', margin: 0, fontSize: '1.2rem' }}>
+                🧾 JSONs de Resumo Técnico ({technicalSummaryExamples.length})
+              </h2>
+              <button
+                type="button"
+                aria-label="Ajuda sobre JSONs de resumo tecnico"
+                aria-expanded={showTechnicalSummaryHelp}
+                onClick={() => setShowTechnicalSummaryHelp((prev) => !prev)}
+                style={helpButtonStyle}
+              >
+                ?
+              </button>
+            </div>
+            {showTechnicalSummaryHelp && (
+              <div style={helpTextStyle}>
+                Use esta area para guardar JSONs de `Resumo Tecnico` que servem de base para a IA e devem aparecer no formulario `Configurar Memorial`.
+                Esses JSONs ficam disponiveis como referencia e selecao posterior no combobox de resumo tecnico.
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => document.getElementById('technicalSummaryUploadDirect')?.click()}
+            disabled={uploadingTechnicalSummaryExample}
+            style={{
+              backgroundColor: uploadingTechnicalSummaryExample ? '#95a5a6' : '#8e44ad',
+              color: 'white',
+              padding: '0.75rem 1.25rem',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: uploadingTechnicalSummaryExample ? 'not-allowed' : 'pointer',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              opacity: uploadingTechnicalSummaryExample ? 0.7 : 1,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {uploadingTechnicalSummaryExample ? '⏳ Processando...' : 'Buscar JSON Resumo Tecnico'}
+          </button>
+        </div>
+
+        <div style={{ padding: '1.5rem' }}>
+          {loadingTechnicalSummaryExamples ? (
+            <div style={{ color: '#5f6b7a' }}>Carregando JSONs de resumo tecnico...</div>
+          ) : technicalSummaryExamples.length === 0 ? (
+            <div style={{ color: '#5f6b7a' }}>
+              Nenhum JSON de resumo tecnico encontrado ainda. Use `Buscar JSON Resumo Tecnico` para adicionar o primeiro.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: '0.9rem' }}>
+              {technicalSummaryExamples.map((record) => (
+                <div
+                  key={record.id}
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '10px',
+                    padding: '1rem',
+                    backgroundColor: '#fff'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: '0.25rem' }}>
+                        {record.fileName || record.analyzedFile}
+                      </div>
+                      <div style={{ color: '#5f6b7a', fontSize: '0.92rem' }}>
+                        Importado em {new Date(record.createdAt).toLocaleString('pt-BR')}
+                        {record.generatedAt ? ` • Gerado em ${new Date(record.generatedAt).toLocaleString('pt-BR')}` : ''}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => void handleDeleteTechnicalSummaryExample(record)}
+                      style={{
+                        backgroundColor: '#dc2626',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '0.5rem 0.85rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

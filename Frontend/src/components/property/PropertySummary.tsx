@@ -1,6 +1,22 @@
 import React from 'react';
 import type { PropertyFormData } from '@/types/property';
 
+const formatCoordinateSource = (source?: string): string => {
+  if (!source) {
+    return 'Nao informada';
+  }
+
+  return {
+    GPS_CAMPO: 'GPS de Campo',
+    MARCO_GEODESICO: 'Marco Geodesico',
+    LEVANTAMENTO_TOPOGRAFICO: 'Levantamento Topografico',
+    MEMORIAL_ORIGINAL: 'Memorial Original',
+    GOOGLE_EARTH: 'Google Earth',
+    IBGE_COORDENADAS: 'Base IBGE',
+    OUTRO: 'Outro'
+  }[source] || source;
+};
+
 interface PropertySummaryProps {
   data: PropertyFormData;
   validation: Record<string, string>;
@@ -50,7 +66,15 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
   const hasOwnersReady = isOwnerValid;
 
   const hasSupportDocuments = Boolean(data?.documents?.length);
-  const hasSupportFiles = Boolean(data?.files?.length);
+  const technicalFiles = (data?.files || []).filter((file) => {
+    const fileName = file?.name?.toLowerCase?.() || '';
+    return fileName.endsWith('.dxf') || fileName.endsWith('.dwg');
+  });
+  const supportFiles = (data?.files || []).filter((file) => {
+    const fileName = file?.name?.toLowerCase?.() || '';
+    return !fileName.endsWith('.dxf') && !fileName.endsWith('.dwg');
+  });
+  const hasTechnicalDxf = technicalFiles.length > 0;
 
   // Verificação de segurança para evitar página branca
   if (!data || typeof data !== 'object') {
@@ -107,12 +131,12 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
             <span className="value">{hasSupportDocuments ? 'Disponiveis' : 'Nao informados'}</span>
           </div>
           <div className="summary-item">
-            <span className="label">Arquivos de apoio</span>
-            <span className="value">{hasSupportFiles ? 'Disponiveis' : 'Nao informados'}</span>
+            <span className="label">DXF tecnico principal</span>
+            <span className="value">{hasTechnicalDxf ? 'Vinculado' : 'Pendente'}</span>
           </div>
         </div>
         <p className="section-description" style={{ marginTop: '0.75rem' }}>
-          Quando os itens essenciais estiverem prontos, salve o imovel e depois escolha-o em "Imoveis Prontos" para usar na operacao atual.
+          Quando os itens essenciais e o DXF tecnico estiverem prontos, salve o imovel e depois escolha-o em "Imoveis Prontos" para usar na operacao atual.
         </p>
       </div>
 
@@ -145,6 +169,10 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
                 'MIXED': '🏘️ Misto'
               }[data.basicData.landUse]}
             </span>
+          </div>
+          <div className="summary-item">
+            <span className="label">Fonte da Coordenada:</span>
+            <span className="value">{formatCoordinateSource(data.basicData.address.sirgas?.source)}</span>
           </div>
           <div className="summary-item full-width">
             <span className="label">Endereço:</span>
@@ -217,8 +245,8 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
       <div className="summary-section">
         <h3>📐 Leitura Tecnica na Operacao</h3>
         <div className="technical-note">
-          <p>📋 Area, perimetro, coordenadas e confrontacoes serao extraidos dos arquivos DXF/DWG durante a operacao do memorial.</p>
-          <p>🎯 Esta etapa acontece depois, no visualizador e na geracao do memorial, usando a base preparada aqui.</p>
+          <p>📋 Area, perimetro, coordenadas e confrontacoes serao extraidos do DXF tecnico vinculado neste cadastro.</p>
+          <p>🎯 A operacao nao deve subir outro DXF: ela reaproveita o mesmo arquivo tecnico salvo aqui.</p>
         </div>
       </div>
 
@@ -270,13 +298,34 @@ const PropertySummary: React.FC<PropertySummaryProps> = ({
       )}
 
       {/* Resumo dos Arquivos */}
-      {data.files && data.files.length > 0 && (
+      {technicalFiles.length > 0 && (
         <div className="summary-section">
-          <h3>🗂️ Arquivos de Apoio ({data.files.length})</h3>
+          <h3>🗂️ Arquivos Tecnicos do Imovel ({technicalFiles.length})</h3>
           <div className="files-summary">
-            {data.files.map((file, index) => (
+            {technicalFiles.map((file, index) => (
               <div key={index} className="file-summary-item">
                 <span className="file-name">{file?.name || 'Nome não disponível'}</span>
+                {file?.primaryTechnical && (
+                  <span className="file-size" style={{ color: '#2563eb', fontWeight: 700 }}>
+                    Principal
+                  </span>
+                )}
+                <span className="file-size">
+                  {file?.size ? (file.size / 1024 / 1024).toFixed(2) : '0.00'} MB
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {supportFiles.length > 0 && (
+        <div className="summary-section">
+          <h3>📎 Outros Arquivos Vinculados ({supportFiles.length})</h3>
+          <div className="files-summary">
+            {supportFiles.map((file, index) => (
+              <div key={index} className="file-summary-item">
+                <span className="file-name">{file?.name || 'Nome nao disponivel'}</span>
                 <span className="file-size">
                   {file?.size ? (file.size / 1024 / 1024).toFixed(2) : '0.00'} MB
                 </span>

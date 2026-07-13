@@ -2,10 +2,12 @@ import React from 'react';
 import { useAuth } from '@/auth/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { getHelpUrlForPath } from '@/utils/helpLinks';
+import { desktopApi } from '@/services/desktopApi';
 
 const Navbar: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const runtimeModeLabel = desktopApi.hasBridge() ? 'Modo Desktop' : 'Modo Web';
 
   return (
     <nav className="navbar">
@@ -15,6 +17,16 @@ const Navbar: React.FC = () => {
         </div>
         
         <div className="navbar-menu">
+          <div className={`navbar-runtime-badge ${desktopApi.hasBridge() ? 'is-desktop' : 'is-web'}`}>
+            {runtimeModeLabel}
+          </div>
+          {user && (
+            <div className="navbar-user">
+              <span className="user-name">
+                Usuario: {user.fullName || 'Nao informado'}
+              </span>
+            </div>
+          )}
           <a
             className="help-link-btn"
             href={getHelpUrlForPath(location.pathname)}
@@ -24,13 +36,6 @@ const Navbar: React.FC = () => {
           >
             Ajuda
           </a>
-          {user && (
-            <div className="navbar-user">
-              <span className="user-name">
-                Usuario: {user.fullName || 'Nao informado'}
-              </span>
-            </div>
-          )}
         </div>
       </div>
     </nav>

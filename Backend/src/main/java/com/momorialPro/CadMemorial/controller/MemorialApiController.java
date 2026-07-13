@@ -1,9 +1,14 @@
 package com.momorialPro.CadMemorial.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.momorialPro.CadMemorial.dto.CorrectiveSnapshotSaveRequestDTO;
+import com.momorialPro.CadMemorial.dto.CorrectiveSnapshotSaveResponseDTO;
 import com.momorialPro.CadMemorial.dto.DxfCompareResultDTO;
 import com.momorialPro.CadMemorial.dto.DxfEntityChangeDTO;
 import com.momorialPro.CadMemorial.dto.SelectedConfrontationTextDTO;
 import com.momorialPro.CadMemorial.service.MemorialAiServiceWithCredits;
+import com.momorialPro.CadMemorial.service.MemorialBaseSnapshotService;
 import com.momorialPro.CadMemorial.service.MemorialService;
 import com.momorialPro.CadMemorial.util.DxfParser;
 import com.momorialPro.CadMemorial.dto.MemorialExportDTO;
@@ -43,6 +48,9 @@ public class MemorialApiController {
 
     private final MemorialService memorialService;
     private final MemorialAiServiceWithCredits memorialAiService;
+    private final MemorialApiService memorialApiService;
+    private final MemorialBaseSnapshotService memorialBaseSnapshotService;
+    private final ObjectMapper objectMapper;
     
     /**
      * Converte vértices de DxfParser.Point para Map<String, Double>
@@ -61,6 +69,54 @@ public class MemorialApiController {
         }
 
         return vertices;
+    }
+
+    private Map<String, Object> buildEntityProperties(DxfParser.Entity entity) {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        if (entity != null && entity.properties() != null && !entity.properties().isEmpty()) {
+            properties.putAll(entity.properties());
+        }
+
+        if (entity == null) {
+            return properties;
+        }
+
+        putIfNotNull(properties, "x", entity.x());
+        putIfNotNull(properties, "y", entity.y());
+        putIfNotNull(properties, "z", entity.z());
+        putIfNotNull(properties, "x2", entity.x2());
+        putIfNotNull(properties, "y2", entity.y2());
+        putIfNotNull(properties, "z2", entity.z2());
+        putIfNotNull(properties, "radius", entity.radius());
+        putIfNotNull(properties, "startAngle", entity.startAngle());
+        putIfNotNull(properties, "endAngle", entity.endAngle());
+        putIfNotNull(properties, "text", entity.text());
+        putIfNotNull(properties, "textStyle", entity.textStyle());
+        putIfNotNull(properties, "textHeight", entity.textHeight());
+        putIfNotNull(properties, "textRotation", entity.textRotation());
+
+        if (entity.vertices() != null && !entity.vertices().isEmpty()) {
+            List<Map<String, Object>> vertices = new ArrayList<>();
+            for (DxfParser.Point point : entity.vertices()) {
+                Map<String, Object> vertex = new LinkedHashMap<>();
+                vertex.put("x", point.x());
+                vertex.put("y", point.y());
+                if (point.id() != null && !point.id().isBlank()) {
+                    vertex.put("id", point.id());
+                }
+                vertices.add(vertex);
+            }
+            properties.put("vertices", vertices);
+        }
+
+        return properties;
+    }
+
+    private void putIfNotNull(Map<String, Object> target, String key, Object value) {
+        if (target == null || key == null || value == null) {
+            return;
+        }
+        target.putIfAbsent(key, value);
     }
 
     // ==============================================================
@@ -90,25 +146,36 @@ public class MemorialApiController {
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
     public ResponseEntity<?> generateGptMemorial(@RequestBody MemorialRequestDTO request) {
         String debugTraceId = UUID.randomUUID().toString();
+        boolean hasEntities = hasEntities(request);
+        boolean hasTechnicalSummaryJson = hasTechnicalSummaryJson(request);
+        boolean useTechnicalSummaryFlow = shouldUseTechnicalSummaryFlow(request);
         // #region debug-point A:request-entry
-        debugReport("pre-fix", "A", "MemorialApiController:generate-gpt:entry", "[DEBUG] Entrada no generate-gpt", Map.of(
-                "traceId", debugTraceId,
-                "entityCount", request.entities() != null ? request.entities().size() : 0,
-                "lotCount", request.lotCount() != null ? request.lotCount() : -1,
-                "selectedLayersCount", request.selectedLayers() != null ? request.selectedLayers().size() : 0,
-                "selectedConfrontationTextsCount", request.selectedConfrontationTexts() != null ? request.selectedConfrontationTexts().size() : 0,
-                "hasPropertyId", request.propertyId() != null,
-                "hasStandardId", request.standardId() != null
+        debugReport("pre-fix", "A", "MemorialApiController:generate-gpt:entry", "[DEBUG] Entrada no generate-gpt", Map.ofEntries(
+                Map.entry("traceId", debugTraceId),
+                Map.entry("entityCount", request.entities() != null ? request.entities().size() : 0),
+                Map.entry("hasTechnicalSummaryJson", hasTechnicalSummaryJson),
+                Map.entry("useTechnicalSummaryFlow", useTechnicalSummaryFlow),
+                Map.entry("lotCount", request.lotCount() != null ? request.lotCount() : -1),
+                Map.entry("selectedLayersCount", request.selectedLayers() != null ? request.selectedLayers().size() : 0),
+                Map.entry("selectedConfrontationTextsCount", request.selectedConfrontationTexts() != null ? request.selectedConfrontationTexts().size() : 0),
+                Map.entry("hasPropertyId", request.propertyId() != null),
+                Map.entry("hasStandardId", request.standardId() != null),
+                Map.entry("fileName", request.fileName() != null ? request.fileName() : ""),
+                Map.entry("projectName", request.projectName() != null ? request.projectName() : ""),
+                Map.entry("templateName", request.templateName() != null ? request.templateName() : ""),
+                Map.entry("templateBackendId", request.templateBackendId() != null ? request.templateBackendId() : ""),
+                Map.entry("technicalSummaryLength", request.technicalSummaryJson() != null ? request.technicalSummaryJson().length() : 0),
+                Map.entry("documentSummaryLength", request.documentSummaryJson() != null ? request.documentSummaryJson().length() : 0)
         ));
         // #endregion
         if (request.propertyId() == null) {
             log.error("PropertyId ausente na geração do memorial com IA");
         }
-        
-        if (request.entities() == null || request.entities().isEmpty()) {
-            log.warn("Nenhuma entidade DXF fornecida");
+
+        if (!hasEntities && !hasTechnicalSummaryJson) {
+            log.warn("Nem entidades DXF nem resumo tecnico JSON foram fornecidos");
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Nao foi possivel iniciar a geracao porque o arquivo DXF nao trouxe entidades suficientes para analise."
+                    "message", "Nao foi possivel iniciar a geracao porque nenhum Resumo Tecnico JSON nem entidades DXF validas foram enviados."
             ));
         }
         
@@ -121,20 +188,15 @@ public class MemorialApiController {
 
         try {
             UUID userId = AuthUtils.getCurrentUserId();
-
-            // ⚡ CORREÇÃO CRÍTICA: Usar TODAS as entidades como "ADDED" (não dividir ao meio)
-            // O frontend envia um único arquivo DXF, não uma comparação entre dois arquivos
-            List<DxfParser.Entity> allEntities = filterEntitiesBySelectedLayers(request.entities(), request.selectedLayers());
-
-            if (allEntities.isEmpty()) {
-                log.warn("Nenhuma entidade permaneceu após filtro por layers; usando conjunto original");
-                allEntities = request.entities();
-            }
-            allEntities = appendSelectedConfrontationTexts(allEntities, request.selectedConfrontationTexts());
+            DxfCompareResultDTO compareResult = useTechnicalSummaryFlow
+                    ? buildTechnicalSummaryCompareResult(request)
+                    : buildSingleFileCompareResult(request);
+            int scopedEntityCount = compareResult.getDifferences() != null ? compareResult.getDifferences().size() : 0;
             // #region debug-point B:post-filter
             debugReport("pre-fix", "B", "MemorialApiController:generate-gpt:post-filter", "[DEBUG] Entidades apos filtro", Map.of(
                     "traceId", debugTraceId,
-                    "filteredEntityCount", allEntities != null ? allEntities.size() : 0,
+                    "filteredEntityCount", scopedEntityCount,
+                    "compareResultSummary", compareResult.getSummary(),
                     "selectedLayers", request.selectedLayers() != null ? String.join(", ", request.selectedLayers()) : "",
                     "selectedConfrontationTexts", request.selectedConfrontationTexts() != null ? request.selectedConfrontationTexts().stream()
                             .map(SelectedConfrontationTextDTO::text)
@@ -142,72 +204,22 @@ public class MemorialApiController {
             ));
             // #endregion
 
-            // Usa nomes de arquivo da requisição
-            String oldFileName = "Arquivo Base";
-            String newFileName = "Arquivo Revisado";
-            
-            // ⚡ TODAS as entidades são consideradas "ADDED" (arquivo único)
-            List<DxfEntityChangeDTO> added = new ArrayList<>();
-            List<DxfEntityChangeDTO> removed = new ArrayList<>(); // Vazio para arquivo único
-            List<DxfEntityChangeDTO> modified = new ArrayList<>(); // Vazio para arquivo único
-            
-            // ⚡ Adicionar TODAS as entidades como "ADDED" (arquivo único, não comparação)
-            for (int i = 0; i < allEntities.size(); i++) {
-                DxfParser.Entity entity = allEntities.get(i);
-                DxfEntityChangeDTO dto = DxfEntityChangeDTO.builder()
-                    .type(entity.type())
-                    .layer(entity.layer())
-                    .id(entity.fingerprint() != null ? entity.fingerprint() : "entity_" + i)
-                    .change("ADDED")
-                    .x(entity.x())
-                    .y(entity.y())
-                    .z(entity.z())
-                    .x2(entity.x2())
-                    .y2(entity.y2())
-                    .z2(entity.z2())
-                    .radius(entity.radius())
-                    .startAngle(entity.startAngle())
-                    .endAngle(entity.endAngle())
-                    .text(entity.text())
-                    .textHeight(entity.textHeight())
-                    .textRotation(entity.textRotation())
-                    .vertices(convertVertices(entity.vertices()))  // ⚡ CRÍTICO: Adicionar vértices!
-                    .build();
-                
-                added.add(dto);
-            }
-
-            // Cria resumo das entidades por tipo
-            Map<String, Integer> summaryByType = new LinkedHashMap<>();
-            for (DxfEntityChangeDTO entity : added) {
-                summaryByType.merge(entity.getType(), 1, Integer::sum);
-            }
-
-            // Cria um DxfCompareResultDTO (arquivo único, sem comparação)
-            DxfCompareResultDTO compareResult = DxfCompareResultDTO.builder()
-                .oldFileName("N/A")
-                .newFileName(newFileName)
-                .totalOldEntities(0) // Não há arquivo antigo
-                .totalNewEntities(allEntities.size())
-                .added(added)
-                .removed(removed) // Lista vazia
-                .modified(modified) // Lista vazia
-                .summaryByType(summaryByType)
-                .summary("Análise de " + allEntities.size() + " entidades DXF")
-                .differences(added) // Todas as entidades são "diferenças" (ADDED)
-                .build();
-
             // Usa o serviço assistido para gerar memorial seguindo normas específicas
             String aiContent = memorialAiService.generateMemorialWithCredits(
-                compareResult, 
-                request.standardId(), 
-                userId,
-                request.propertyId(),
-                request.lotCount(),
-                request.billableLotCount(),
-                request.chargeCredits(),
-                request.selectedLayers(),
-                request.selectedConfrontationTexts()
+                    compareResult,
+                    request.standardId(),
+                    userId,
+                    request.propertyId(),
+                    request.lotCount(),
+                    request.billableLotCount(),
+                    request.chargeCredits(),
+                    request.selectedLayers(),
+                    request.selectedConfrontationTexts(),
+                    request.selectedReferencePoints(),
+                    request.technicalSummaryJson(),
+                    request.documentSummaryJson(),
+                    request.templateName(),
+                    request.templateBackendId()
             );
             // #region debug-point C:service-output
             debugReport("pre-fix", "C", "MemorialApiController:generate-gpt:service-output", "[DEBUG] Conteudo retornado pelo service", Map.of(
@@ -232,8 +244,10 @@ public class MemorialApiController {
             gptMemorial.setMemorialText(sanitizedAiContent);
             gptMemorial.setProjectName(request.projectName());
             gptMemorial.setProjectDescription(request.projectDescription());
-            gptMemorial.setComparisonSummary("Memorial assistido gerado com " + request.entities().size() + " entidades");
-            gptMemorial.setDifferences(added); // Todas as entidades estão na lista "added"
+            gptMemorial.setComparisonSummary(useTechnicalSummaryFlow
+                    ? "Memorial assistido gerado a partir do Resumo Tecnico JSON aplicado"
+                    : "Memorial assistido gerado com " + request.entities().size() + " entidades");
+            gptMemorial.setDifferences(compareResult.getAdded());
 
             return ResponseEntity.ok(gptMemorial);
             
@@ -242,7 +256,9 @@ public class MemorialApiController {
             debugReport("pre-fix", "E", "MemorialApiController:generate-gpt:exception", "[DEBUG] Excecao no generate-gpt", Map.of(
                     "traceId", debugTraceId,
                     "exceptionType", e.getClass().getName(),
-                    "message", String.valueOf(e.getMessage())
+                    "message", String.valueOf(e.getMessage()),
+                    "causeType", e.getCause() != null ? e.getCause().getClass().getName() : "",
+                    "causeMessage", e.getCause() != null ? String.valueOf(e.getCause().getMessage()) : ""
             ));
             // #endregion
             log.error("Erro durante geração do memorial com IA: {}", e.getMessage(), e);
@@ -258,6 +274,116 @@ public class MemorialApiController {
             }
 
             return ResponseEntity.internalServerError().body(Map.of(
+                    "message", buildOperatorFriendlyErrorMessage(e)
+            ));
+        }
+    }
+
+    @PostMapping("/generate-summary")
+    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    public ResponseEntity<?> generateTechnicalSummary(@RequestBody MemorialRequestDTO request) {
+        if (request.entities() == null || request.entities().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Nao foi possivel gerar o resumo tecnico porque o arquivo DXF nao trouxe entidades suficientes para analise."
+            ));
+        }
+
+        try {
+            UUID userId = AuthUtils.getCurrentUserId();
+            DxfCompareResultDTO compareResult = buildSingleFileCompareResult(request);
+            MemorialApiService.TechnicalSummaryPayload payload = memorialApiService.generateTechnicalSummaryPayload(
+                    compareResult,
+                    userId,
+                    request.propertyId(),
+                    request.lotCount(),
+                    request.selectedLayers(),
+                    request.detectedLotNumbers(),
+                    request.selectedLotNumbers(),
+                    request.partialReplacementLotNumbers(),
+                    request.manualReviewLotNumbers(),
+                    request.selectedConfrontationTexts(),
+                    request.selectedReferencePoints()
+            );
+
+            MemorialExportDTO summaryResponse = new MemorialExportDTO();
+            summaryResponse.setProjectName(request.projectName());
+            summaryResponse.setProjectDescription(request.projectDescription());
+            summaryResponse.setMemorialText(payload.summaryText());
+            summaryResponse.setTechnicalSummaryJson(payload.technicalSummaryJson());
+            summaryResponse.setDocumentSummaryJson(payload.documentSummaryJson());
+            summaryResponse.setProcessingContextStatus(payload.processingContextStatus());
+            summaryResponse.setComparisonSummary(compareResult.getSummary());
+            summaryResponse.setDifferences(compareResult.getDifferences());
+            return ResponseEntity.ok(summaryResponse);
+        } catch (Exception e) {
+            log.error("Erro ao gerar resumo tecnico do memorial: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "message", buildOperatorFriendlyErrorMessage(e)
+            ));
+        }
+    }
+
+    @PostMapping("/corrective-snapshots")
+    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    public ResponseEntity<?> saveCorrectiveSnapshot(@RequestBody CorrectiveSnapshotSaveRequestDTO request) {
+        if (request == null || request.correctiveSnapshot() == null || request.correctiveSnapshot().isNull()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Nao foi possivel salvar o snapshot corretivo porque a geometria corrigida nao foi enviada."
+            ));
+        }
+
+        try {
+            UUID userId = AuthUtils.getCurrentUserId();
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
+
+            ObjectNode memorialBaseNode = objectMapper.createObjectNode();
+            memorialBaseNode.put("kind", "CORRECTIVE_SNAPSHOT");
+            memorialBaseNode.put("savedAt", java.time.LocalDateTime.now().toString());
+            if (request.technicalSummaryJson() != null) {
+                memorialBaseNode.put("technicalSummaryJson", request.technicalSummaryJson());
+            }
+            if (request.processingContextStatus() != null && !request.processingContextStatus().isNull()) {
+                memorialBaseNode.set("processingContextStatus", request.processingContextStatus());
+            }
+            memorialBaseNode.set("correctiveSnapshot", request.correctiveSnapshot());
+            if (request.metadata() != null && !request.metadata().isNull()) {
+                memorialBaseNode.set("metadata", request.metadata());
+            }
+
+            String pipelineVersion = "editor-corretivo-v1";
+            String generationStatus = MemorialBaseSnapshotService.GENERATION_STATUS_CORRECTIVE_SNAPSHOT;
+            java.time.LocalDateTime generatedAt = java.time.LocalDateTime.now();
+
+            UUID snapshotId = memorialBaseSnapshotService.saveSnapshot(
+                    MemorialBaseSnapshotService.SaveRequest.builder()
+                            .tenantId(tenantId)
+                            .userId(userId)
+                            .propertyId(request.propertyId())
+                            .fileId(request.fileId())
+                            .memorialStandardId(request.standardId())
+                            .projectName(request.projectName())
+                            .fileName(request.fileName())
+                            .pipelineVersion(pipelineVersion)
+                            .estimatedLotCount(request.estimatedLotCount())
+                            .georeferenced(Boolean.TRUE.equals(request.georeferenced()))
+                            .coordinateSource(request.coordinateSource())
+                            .generationStatus(generationStatus)
+                            .generatedAt(generatedAt)
+                            .memorialBaseJson(objectMapper.writeValueAsString(memorialBaseNode))
+                            .build()
+            ).orElseThrow(() -> new IllegalStateException("Snapshot corretivo nao foi persistido"));
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(new CorrectiveSnapshotSaveResponseDTO(
+                    snapshotId,
+                    request.propertyId(),
+                    request.fileId(),
+                    generationStatus,
+                    pipelineVersion,
+                    generatedAt
+            ));
+        } catch (Exception e) {
+            log.error("Erro ao salvar snapshot corretivo: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "message", buildOperatorFriendlyErrorMessage(e)
             ));
         }
@@ -311,6 +437,119 @@ public class MemorialApiController {
         return new String(hexChars);
     }
 
+    private DxfCompareResultDTO buildSingleFileCompareResult(MemorialRequestDTO request) {
+        List<DxfParser.Entity> allEntities = filterEntitiesBySelectedLayers(request.entities(), request.selectedLayers());
+
+        if (allEntities.isEmpty()) {
+            log.warn("Nenhuma entidade permaneceu após filtro por layers; usando conjunto original");
+            allEntities = request.entities();
+        }
+
+        allEntities = appendSelectedConfrontationTexts(allEntities, request.selectedConfrontationTexts());
+
+        List<DxfEntityChangeDTO> added = new ArrayList<>();
+        List<DxfEntityChangeDTO> removed = new ArrayList<>();
+        List<DxfEntityChangeDTO> modified = new ArrayList<>();
+
+        for (int i = 0; i < allEntities.size(); i++) {
+            DxfParser.Entity entity = allEntities.get(i);
+            added.add(DxfEntityChangeDTO.builder()
+                    .type(entity.type())
+                    .layer(entity.layer())
+                    .id(entity.fingerprint() != null ? entity.fingerprint() : "entity_" + i)
+                    .change("ADDED")
+                    .x(entity.x())
+                    .y(entity.y())
+                    .z(entity.z())
+                    .x2(entity.x2())
+                    .y2(entity.y2())
+                    .z2(entity.z2())
+                    .radius(entity.radius())
+                    .startAngle(entity.startAngle())
+                    .endAngle(entity.endAngle())
+                    .text(entity.text())
+                    .textStyle(entity.textStyle())
+                    .textHeight(entity.textHeight())
+                    .textRotation(entity.textRotation())
+                    .vertices(convertVertices(entity.vertices()))
+                    .properties(buildEntityProperties(entity))
+                    .build());
+        }
+
+        Map<String, Integer> summaryByType = new LinkedHashMap<>();
+        for (DxfEntityChangeDTO entity : added) {
+            summaryByType.merge(entity.getType(), 1, Integer::sum);
+        }
+
+        return DxfCompareResultDTO.builder()
+                .oldFileName("N/A")
+                .newFileName(request.fileName() != null && !request.fileName().isBlank() ? request.fileName() : "Arquivo Revisado")
+                .totalOldEntities(0)
+                .totalNewEntities(allEntities.size())
+                .added(added)
+                .removed(removed)
+                .modified(modified)
+                .summaryByType(summaryByType)
+                .summary("Analise de " + allEntities.size() + " entidades DXF")
+                .differences(added)
+                .build();
+    }
+
+    private DxfCompareResultDTO buildTechnicalSummaryCompareResult(MemorialRequestDTO request) {
+        String analyzedFileName = extractAnalyzedFileName(request.technicalSummaryJson(), request.documentSummaryJson());
+        String resolvedFileName = analyzedFileName != null && !analyzedFileName.isBlank()
+                ? analyzedFileName
+                : request.fileName() != null && !request.fileName().isBlank()
+                    ? request.fileName()
+                    : "Resumo Tecnico Aplicado";
+        return DxfCompareResultDTO.builder()
+                .oldFileName(analyzedFileName != null && !analyzedFileName.isBlank() ? analyzedFileName : "N/A")
+                .newFileName(resolvedFileName)
+                .totalOldEntities(0)
+                .totalNewEntities(0)
+                .added(new ArrayList<>())
+                .removed(new ArrayList<>())
+                .modified(new ArrayList<>())
+                .summaryByType(Map.of())
+                .summary("Analise baseada exclusivamente no resumo tecnico JSON aplicado")
+                .differences(new ArrayList<>())
+                .build();
+    }
+
+    private String extractAnalyzedFileName(String technicalSummaryJson, String documentSummaryJson) {
+        String technicalSummaryFileName = extractAnalyzedFileNameFromJson(technicalSummaryJson);
+        if (technicalSummaryFileName != null && !technicalSummaryFileName.isBlank()) {
+            return technicalSummaryFileName;
+        }
+        return extractAnalyzedFileNameFromJson(documentSummaryJson);
+    }
+
+    private String extractAnalyzedFileNameFromJson(String summaryJson) {
+        if (summaryJson == null || summaryJson.isBlank()) {
+            return null;
+        }
+
+        try {
+            String analyzedFile = objectMapper.readTree(summaryJson).path("analyzedFile").asText(null);
+            return analyzedFile != null && !analyzedFile.isBlank() ? analyzedFile.trim() : null;
+        } catch (Exception e) {
+            log.debug("Nao foi possivel extrair analyzedFile do resumo para o compareResult tecnico: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean hasEntities(MemorialRequestDTO request) {
+        return request.entities() != null && !request.entities().isEmpty();
+    }
+
+    private boolean hasTechnicalSummaryJson(MemorialRequestDTO request) {
+        return request.technicalSummaryJson() != null && !request.technicalSummaryJson().isBlank();
+    }
+
+    private boolean shouldUseTechnicalSummaryFlow(MemorialRequestDTO request) {
+        return hasTechnicalSummaryJson(request);
+    }
+
     private String sanitizeMemorialText(String content) {
         if (content == null) {
             return null;
@@ -335,6 +574,7 @@ public class MemorialApiController {
         sanitized = sanitized.replaceAll("(?is)<!--.*?-->", "");
         sanitized = removeDuplicateMemorialHeaders(sanitized);
         boolean shouldPreserveHeader = request.lotCount() == null || request.lotCount() != 1;
+        boolean shouldPreserveDocumentSections = shouldPreserveHeader;
         if (!shouldPreserveHeader) {
             sanitized = sanitized.replaceAll("(?is)^\\s*Memorial\\s+Descritivo\\s*\\n\\s*Projeto:.*?\\n\\s*Arquivo:.*?\\n\\s*Data:.*?(?:\\n|$)", "");
         }
@@ -386,22 +626,23 @@ public class MemorialApiController {
                     || compact.startsWith("aosul:")
                     || compact.startsWith("aoleste:")
                     || compact.startsWith("aooeste:");
-            boolean isNumberedInvalidSection = compact.matches("^\\d+\\.(preâmbulo|preambulo|identificaçãodoterreno|identificacaodoterreno|situaçãoantes|situacaoantes|situaçãodepois|situacaodepois|declaraçãofinal|declaracaofinal).*$");
+            boolean isNumberedInvalidSection = !shouldPreserveDocumentSections
+                    && compact.matches("^\\d+\\.(preâmbulo|preambulo|identificaçãodoterreno|identificacaodoterreno|situaçãoantes|situacaoantes|situaçãodepois|situacaodepois|declaraçãofinal|declaracaofinal).*$");
             boolean isMetadataOnlyLine = compact.contains("geradopor")
                     || compact.contains("aviso:estememorialestaincompleto")
                     || compact.contains("foramgeradosapenasalgunslotes")
                     || compact.contains("paramemorialcompleto")
                     || (!shouldPreserveHeader && compact.startsWith("memorialdescritivo"))
-                    || (!shouldPreserveHeader && compact.startsWith("preâmbulo"))
-                    || (!shouldPreserveHeader && compact.startsWith("preambulo"))
-                    || compact.startsWith("identificaçãodoterreno")
-                    || compact.startsWith("identificacaodoterreno")
-                    || compact.startsWith("situaçãoantes")
-                    || compact.startsWith("situacaoantes")
-                    || compact.startsWith("situaçãodepois")
-                    || compact.startsWith("situacaodepois")
-                    || compact.startsWith("declaraçãofinal")
-                    || compact.startsWith("declaracaofinal")
+                    || (!shouldPreserveDocumentSections && compact.startsWith("preâmbulo"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("preambulo"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("identificaçãodoterreno"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("identificacaodoterreno"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("situaçãoantes"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("situacaoantes"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("situaçãodepois"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("situacaodepois"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("declaraçãofinal"))
+                    || (!shouldPreserveDocumentSections && compact.startsWith("declaracaofinal"))
                     || isNumberedInvalidSection
                     || compact.contains("0,0000m²")
                     || compact.contains("0,0000m2")
@@ -425,7 +666,10 @@ public class MemorialApiController {
         // caso a IA acidentalmente gere mais de um.
 
         if (request.lotCount() != null && request.lotCount() == 1 && selectedLotNumber != null) {
-            sanitized = sanitized.replaceFirst("(?i)^\\s*LOTE\\s*0*\\d+\\s*:", "LOTE " + selectedLotNumber + ":");
+            sanitized = sanitized.replaceFirst(
+                    "(?im)^\\s*LOTE\\s*0*\\d+(?:\\s*:\\s*|\\s*\\[[^\\]]+\\]\\s*)",
+                    "LOTE " + selectedLotNumber + ":\n"
+            );
         }
 
         if (request.lotCount() != null && request.lotCount() == 1
@@ -570,7 +814,8 @@ public class MemorialApiController {
 
         if (selectedLotNumber != null) {
             Pattern targetLotPattern = Pattern.compile(
-                    "(?ims)^LOTE\\s*0*" + selectedLotNumber + "\\s*:\\s*.*?(?=^LOTE\\s*\\d+\\s*:|\\z)"
+                    "(?ims)^LOTE\\s*0*" + selectedLotNumber
+                            + "(?:\\s*:\\s*|\\s*\\[[^\\]]+\\]\\s*).*?(?=^LOTE\\s*\\d+(?:\\s*:|\\s*\\[[^\\]]+\\])|\\z)"
             );
             Matcher targetMatcher = targetLotPattern.matcher(content);
             if (targetMatcher.find()) {
@@ -578,7 +823,9 @@ public class MemorialApiController {
             }
         }
 
-        Pattern genericLotPattern = Pattern.compile("(?ims)^LOTE\\s*\\d+\\s*:\\s*.*?(?=^LOTE\\s*\\d+\\s*:|\\z)");
+        Pattern genericLotPattern = Pattern.compile(
+                "(?ims)^LOTE\\s*\\d+(?:\\s*:\\s*|\\s*\\[[^\\]]+\\]\\s*).*?(?=^LOTE\\s*\\d+(?:\\s*:|\\s*\\[[^\\]]+\\])|\\z)"
+        );
         Matcher genericMatcher = genericLotPattern.matcher(content);
         if (genericMatcher.find()) {
             return genericMatcher.group().trim();
@@ -594,11 +841,11 @@ public class MemorialApiController {
 
         String trimmed = content.trim();
         if (selectedLotNumber != null) {
-            Pattern lotPattern = Pattern.compile("(?i)^LOTE\\s*0*" + selectedLotNumber + "\\s*:");
+            Pattern lotPattern = Pattern.compile("(?i)^LOTE\\s*0*" + selectedLotNumber + "(?:\\s*:|\\s*\\[[^\\]]+\\])");
             if (!lotPattern.matcher(trimmed).find()) {
                 return false;
             }
-        } else if (!Pattern.compile("(?i)^LOTE\\s*\\d+\\s*:").matcher(trimmed).find()) {
+        } else if (!Pattern.compile("(?i)^LOTE\\s*\\d+(?:\\s*:|\\s*\\[[^\\]]+\\])").matcher(trimmed).find()) {
             return false;
         }
 
@@ -857,7 +1104,7 @@ public class MemorialApiController {
             return "Nao foi possivel concluir a leitura deste DXF. Revise o arquivo e tente novamente.";
         }
 
-        return "Nao foi possivel concluir a geracao deste memorial agora. Revise os dados do arquivo e tente novamente.";
+        return "Nao foi possivel concluir a geracao deste memorial agora. Revise a norma, o template e o Resumo Tecnico aplicados e tente novamente.";
     }
 }
 

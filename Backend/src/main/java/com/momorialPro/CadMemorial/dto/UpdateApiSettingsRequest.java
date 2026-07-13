@@ -14,7 +14,13 @@ public class UpdateApiSettingsRequest {
     
     @NotBlank(message = "O provedor da API de templates não pode estar vazio")
     private String templateApiProvider;
+
+    @NotBlank(message = "O modelo da API de templates não pode estar vazio")
+    private String templateApiModel;
     
     @NotBlank(message = "O provedor da API de memoriais não pode estar vazio")
     private String memorialApiProvider;
+
+    @NotBlank(message = "O modelo da API de memoriais não pode estar vazio")
+    private String memorialApiModel;
 }

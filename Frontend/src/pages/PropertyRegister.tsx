@@ -8,7 +8,7 @@ import PropertyOwners from '../components/property/PropertyOwners';
 import PropertyDocuments from '../components/property/PropertyDocuments';
 import PropertyFiles from '../components/property/PropertyFiles';
 import PropertySummary from '../components/property/PropertySummary';
-import type { PropertyFormData, PropertyFormValidation } from '../types/property';
+import type { PropertyFormData, PropertyFormFile, PropertyFormValidation } from '../types/property';
 import '../styles/PropertyRegister.css';
 
 const createEmptyReferencePoint = (sequenceOrder: number) => ({
@@ -21,10 +21,184 @@ const createEmptyReferencePoint = (sequenceOrder: number) => ({
   description: ''
 });
 
+const MIN_REFERENCE_POINTS = 2;
+
+const isDxfFile = (file: Pick<PropertyFormFile, 'name'>): boolean =>
+  file.name.toLowerCase().endsWith('.dxf');
+
+const isTechnicalFile = (file: Pick<PropertyFormFile, 'name'>): boolean => {
+  const normalizedName = file.name.toLowerCase();
+  return normalizedName.endsWith('.dxf') || normalizedName.endsWith('.dwg');
+};
+
+const getFileIdentity = (file: Pick<PropertyFormFile, 'name' | 'size' | 'lastModified' | 'backendFileId'>): string =>
+  file.backendFileId
+    ? `backend:${file.backendFileId}`
+    : `${file.name}|${file.size}|${file.lastModified || 0}`;
+
+const dedupeFiles = (files: PropertyFormFile[]): PropertyFormFile[] => {
+  const uniqueFiles = new Map<string, PropertyFormFile>();
+  files.forEach((file) => {
+    uniqueFiles.set(getFileIdentity(file), file);
+  });
+  return Array.from(uniqueFiles.values());
+};
+
+const normalizePrimaryTechnicalSelection = (files: PropertyFormFile[]): PropertyFormFile[] => {
+  const technicalIndexes = files.reduce<number[]>((indexes, file, index) => {
+    if (isTechnicalFile(file)) {
+      indexes.push(index);
+    }
+    return indexes;
+  }, []);
+
+  if (technicalIndexes.length === 0) {
+    return files.map((file) => ({
+      ...file,
+      primaryTechnical: false
+    }));
+  }
+
+  const explicitlyPrimaryIndex = technicalIndexes.find((index) => files[index].primaryTechnical);
+  const primaryIndex = explicitlyPrimaryIndex ?? technicalIndexes[0];
+
+  return files.map((file, index) => ({
+    ...file,
+    primaryTechnical: isTechnicalFile(file) ? index === primaryIndex : false
+  }));
+};
+
+const hasMeaningfulLandmarkData = (landmark: PropertyFormData['landmarks'][number]): boolean =>
+  Boolean(
+    landmark.name.trim() ||
+    landmark.coordinateX !== undefined ||
+    landmark.coordinateY !== undefined ||
+    landmark.coordinateZ !== undefined ||
+    landmark.description?.trim()
+  );
+
+const normalizeLandmarkName = (name: string): string =>
+  name.trim().replace(/\s+/g, '').toUpperCase();
+
+// #region debug-point A:frontend-report
+const reportDxfImportDebug = (hypothesisId: string, msg: string, data: Record<string, unknown> = {}) => {
+  fetch('http://127.0.0.1:7779/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'dxf-landmarks-import',
+      runId: 'pre-fix',
+      hypothesisId,
+      location: 'PropertyRegister.tsx',
+      msg: `[DEBUG] ${msg}`,
+      data,
+      ts: Date.now()
+    })
+  }).catch(() => {});
+};
+// #endregion
+
+// #region debug-point A:frontend-report
+const reportDxfUpload500Debug = (hypothesisId: string, msg: string, data: Record<string, unknown> = {}) => {
+  const DEBUG_DXF_UPLOAD_500_ENABLED = false;
+  if (!DEBUG_DXF_UPLOAD_500_ENABLED) {
+    return;
+  }
+  fetch('http://127.0.0.1:7778/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'dxf-upload-500',
+      runId: 'pre-fix',
+      hypothesisId,
+      location: 'PropertyRegister.tsx',
+      msg,
+      data,
+      ts: Date.now()
+    })
+  }).catch(() => {});
+};
+// #endregion
+
+const mapLandmarkToForm = (landmark: any, index: number): PropertyFormData['landmarks'][number] => ({
+  id: landmark.landmarkId || landmark.id,
+  name: landmark.landmarkName || landmark.name || '',
+  type: landmark.landmarkType || landmark.type || 'REFERENCE_POINT',
+  coordinateX: landmark.coordinateX,
+  coordinateY: landmark.coordinateY,
+  coordinateZ: landmark.coordinateZ,
+  sequenceOrder: landmark.sequenceOrder || index + 1,
+  description: landmark.description || ''
+});
+
+const ensureMinimumReferencePoints = (
+  landmarks: PropertyFormData['landmarks']
+): PropertyFormData['landmarks'] => {
+  const nextLandmarks = landmarks
+    .map((landmark, index) => ({
+      ...landmark,
+      sequenceOrder: index + 1
+    }));
+
+  while (nextLandmarks.length < MIN_REFERENCE_POINTS) {
+    nextLandmarks.push(createEmptyReferencePoint(nextLandmarks.length + 1));
+  }
+
+  return nextLandmarks;
+};
+
+const mergeImportedLandmarks = (
+  currentLandmarks: PropertyFormData['landmarks'],
+  importedLandmarks: PropertyFormData['landmarks']
+): PropertyFormData['landmarks'] => {
+  const filledCurrentLandmarks = currentLandmarks.filter(hasMeaningfulLandmarkData);
+  const merged = new Map<string, PropertyFormData['landmarks'][number]>();
+  const fallbackLandmarks: PropertyFormData['landmarks'] = [];
+
+  filledCurrentLandmarks.forEach((landmark) => {
+    const normalizedName = normalizeLandmarkName(landmark.name);
+    if (normalizedName) {
+      merged.set(normalizedName, landmark);
+    } else {
+      fallbackLandmarks.push(landmark);
+    }
+  });
+
+  importedLandmarks.forEach((landmark) => {
+    const normalizedName = normalizeLandmarkName(landmark.name);
+    if (!normalizedName) {
+      fallbackLandmarks.push(landmark);
+      return;
+    }
+
+    const existing = merged.get(normalizedName);
+    if (existing) {
+      merged.set(normalizedName, {
+        ...landmark,
+        ...existing,
+        type: existing.type || landmark.type,
+        coordinateX: existing.coordinateX ?? landmark.coordinateX,
+        coordinateY: existing.coordinateY ?? landmark.coordinateY,
+        coordinateZ: existing.coordinateZ ?? landmark.coordinateZ,
+        description: existing.description || landmark.description
+      });
+      return;
+    }
+
+    merged.set(normalizedName, landmark);
+  });
+
+  return ensureMinimumReferencePoints([
+    ...Array.from(merged.values()),
+    ...fallbackLandmarks
+  ]);
+};
+
 interface CachedIncompleteProperty extends PropertyFormData {
   id: string;
   lastModified: string;
   isComplete: boolean;
+  databasePropertyId?: string;
   finalizedInDatabase?: boolean;
 }
 
@@ -75,6 +249,73 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+const sanitizeFilesForCache = (files: PropertyFormData['files']): PropertyFormData['files'] =>
+  normalizePrimaryTechnicalSelection(
+    dedupeFiles(
+      files.map((file) => ({
+        id: file.id,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified,
+        backendFileId: file.backendFileId,
+        primaryTechnical: Boolean(file.primaryTechnical),
+        uploadedFromBackend: Boolean(file.uploadedFromBackend || file.backendFileId)
+      }))
+    )
+  );
+
+const sanitizeFormDataForCache = (data: PropertyFormData): PropertyFormData => ({
+  ...data,
+  files: sanitizeFilesForCache(data.files)
+});
+
+const hydrateCachedProperty = (data: CachedIncompleteProperty): CachedIncompleteProperty => ({
+  ...data,
+  files: sanitizeFilesForCache(Array.isArray(data.files) ? data.files : [])
+});
+
+const parseBackendFileLastModified = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  return undefined;
+};
+
+const mapBackendFileToForm = (file: any): PropertyFormFile => ({
+  id: file.id || file.fileId || Math.random().toString(36).substr(2, 9),
+  name: file.originalName || file.fileName || file.name || file.storedName || '',
+  size: Number(file.sizeBytes ?? file.fileSize ?? file.size ?? 0),
+  type: file.contentType || file.fileType || file.type || undefined,
+  lastModified: parseBackendFileLastModified(file.updatedAt || file.createdAt || file.lastModified),
+  backendFileId: file.id || file.fileId,
+  primaryTechnical: Boolean(file.primaryForProperty || file.primaryTechnical),
+  uploadedFromBackend: true
+});
+
+const extractBackendFiles = (backendData: any): PropertyFormData['files'] => {
+  const explicitDxfFiles = Array.isArray(backendData?.dxfFiles) ? backendData.dxfFiles : [];
+  const explicitOtherFiles = Array.isArray(backendData?.otherFiles) ? backendData.otherFiles : [];
+  const genericFiles = [
+    ...(Array.isArray(backendData?.files) ? backendData.files : []),
+    ...(Array.isArray(backendData?.technicalFiles) ? backendData.technicalFiles : [])
+  ];
+
+  const sourceFiles = explicitDxfFiles.length > 0 || explicitOtherFiles.length > 0
+    ? [...explicitDxfFiles, ...explicitOtherFiles]
+    : genericFiles;
+
+  return normalizePrimaryTechnicalSelection(
+    dedupeFiles(sourceFiles.map(mapBackendFileToForm))
+  );
+};
+
 // Função de mapeamento para carregar dados do backend (PropertyDTO) para o formulário (PropertyFormData)
 const mapBackendToFormData = (backendData: any): PropertyFormData => {
   const owners = [];
@@ -113,6 +354,15 @@ const mapBackendToFormData = (backendData: any): PropertyFormData => {
     });
   }
 
+  const hasSirgasData =
+    backendData.sirgas_e !== null &&
+    backendData.sirgas_e !== undefined ||
+    backendData.sirgas_n !== null &&
+    backendData.sirgas_n !== undefined ||
+    Boolean(backendData.sirgas_source) ||
+    Boolean(backendData.utmZone) ||
+    Boolean(backendData.datum);
+
   return {
     basicData: {
       registrationNumber: backendData.registrationNumber || backendData.name || '',
@@ -130,9 +380,9 @@ const mapBackendToFormData = (backendData: any): PropertyFormData => {
           latitude: backendData.latitude,
           longitude: backendData.longitude
         } : undefined,
-        sirgas: (backendData.sirgas_e && backendData.sirgas_n) ? {
-          e: backendData.sirgas_e,
-          n: backendData.sirgas_n,
+        sirgas: hasSirgasData ? {
+          e: backendData.sirgas_e ?? 0,
+          n: backendData.sirgas_n ?? 0,
           source: backendData.sirgas_source || '',
           zone: backendData.utmZone || '24S',
           datum: backendData.datum || 'SIRGAS 2000'
@@ -140,38 +390,117 @@ const mapBackendToFormData = (backendData: any): PropertyFormData => {
       }
     },
     landmarks: Array.isArray(backendData.landmarks)
-      ? backendData.landmarks
-          .slice()
-          .sort((a: any, b: any) => (a.sequenceOrder || 0) - (b.sequenceOrder || 0))
-          .map((landmark: any, index: number) => ({
-            id: landmark.landmarkId || landmark.id,
-            name: landmark.landmarkName || '',
-            type: landmark.landmarkType || 'REFERENCE_POINT',
-            coordinateX: landmark.coordinateX,
-            coordinateY: landmark.coordinateY,
-            coordinateZ: landmark.coordinateZ,
-            sequenceOrder: landmark.sequenceOrder || index + 1,
-            description: landmark.description || ''
-          }))
-      : [],
+      ? ensureMinimumReferencePoints(
+          backendData.landmarks
+            .slice()
+            .sort((a: any, b: any) => (a.sequenceOrder || 0) - (b.sequenceOrder || 0))
+            .map((landmark: any, index: number) => mapLandmarkToForm(landmark, index))
+        )
+      : ensureMinimumReferencePoints([]),
     owners: owners,
     documents: backendData.documents || [],
-    files: [
-      ...(backendData.dxfFiles || []).map((f: any) => ({
-        id: f.id || Math.random().toString(36).substr(2, 9),
-        name: f.fileName,
-        size: f.fileSize,
-        type: 'dxf'
-      })),
-      ...(backendData.otherFiles || []).map((f: any) => ({
-        id: f.id || Math.random().toString(36).substr(2, 9),
-        name: f.fileName,
-        size: f.fileSize,
-        type: f.fileType
-      }))
-    ]
+    files: extractBackendFiles(backendData)
   };
 };
+
+const getOwnerDisplayName = (owners: PropertyFormData['owners']): string => {
+  const owner = owners[0];
+  if (!owner) {
+    return 'Cadastro em andamento';
+  }
+
+  if (owner.ownerType === 'INDIVIDUAL') {
+    return owner.fullName?.trim() || 'Cadastro em andamento';
+  }
+
+  return owner.companyName?.trim() || 'Cadastro em andamento';
+};
+
+const buildPropertyPayload = (
+  data: PropertyFormData,
+  persistedPropertyId?: string | null
+) => ({
+  id: persistedPropertyId || undefined,
+  propertyId: persistedPropertyId || undefined,
+  name: data.basicData.registrationNumber?.trim() || 'Cadastro em andamento',
+  registrationNumber: data.basicData.registrationNumber?.trim() || '',
+  propertyType: data.basicData.propertyType,
+  landUse: data.basicData.landUse,
+
+  street: data.basicData.address.street?.trim() || '',
+  number: data.basicData.address.number || '',
+  complement: data.basicData.address.complement || '',
+  neighborhood: data.basicData.address.neighborhood?.trim() || '',
+  city: data.basicData.address.city?.trim() || '',
+  state: data.basicData.address.state?.trim() || '',
+  zipCode: data.basicData.address.zipCode || '',
+
+  latitude: data.basicData.address.coordinates?.latitude,
+  longitude: data.basicData.address.coordinates?.longitude,
+
+  sirgas_e: data.basicData.address.sirgas?.e,
+  sirgas_n: data.basicData.address.sirgas?.n,
+  sirgas_source: data.basicData.address.sirgas?.source,
+  landmarks: data.landmarks
+    .filter((landmark) =>
+      landmark.name.trim() ||
+      landmark.coordinateX !== undefined ||
+      landmark.coordinateY !== undefined ||
+      landmark.coordinateZ !== undefined
+    )
+    .map((landmark, index) => ({
+      landmarkId: landmark.id,
+      landmarkName: landmark.name.trim(),
+      landmarkType: landmark.type,
+      coordinateX: landmark.coordinateX,
+      coordinateY: landmark.coordinateY,
+      coordinateZ: landmark.coordinateZ,
+      sequenceOrder: index + 1,
+      description: landmark.description?.trim() || ''
+    })),
+
+  ownerName: getOwnerDisplayName(data.owners),
+  ownerDocument: data.owners.length > 0
+    ? (data.owners[0].ownerType === 'INDIVIDUAL'
+      ? data.owners[0].cpf
+      : data.owners[0].cnpj) || ''
+    : '',
+  ownerEmail: data.owners.length > 0 ? data.owners[0].email || '' : '',
+  ownerPhone: data.owners.length > 0 ? data.owners[0].phone || '' : '',
+  ownerIdNumber: data.owners.length > 0
+    ? (data.owners[0].ownerType === 'INDIVIDUAL'
+      ? data.owners[0].rg || ''
+      : data.owners[0].stateRegistration || '')
+    : '',
+
+  totalArea: 0,
+  totalPerimeter: 0,
+  datum: 'SIRGAS 2000',
+  coordinateSystem: 'SIRGAS 2000 / UTM zone 23S',
+  utmZone: data.basicData.address.sirgas?.zone || '23S',
+  centralMeridian: data.basicData.address.sirgas?.zone === '24S' ? '-39°' : '-45°',
+
+  active: true,
+  documents: data.documents,
+
+  dxfFiles: data.files
+    .filter((file) => isTechnicalFile(file) && Boolean(file.backendFileId))
+    .map((file) => ({
+      id: file.backendFileId,
+      originalName: file.name,
+      sizeBytes: file.size,
+      contentType: file.type || 'application/dxf',
+      primaryForProperty: Boolean(file.primaryTechnical)
+    })),
+
+  otherFiles: data.files
+    .filter((file) => !isTechnicalFile(file))
+    .map((file) => ({
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || 'unknown'
+    }))
+});
 
 const PropertyRegister: React.FC = () => {
   const navigate = useNavigate();
@@ -182,6 +511,7 @@ const PropertyRegister: React.FC = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
   const [loadingEdit, setLoadingEdit] = useState(false);
+  const [dxfImportStatusText, setDxfImportStatusText] = useState('');
   const [formData, setFormData] = useState<PropertyFormData>({
     basicData: {
       registrationNumber: '',
@@ -226,6 +556,7 @@ const PropertyRegister: React.FC = () => {
 
   const [isSaving, setIsSaving] = useState(false);
   const [propertyId, setPropertyId] = useState<string | null>(null);
+  const [databasePropertyId, setDatabasePropertyId] = useState<string | null>(editId);
   const [selectedIncompleteId, setSelectedIncompleteId] = useState<string>('');
   const [refreshCombobox, setRefreshCombobox] = useState<number>(0);
   
@@ -240,13 +571,15 @@ const PropertyRegister: React.FC = () => {
 
   useEffect(() => {
     const loadPropertyFromDb = async () => {
-      if (!editId) return;
+      if (!editId) {
+        return;
+      }
       try {
         setLoadingEdit(true);
         const response = await api.get(`/properties/${editId}/details`);
-        const mapped = mapBackendToFormData(response.data);
-        setFormData(mapped);
+        setFormData(mapBackendToFormData(response.data));
         setPropertyId(editId);
+        setDatabasePropertyId(editId);
       } catch (error) {
         console.error('Erro ao carregar imóvel para edição:', error);
         alert('Não foi possível carregar os dados do imóvel selecionado do banco de dados.');
@@ -300,9 +633,10 @@ const PropertyRegister: React.FC = () => {
     const currentId = propertyId || generatePropertyId();
     const propertyData: CachedIncompleteProperty = {
       id: currentId,
-      ...formData,
+      ...sanitizeFormDataForCache(formData),
       lastModified: new Date().toISOString(),
-      isComplete: isPropertyComplete(formData)
+      isComplete: isPropertyComplete(formData),
+      databasePropertyId: databasePropertyId || undefined
     };
     
     localStorage.setItem(`incomplete_property_${currentId}`, JSON.stringify(propertyData));
@@ -313,7 +647,33 @@ const PropertyRegister: React.FC = () => {
     }
     
     setRefreshCombobox(prev => prev + 1);
-  }, [formData, propertyId, editId]);
+  }, [formData, propertyId, editId, databasePropertyId]);
+
+  const persistDatabaseLinkInDraftCache = useCallback((savedDatabasePropertyId: string) => {
+    if (editId || !propertyId) {
+      return;
+    }
+
+    const storageKey = `incomplete_property_${propertyId}`;
+    const rawDraft = localStorage.getItem(storageKey);
+    if (!rawDraft) {
+      return;
+    }
+
+    try {
+      const parsedDraft = hydrateCachedProperty(JSON.parse(rawDraft) as CachedIncompleteProperty);
+      const updatedDraft: CachedIncompleteProperty = {
+        ...parsedDraft,
+        databasePropertyId: savedDatabasePropertyId,
+        lastModified: new Date().toISOString()
+      };
+
+      localStorage.setItem(storageKey, JSON.stringify(updatedDraft));
+      setLastDraftSavedAt(updatedDraft.lastModified);
+    } catch (error) {
+      console.error('Erro ao vincular rascunho local ao imóvel salvo no banco:', error);
+    }
+  }, [editId, propertyId]);
 
   const getIncompleteProperties = (): IncompletePropertyListItem[] => {
     const incompleteProperties: IncompletePropertyListItem[] = [];
@@ -352,10 +712,11 @@ const PropertyRegister: React.FC = () => {
     try {
       const saved = localStorage.getItem(`incomplete_property_${selectedId}`);
       if (saved) {
-        const propertyData = JSON.parse(saved) as CachedIncompleteProperty;
+        const propertyData = hydrateCachedProperty(JSON.parse(saved) as CachedIncompleteProperty);
         
         setFormData(propertyData);
         setPropertyId(selectedId);
+        setDatabasePropertyId(propertyData.databasePropertyId || null);
         setSelectedIncompleteId(selectedId);
       }
     } catch (error) {
@@ -380,6 +741,34 @@ const PropertyRegister: React.FC = () => {
     }
   }, [propertyId, editId]);
 
+  const persistTechnicalFilesToDatabase = useCallback(async (nextFormData: PropertyFormData) => {
+    const persistedTargetId = editId || databasePropertyId;
+    const hasLinkedTechnicalFiles = nextFormData.files.some(
+      (file) => isTechnicalFile(file) && Boolean(file.backendFileId)
+    );
+
+    if (!persistedTargetId && !hasLinkedTechnicalFiles) {
+      return null;
+    }
+
+    const payload = buildPropertyPayload(nextFormData, persistedTargetId);
+    const response = persistedTargetId
+      ? await api.put(`/properties/${persistedTargetId}`, payload)
+      : await api.post('/properties', payload);
+
+    const savedDatabasePropertyId = response?.data?.propertyId || response?.data?.id;
+    if (!savedDatabasePropertyId) {
+      throw new Error('O backend nao retornou o identificador do imovel ao persistir os arquivos tecnicos.');
+    }
+
+    if (!persistedTargetId) {
+      setDatabasePropertyId(savedDatabasePropertyId);
+      persistDatabaseLinkInDraftCache(savedDatabasePropertyId);
+    }
+
+    return savedDatabasePropertyId;
+  }, [databasePropertyId, editId, persistDatabaseLinkInDraftCache]);
+
   useEffect(() => {
     if (propertyId && !editId) {
       const incompleteProps = getIncompleteProperties();
@@ -392,6 +781,211 @@ const PropertyRegister: React.FC = () => {
       }
     }
   }, [propertyId, formData.basicData.registrationNumber, editId]);
+
+  const handleFilesChange = useCallback(async (files: PropertyFormData['files']) => {
+    const incomingFiles = normalizePrimaryTechnicalSelection(
+      dedupeFiles(files.map((file) => ({ ...file })))
+    );
+    const previousFiles = formData.files;
+    const targetPropertyIdForUpload = editId || databasePropertyId;
+    const importedLandmarks: PropertyFormData['landmarks'] = [];
+    const failedUploads: string[] = [];
+    const dxfFilesToImport = incomingFiles.filter((file) => {
+      const alreadyKnown = previousFiles.some(
+        (previousFile) => getFileIdentity(previousFile) === getFileIdentity(file)
+      );
+      return !alreadyKnown && isDxfFile(file) && !file.backendFileId && Boolean(file.rawFile);
+    });
+
+    if (dxfFilesToImport.length > 0) {
+      setDxfImportStatusText(`Importacao iniciada para ${dxfFilesToImport.length} arquivo(s) DXF...`);
+    } else if (incomingFiles.length === 0) {
+      setDxfImportStatusText('');
+    } else {
+      setDxfImportStatusText('Nenhum DXF novo precisou ser importado nesta alteracao.');
+    }
+    // #region debug-point A:handle-files-change
+    reportDxfImportDebug('A', 'handleFilesChange called', {
+      incomingFileCount: incomingFiles.length,
+      previousFileCount: previousFiles.length,
+      incomingFiles: incomingFiles.map((file) => ({
+        name: file.name,
+        backendFileId: file.backendFileId || null,
+        hasRawFile: Boolean(file.rawFile)
+      }))
+    });
+    // #endregion
+
+    for (const file of incomingFiles) {
+      const alreadyKnown = previousFiles.some(
+        (previousFile) => getFileIdentity(previousFile) === getFileIdentity(file)
+      );
+      // #region debug-point A:file-loop
+      reportDxfImportDebug('A', 'evaluating file for import', {
+        fileName: file.name,
+        alreadyKnown,
+        isDxf: isDxfFile(file),
+        backendFileId: file.backendFileId || null,
+        hasRawFile: Boolean(file.rawFile)
+      });
+      // #endregion
+
+      if (alreadyKnown || !isDxfFile(file) || file.backendFileId || !file.rawFile) {
+        continue;
+      }
+
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', file.rawFile);
+        if (targetPropertyIdForUpload) {
+          uploadFormData.append('propertyId', targetPropertyIdForUpload);
+          uploadFormData.append('primaryForProperty', String(Boolean(file.primaryTechnical)));
+        }
+        // #region debug-point A:frontend-upload-request
+        reportDxfUpload500Debug('A', '[DEBUG] sending upload request', {
+          fileName: file.name,
+          targetPropertyIdForUpload: targetPropertyIdForUpload || null,
+          primaryTechnical: Boolean(file.primaryTechnical)
+        });
+        // #endregion
+
+        const uploadResponse = await api.post('/dxf/upload', uploadFormData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 60000,
+        });
+
+        const uploadedFile = Array.isArray(uploadResponse.data)
+          ? uploadResponse.data[0]
+          : uploadResponse.data;
+        // #region debug-point B:upload-response
+        reportDxfImportDebug('B', 'upload response received', {
+          fileName: file.name,
+          uploadedFileId: uploadedFile?.id || null,
+          responseType: Array.isArray(uploadResponse.data) ? 'array' : typeof uploadResponse.data
+        });
+        // #endregion
+
+        if (!uploadedFile?.id) {
+          throw new Error('O backend nao retornou o identificador do DXF enviado.');
+        }
+
+        setDxfImportStatusText(`DXF ${file.name} enviado. Extraindo pontos do arquivo...`);
+
+        file.id = uploadedFile.id;
+        file.backendFileId = uploadedFile.id;
+        file.uploadedFromBackend = true;
+        file.rawFile = undefined;
+        file.type = file.type || uploadedFile.contentType || 'application/dxf';
+
+        const landmarksResponse = await api.get(`/dxf/${uploadedFile.id}/landmarks`);
+        const extractedLandmarks = Array.isArray(landmarksResponse.data)
+          ? landmarksResponse.data.map((landmark: any, index: number) => mapLandmarkToForm(landmark, index))
+          : [];
+        // #region debug-point C:landmarks-response
+        reportDxfImportDebug('C', 'landmarks response received', {
+          fileName: file.name,
+          uploadedFileId: uploadedFile.id,
+          extractedCount: extractedLandmarks.length,
+          extractedNames: extractedLandmarks.map((landmark) => landmark.name)
+        });
+        // #endregion
+
+        importedLandmarks.push(...extractedLandmarks);
+        setDxfImportStatusText(
+          extractedLandmarks.length > 0
+            ? `DXF ${file.name}: ${extractedLandmarks.length} ponto(s) extraido(s) com sucesso.`
+            : `DXF ${file.name} foi enviado, mas o backend retornou 0 pontos.`
+        );
+      } catch (error) {
+        // #region debug-point C:import-error
+        reportDxfImportDebug('C', 'error importing dxf landmarks', {
+          fileName: file.name,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        });
+        // #endregion
+        console.error(`Erro ao importar pontos do DXF ${file.name}:`, error);
+        failedUploads.push(file.name);
+        setDxfImportStatusText(
+          `Falha ao importar o DXF ${file.name}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    // #region debug-point D:before-set-form
+    reportDxfImportDebug('D', 'about to update formData with imported landmarks', {
+      importedCount: importedLandmarks.length,
+      failedUploads,
+      resultingFileCount: incomingFiles.length
+    });
+    // #endregion
+    const nextLandmarks = importedLandmarks.length > 0
+      ? mergeImportedLandmarks(formData.landmarks, importedLandmarks)
+      : formData.landmarks;
+    const nextFormData: PropertyFormData = {
+      ...formData,
+      files: incomingFiles,
+      landmarks: nextLandmarks
+    };
+
+    setFormData(nextFormData);
+    // #region debug-point D:after-set-form
+    reportDxfImportDebug('D', 'setFormData dispatched for imported landmarks', {
+      importedCount: importedLandmarks.length,
+      failedUploadsCount: failedUploads.length
+    });
+    // #endregion
+
+    if (importedLandmarks.length > 0) {
+      alert(`✅ ${importedLandmarks.length} ponto(s) do DXF foram importados automaticamente para a grade de coordenadas.`);
+    }
+
+    if (failedUploads.length > 0) {
+      alert(`⚠️ Nao foi possivel importar automaticamente os pontos dos seguintes arquivos: ${failedUploads.join(', ')}.`);
+    } else if (importedLandmarks.length === 0 && dxfFilesToImport.length > 0) {
+      setDxfImportStatusText('O upload foi processado, mas nenhum ponto foi inserido na grade.');
+    }
+
+    try {
+      // #region debug-point E:frontend-persist-request
+      reportDxfUpload500Debug('E', '[DEBUG] persisting technical files to property', {
+        editId: editId || null,
+        databasePropertyId: databasePropertyId || null,
+        dxfFilesWithBackendId: nextFormData.files.filter((currentFile) => isTechnicalFile(currentFile) && Boolean(currentFile.backendFileId)).length
+      });
+      // #endregion
+      const savedDatabasePropertyId = await persistTechnicalFilesToDatabase(nextFormData);
+      if (savedDatabasePropertyId) {
+        // #region debug-point E:frontend-persist-success
+        reportDxfUpload500Debug('E', '[DEBUG] property persistence completed', {
+          savedDatabasePropertyId
+        });
+        // #endregion
+        setDxfImportStatusText((currentStatus) => {
+          if (!currentStatus) {
+            return 'Arquivos tecnicos vinculados ao imovel e persistidos no banco.';
+          }
+
+          if (currentStatus.includes('persistidos no banco')) {
+            return currentStatus;
+          }
+
+          return `${currentStatus} Vínculo persistido no banco.`;
+        });
+      }
+    } catch (error) {
+      // #region debug-point E:frontend-persist-error
+      reportDxfUpload500Debug('E', '[DEBUG] property persistence failed', {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        editId: editId || null,
+        databasePropertyId: databasePropertyId || null
+      });
+      // #endregion
+      console.error('Erro ao persistir arquivos tecnicos no banco:', error);
+      const message = getErrorMessage(error, 'Nao foi possivel persistir os arquivos tecnicos no banco neste momento.');
+      setDxfImportStatusText(message);
+      alert(`⚠️ ${message}`);
+    }
+  }, [databasePropertyId, editId, formData, persistTechnicalFilesToDatabase]);
 
   const calculateProgress = (): number => {
     let completed = 0;
@@ -503,104 +1097,20 @@ const PropertyRegister: React.FC = () => {
         return;
       }
 
-      const propertyPayload = {
-        id: editId ? propertyId : undefined,
-        propertyId: editId ? propertyId : undefined,
-        name: formData.basicData.registrationNumber,
-        registrationNumber: formData.basicData.registrationNumber,
-        propertyType: formData.basicData.propertyType,
-        landUse: formData.basicData.landUse,
-        
-        street: formData.basicData.address.street,
-        number: formData.basicData.address.number || '',
-        complement: formData.basicData.address.complement || '',
-        neighborhood: formData.basicData.address.neighborhood,
-        city: formData.basicData.address.city,
-        state: formData.basicData.address.state,
-        zipCode: formData.basicData.address.zipCode || '',
-        
-        latitude: formData.basicData.address.coordinates?.latitude,
-        longitude: formData.basicData.address.coordinates?.longitude,
-        
-        sirgas_e: formData.basicData.address.sirgas?.e,
-        sirgas_n: formData.basicData.address.sirgas?.n,
-        sirgas_source: formData.basicData.address.sirgas?.source,
-        landmarks: formData.landmarks
-          .filter(landmark =>
-            landmark.name.trim() ||
-            landmark.coordinateX !== undefined ||
-            landmark.coordinateY !== undefined ||
-            landmark.coordinateZ !== undefined
-          )
-          .map((landmark, index) => ({
-            landmarkId: landmark.id,
-            landmarkName: landmark.name.trim(),
-            landmarkType: landmark.type,
-            coordinateX: landmark.coordinateX,
-            coordinateY: landmark.coordinateY,
-            coordinateZ: landmark.coordinateZ,
-            sequenceOrder: index + 1,
-            description: landmark.description?.trim() || ''
-          })),
-        
-        ownerName: formData.owners.length > 0 ? 
-          (formData.owners[0].ownerType === 'INDIVIDUAL' ? 
-            formData.owners[0].fullName : 
-            formData.owners[0].companyName) : '',
-        ownerDocument: formData.owners.length > 0 ? 
-          (formData.owners[0].ownerType === 'INDIVIDUAL' ? 
-            formData.owners[0].cpf : 
-            formData.owners[0].cnpj) : '',
-        ownerEmail: formData.owners.length > 0 ? formData.owners[0].email || '' : '',
-        ownerPhone: formData.owners.length > 0 ? formData.owners[0].phone || '' : '',
-        ownerIdNumber: formData.owners.length > 0 ? 
-          (formData.owners[0].ownerType === 'INDIVIDUAL' ? 
-            formData.owners[0].rg || '' : 
-            formData.owners[0].stateRegistration || '') : '',
-        
-        totalArea: 0,
-        totalPerimeter: 0,
-        datum: 'SIRGAS 2000',
-        coordinateSystem: 'SIRGAS 2000 / UTM zone 23S',
-        utmZone: formData.basicData.address.sirgas?.zone || '23S',
-        centralMeridian: formData.basicData.address.sirgas?.zone === '24S' ? '-39°' : '-45°',
-        
-        active: true,
-        
-        documents: formData.documents,
-        
-        dxfFiles: formData.files
-          .filter(file => {
-            const fileName = file.name.toLowerCase();
-            return fileName.endsWith('.dxf') || fileName.endsWith('.dwg');
-          })
-          .map(file => ({
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: file.name.toLowerCase().endsWith('.dxf') ? 'DXF' : 'DWG',
-            filePath: `properties/${propertyId}/technical/${file.name}`
-          })),
-        
-        otherFiles: formData.files
-          .filter(file => {
-            const fileName = file.name.toLowerCase();
-            return !fileName.endsWith('.dxf') && !fileName.endsWith('.dwg');
-          })
-          .map(file => ({
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: file.type || 'unknown'
-          }))
-      };
-      
-      if (editId) {
-        await api.put(`/properties/${editId}`, propertyPayload);
-      } else {
-        await api.post('/properties', propertyPayload);
-      }
-      
-      if (propertyId && !editId) {
-        localStorage.removeItem(`incomplete_property_${propertyId}`);
+      const persistedTargetId = editId || databasePropertyId;
+      const propertyPayload = buildPropertyPayload(formData, persistedTargetId);
+      const response = persistedTargetId
+        ? await api.put(`/properties/${persistedTargetId}`, propertyPayload)
+        : await api.post('/properties', propertyPayload);
+
+      const savedPropertyId = response?.data?.propertyId || response?.data?.id || propertyId;
+      setDatabasePropertyId(savedPropertyId || null);
+
+      if (savedPropertyId && !editId) {
+        if (propertyId) {
+          localStorage.removeItem(`incomplete_property_${propertyId}`);
+        }
+        localStorage.removeItem(`incomplete_property_${savedPropertyId}`);
       }
       
       alert(editId ? '✅ Cadastro do imóvel atualizado com sucesso!' : '✅ Propriedade cadastrada com sucesso no banco de dados!');
@@ -743,6 +1253,7 @@ const PropertyRegister: React.FC = () => {
                         files: []
                       });
                       setPropertyId(null);
+                      setDatabasePropertyId(null);
                       setSelectedIncompleteId('');
                       setCurrentTab(0);
                     }}
@@ -823,7 +1334,8 @@ const PropertyRegister: React.FC = () => {
             <PropertyFiles
               files={formData.files}
               validation={validation.files}
-              onChange={(files: PropertyFormData['files']) => setFormData(prev => ({ ...prev, files }))}
+              onChange={handleFilesChange}
+              importStatusText={dxfImportStatusText}
             />
           )}
           

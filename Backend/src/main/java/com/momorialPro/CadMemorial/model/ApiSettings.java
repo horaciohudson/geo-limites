@@ -27,7 +27,15 @@ public class ApiSettings extends AuditBase {
     @Builder.Default
     private String templateApiProvider = "CLAUDE";
 
+    @Column(name = "template_api_model", nullable = false, length = 100)
+    @Builder.Default
+    private String templateApiModel = "GPT-4.0";
+
     @Column(name = "memorial_api_provider", nullable = false, length = 50)
     @Builder.Default
     private String memorialApiProvider = "CLAUDE";
+
+    @Column(name = "memorial_api_model", nullable = false, length = 100)
+    @Builder.Default
+    private String memorialApiModel = "GPT-4.0";
 }

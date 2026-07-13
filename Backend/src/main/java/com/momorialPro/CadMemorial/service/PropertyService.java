@@ -1,13 +1,16 @@
 package com.momorialPro.CadMemorial.service;
 
 import com.momorialPro.CadMemorial.dto.PropertyDTO;
+import com.momorialPro.CadMemorial.dto.FileMetadataDTO;
 import com.momorialPro.CadMemorial.dto.PropertyLandmarkDTO;
 import com.momorialPro.CadMemorial.mapper.PropertyLandmarkMapper;
 import com.momorialPro.CadMemorial.dto.PropertySummaryDTO;
 import com.momorialPro.CadMemorial.mapper.PropertyMapper;
+import com.momorialPro.CadMemorial.model.FileMetadata;
 import com.momorialPro.CadMemorial.model.Property;
 import com.momorialPro.CadMemorial.model.PropertyLandmark;
 import com.momorialPro.CadMemorial.model.User;
+import com.momorialPro.CadMemorial.repository.FileMetadataRepository;
 import com.momorialPro.CadMemorial.repository.PropertyLandmarkRepository;
 import com.momorialPro.CadMemorial.repository.PropertyRepository;
 import com.momorialPro.CadMemorial.repository.UserRepository;
@@ -18,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -29,6 +33,7 @@ public class PropertyService {
     
     private final PropertyRepository propertyRepository;
     private final PropertyLandmarkRepository propertyLandmarkRepository;
+    private final FileMetadataRepository fileMetadataRepository;
     private final PropertyMapper propertyMapper;
     private final PropertyLandmarkMapper propertyLandmarkMapper;
     private final UserRepository userRepository;
@@ -52,7 +57,7 @@ public class PropertyService {
                     return new RuntimeException("Property not found");
                 });
 
-        return propertyMapper.toDTO(property);
+        return buildPropertyDtoWithFiles(property, tenantId);
     }
 
     @Transactional(readOnly = true)
@@ -64,7 +69,7 @@ public class PropertyService {
                     return new RuntimeException("Property not found");
                 });
 
-        return propertyMapper.toDTO(property);
+        return buildPropertyDtoWithFiles(property, tenantId);
     }
 
     public PropertyDTO create(PropertyDTO propertyDTO, UUID userId) {
@@ -95,8 +100,9 @@ public class PropertyService {
         applyLandmarks(property, propertyDTO.getLandmarks());
 
         Property savedProperty = propertyRepository.save(property);
+        replaceTechnicalFiles(savedProperty, propertyDTO.getDxfFiles(), persistedUser);
 
-        return propertyMapper.toDTO(savedProperty);
+        return buildPropertyDtoWithFiles(savedProperty, persistedUser.getTenant().getId());
     }
 
     public PropertyDTO update(UUID propertyId, PropertyDTO propertyDTO, UUID userId) {
@@ -110,10 +116,11 @@ public class PropertyService {
         // Update fields
         propertyMapper.updateEntityFromDTO(propertyDTO, existingProperty);
         replaceLandmarks(existingProperty, propertyDTO.getLandmarks());
+        replaceTechnicalFiles(existingProperty, propertyDTO.getDxfFiles(), existingProperty.getUser());
 
         Property updatedProperty = propertyRepository.save(existingProperty);
 
-        return propertyMapper.toDTO(updatedProperty);
+        return buildPropertyDtoWithFiles(updatedProperty, tenantId);
     }
 
     public void delete(UUID propertyId, UUID userId) {
@@ -214,9 +221,9 @@ public class PropertyService {
                 .owner_document(property.getOwnerDocument())
                 .total_owners(1)
                 .total_documents(0)
-                .total_files(0)
-                .total_dxf_files(0) // TODO: Implementar contagem de arquivos DXF
-                .dxf_files_list("") // TODO: Implementar lista de arquivos DXF
+                .total_files(property.getFiles() != null ? property.getFiles().size() : 0)
+                .total_dxf_files(countTechnicalFiles(property))
+                .dxf_files_list(buildTechnicalFilesList(property))
                 .completeness_status(completenessStatus)
                 .created_at(property.getCreatedAt())
                 .updated_at(property.getUpdatedAt())
@@ -238,6 +245,16 @@ public class PropertyService {
         applyLandmarks(property, landmarkDTOs);
     }
 
+    private PropertyDTO buildPropertyDtoWithFiles(Property property, UUID tenantId) {
+        PropertyDTO dto = propertyMapper.toDTO(property);
+        List<FileMetadata> linkedFiles = fileMetadataRepository
+                .findByTenantIdAndPropertyPropertyIdOrderByCreatedAtDesc(tenantId, property.getPropertyId());
+
+        dto.setDxfFiles(propertyMapper.mapTechnicalFiles(linkedFiles));
+        dto.setOtherFiles(propertyMapper.mapOtherFiles(linkedFiles));
+        return dto;
+    }
+
     private void applyLandmarks(Property property, List<PropertyLandmarkDTO> landmarkDTOs) {
         if (landmarkDTOs == null || landmarkDTOs.isEmpty()) {
             return;
@@ -252,5 +269,110 @@ public class PropertyService {
                 .collect(Collectors.toList());
 
         property.getLandmarks().addAll(landmarks);
+    }
+
+    private void replaceTechnicalFiles(Property property, List<FileMetadataDTO> fileDTOs, User user) {
+        UUID tenantId = property.getTenant() != null ? property.getTenant().getId() : requireTenantId(user.getId());
+        List<FileMetadataDTO> orderedFileDTOs = fileDTOs == null
+                ? List.of()
+                : fileDTOs.stream()
+                        .filter(Objects::nonNull)
+                        .filter(dto -> dto.getId() != null)
+                        .collect(Collectors.toList());
+        Set<UUID> desiredFileIds = fileDTOs == null
+                ? Set.of()
+                : orderedFileDTOs.stream()
+                        .map(FileMetadataDTO::getId)
+                        .collect(Collectors.toSet());
+        UUID desiredPrimaryFileId = orderedFileDTOs.stream()
+                .filter(dto -> Boolean.TRUE.equals(dto.getPrimaryForProperty()))
+                .map(FileMetadataDTO::getId)
+                .findFirst()
+                .orElseGet(() -> orderedFileDTOs.stream()
+                        .map(FileMetadataDTO::getId)
+                        .findFirst()
+                        .orElse(null));
+
+        List<FileMetadata> currentlyLinkedFiles = fileMetadataRepository
+                .findByTenantIdAndPropertyPropertyIdOrderByCreatedAtDesc(tenantId, property.getPropertyId());
+        Set<UUID> currentlyLinkedFileIds = currentlyLinkedFiles.stream()
+                .map(FileMetadata::getId)
+                .collect(Collectors.toSet());
+
+        currentlyLinkedFiles.stream()
+                .filter(file -> !desiredFileIds.contains(file.getId()))
+                .forEach(file -> {
+                    file.setProperty(null);
+                    file.setPrimaryForProperty(false);
+                });
+
+        if (desiredFileIds.isEmpty()) {
+            if (!currentlyLinkedFiles.isEmpty()) {
+                fileMetadataRepository.saveAll(currentlyLinkedFiles);
+            }
+            return;
+        }
+
+        List<FileMetadata> desiredFiles = fileMetadataRepository.findByIdInAndTenantId(desiredFileIds, tenantId).stream()
+                .collect(Collectors.toList());
+
+        if (desiredFiles.size() != desiredFileIds.size()) {
+            throw new IllegalArgumentException("Um ou mais arquivos tecnicos informados nao pertencem ao usuario atual.");
+        }
+
+        List<FileMetadata> unauthorizedFiles = desiredFiles.stream()
+                .filter(file -> {
+                    boolean belongsToCurrentUser = file.getOwner() != null && Objects.equals(file.getOwner().getId(), user.getId());
+                    boolean alreadyLinkedToProperty = currentlyLinkedFileIds.contains(file.getId());
+                    return !belongsToCurrentUser && !alreadyLinkedToProperty;
+                })
+                .toList();
+
+        if (!unauthorizedFiles.isEmpty()) {
+            throw new IllegalArgumentException("Um ou mais arquivos tecnicos informados nao pertencem ao usuario atual.");
+        }
+
+        desiredFiles.stream()
+                .filter(file -> file.getOwner() == null || !Objects.equals(file.getOwner().getId(), user.getId()))
+                .filter(file -> currentlyLinkedFileIds.contains(file.getId()))
+                .forEach(file -> log.warn(
+                        "Mantendo arquivo tecnico legado {} vinculado ao imovel {} apesar de owner divergente/null. userAtual={}, ownerArquivo={}",
+                        file.getId(),
+                        property.getPropertyId(),
+                        user.getId(),
+                        file.getOwner() != null ? file.getOwner().getId() : null
+                ));
+
+        desiredFiles.forEach(file -> {
+            file.setProperty(property);
+            file.setPrimaryForProperty(Objects.equals(file.getId(), desiredPrimaryFileId));
+        });
+        fileMetadataRepository.saveAll(desiredFiles);
+    }
+
+    private int countTechnicalFiles(Property property) {
+        if (property.getFiles() == null) {
+            return 0;
+        }
+
+        return (int) property.getFiles().stream()
+                .filter(this::isTechnicalFile)
+                .count();
+    }
+
+    private String buildTechnicalFilesList(Property property) {
+        if (property.getFiles() == null) {
+            return "";
+        }
+
+        return property.getFiles().stream()
+                .filter(this::isTechnicalFile)
+                .map(FileMetadata::getOriginalName)
+                .collect(Collectors.joining(", "));
+    }
+
+    private boolean isTechnicalFile(FileMetadata file) {
+        String extension = file.getExtension() == null ? "" : file.getExtension().trim().toLowerCase();
+        return "dxf".equals(extension) || "dwg".equals(extension);
     }
 }

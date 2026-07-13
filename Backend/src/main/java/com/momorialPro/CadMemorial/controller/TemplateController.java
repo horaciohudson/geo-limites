@@ -164,10 +164,25 @@ public class TemplateController {
             
         } catch (IllegalArgumentException e) {
             log.error("Erro de validação ao gerar template: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(
+                    TemplateGenerationResponseDTO.builder()
+                            .message(e.getMessage())
+                            .build()
+            );
+        } catch (IllegalStateException e) {
+            log.error("Erro de configuracao ao gerar template: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(
+                    TemplateGenerationResponseDTO.builder()
+                            .message(e.getMessage())
+                            .build()
+            );
         } catch (Exception e) {
             log.error("Erro interno ao gerar template", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                    TemplateGenerationResponseDTO.builder()
+                            .message(e.getMessage())
+                            .build()
+            );
         }
     }
 

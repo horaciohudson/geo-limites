@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import type { AsyncPropertyData } from '@/services/polling-memorial';
+import { clearSelectedOperationProperty, setSelectedOperationProperty } from '@/utils/operationContext';
 import '../../styles/PropertySearch.css';
 
 interface PropertySummary {
@@ -176,7 +177,7 @@ const PropertySearch: React.FC<PropertySearchProps> = ({ onPropertySelect }) => 
       dxfFiles: property.dxf_files_list ? property.dxf_files_list.split(', ') : []
     };
     
-    localStorage.setItem('selectedPropertyForMemorial', JSON.stringify(propertyForMemorial));
+    setSelectedOperationProperty(propertyForMemorial);
     
     // Callback para o componente pai
     onPropertySelect(property);
@@ -362,7 +363,7 @@ const PropertySearch: React.FC<PropertySearchProps> = ({ onPropertySelect }) => 
               onClick={() => {
                 // Limpar seleção
                 setSelectedProperty(null);
-                localStorage.removeItem('selectedPropertyForMemorial');
+                clearSelectedOperationProperty();
               }}
               className="btn-clear"
             >

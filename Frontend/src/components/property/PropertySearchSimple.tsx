@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { AsyncPropertyData } from '@/services/polling-memorial';
+import { setSelectedOperationProperty } from '@/utils/operationContext';
 
 interface PropertySummary {
   property_id: string;
@@ -63,7 +64,7 @@ const PropertySearchSimple: React.FC<PropertySearchSimpleProps> = ({ onPropertyS
       propertyType: testProperty.property_type
     };
     
-    localStorage.setItem('selectedPropertyForMemorial', JSON.stringify(propertyForMemorial));
+    setSelectedOperationProperty(propertyForMemorial);
     
     onPropertySelect(testProperty);
     alert('✅ Propriedade teste selecionada! Agora você pode gerar o memorial.');

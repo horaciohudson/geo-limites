@@ -71,6 +71,13 @@ type UserRoleFilter = 'all' | 'admin' | 'user';
 type UserStatusFilter = 'all' | 'active' | 'inactive' | 'pending';
 type OnboardingQueueFilter = 'all' | 'analysis' | 'payment' | 'release' | 'rejected' | 'released';
 
+const OPENAI_MODEL_OPTIONS = [
+  { value: 'GPT-4.0', label: 'OpenAI - GPT-4.0' },
+  { value: 'GPT-5.5', label: 'OpenAI - GPT-5.5' },
+  { value: 'GPT-5.4', label: 'OpenAI - GPT-5.4' },
+  { value: 'GPT-5.4 mini', label: 'OpenAI - GPT-5.4 mini' },
+] as const;
+
 interface ApiErrorLike {
   message?: string;
   response?: {
@@ -108,7 +115,12 @@ const AdminSettings: React.FC = () => {
   const [currentOnboardingSettings, setCurrentOnboardingSettings] = useState<OnboardingNotificationSettings | null>(null);
   const [loadingOperationalTenants, setLoadingOperationalTenants] = useState(true);
   const [loadingOnboarding, setLoadingOnboarding] = useState(true);
-  const [apiForm, setApiForm] = useState<UpdateApiSettingsRequest>({ templateApiProvider: 'CLAUDE', memorialApiProvider: 'CLAUDE' });
+  const [apiForm, setApiForm] = useState<UpdateApiSettingsRequest>({
+    templateApiProvider: 'CLAUDE',
+    memorialApiProvider: 'CLAUDE',
+    templateApiModel: 'GPT-4.0',
+    memorialApiModel: 'GPT-4.0',
+  });
   const [loadingApi, setLoadingApi] = useState(true);
   const [creditPricingForm, setCreditPricingForm] = useState<UpdateCreditPricingSettingsRequest>(defaultCreditPricingForm);
   const [currentCreditPricing, setCurrentCreditPricing] = useState<CreditPricingSettings | null>(null);
@@ -358,6 +370,8 @@ const AdminSettings: React.FC = () => {
       setApiForm({
         templateApiProvider: settings.templateApiProvider || 'CLAUDE',
         memorialApiProvider: settings.memorialApiProvider || 'CLAUDE',
+        templateApiModel: settings.templateApiModel || 'GPT-4.0',
+        memorialApiModel: settings.memorialApiModel || 'GPT-4.0',
       });
     } catch (error: unknown) {
       showError(error, 'Nao foi possivel carregar as configuracoes de API.');
@@ -608,6 +622,8 @@ const AdminSettings: React.FC = () => {
       setApiForm({
         templateApiProvider: settings.templateApiProvider,
         memorialApiProvider: settings.memorialApiProvider,
+        templateApiModel: settings.templateApiModel || 'GPT-4.0',
+        memorialApiModel: settings.memorialApiModel || 'GPT-4.0',
       });
       showSuccess('Configuracoes de API atualizadas com sucesso.');
     } catch (error: unknown) {
@@ -1393,6 +1409,23 @@ const AdminSettings: React.FC = () => {
                         </select>
                       </div>
                       <div className="admin-settings-field">
+                        <label htmlFor="template-api-model">Modelo</label>
+                        <select
+                          id="template-api-model"
+                          value={apiForm.templateApiModel}
+                          onChange={(e) => setApiField('templateApiModel', e.target.value)}
+                          disabled={apiForm.templateApiProvider !== 'GPT'}
+                        >
+                          {OPENAI_MODEL_OPTIONS.map((modelOption) => (
+                            <option key={modelOption.value} value={modelOption.value}>
+                              {modelOption.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="admin-settings-row">
+                      <div className="admin-settings-field">
                         <label htmlFor="memorial-api-provider">Gerar Memoriais</label>
                         <select
                           id="memorial-api-provider"
@@ -1401,6 +1434,21 @@ const AdminSettings: React.FC = () => {
                         >
                           <option value="CLAUDE">Claude (Anthropic)</option>
                           <option value="GPT">GPT (OpenAI)</option>
+                        </select>
+                      </div>
+                      <div className="admin-settings-field">
+                        <label htmlFor="memorial-api-model">Modelo</label>
+                        <select
+                          id="memorial-api-model"
+                          value={apiForm.memorialApiModel}
+                          onChange={(e) => setApiField('memorialApiModel', e.target.value)}
+                          disabled={apiForm.memorialApiProvider !== 'GPT'}
+                        >
+                          {OPENAI_MODEL_OPTIONS.map((modelOption) => (
+                            <option key={modelOption.value} value={modelOption.value}>
+                              {modelOption.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>

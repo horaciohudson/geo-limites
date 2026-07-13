@@ -79,6 +79,8 @@ public class PropertyDTO {
     private List<PropertyLandmarkDTO> landmarks;
     private List<PropertyBoundaryDTO> boundaries;
     private List<PropertyDocumentDTO> documents;
+    private List<FileMetadataDTO> dxfFiles;
+    private List<FileMetadataDTO> otherFiles;
     
     // AUDIT
     private UUID userId;

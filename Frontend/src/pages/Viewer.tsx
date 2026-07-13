@@ -1,19 +1,85 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ViewerDXF, Loading, ErrorBoundary } from '@/components';
-import type { ConfirmedLotSelection } from '@/components/ViewerDXF';
-import { useSidebarActions } from '@/App';
+import CorrectivePanel from '@/components/CorrectivePanel';
+import DocumentProcessingOverlay from '@/components/DocumentProcessingOverlay';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import GeneratedDocumentPanel from '@/components/GeneratedDocumentPanel';
+import Loading from '@/components/Loading';
+import { GeoLimitesViewerDXF } from '@/graphics-engine/adapters/geolimites';
+import { scanGeoLimitesCorrectiveIssues } from '@/graphics-engine/adapters/geolimites/scanGeoLimitesCorrectiveIssues';
+import type { CorrectiveDraftOperation, PropertyLandmarkView } from '@/graphics-engine/shared/viewer-corrective';
+import ViewerHeader from '@/components/ViewerHeader';
+import ViewerMultiFileLayout from '@/components/ViewerMultiFileLayout';
+import ViewerSingleFileLayout from '@/components/ViewerSingleFileLayout';
+import { useSidebarActions } from '@/contexts/SidebarActionsContext';
 import { useFileContext } from '@/contexts/FileContext';
-import api from '@/services/api';
-import aiService from '@/services/aiService';
+import { useOperationContext } from '@/contexts/OperationContext';
+import {
+  persistViewerDocumentRequest,
+  useViewerDocumentRequestBootstrap,
+  type ViewerDocumentRequest
+} from '@/hooks/useViewerDocumentRequest';
+import type { ConfirmedLotSelection, ConfirmedReferencePoint } from '@/graphics-engine/components/viewer-dxf';
+import { useViewerFileSelection } from '@/hooks/useViewerFileSelection';
+import { useViewerPropertyDetails } from '@/hooks/useViewerPropertyDetails';
+import {
+  useCorrectiveSnapshots
+} from '@/hooks/useCorrectiveSnapshots';
+import { useDocumentGenerationActions } from '@/hooks/useDocumentGenerationActions';
+import { useDocumentGenerationState } from '@/hooks/useDocumentGenerationState';
 import type { AsyncPropertyData } from '@/services/polling-memorial';
-import type { FileMetadata } from '@/types';
+import {
+  copyGeneratedDocumentText,
+  downloadTechnicalFile,
+  exportGeneratedDocumentPdf
+} from '@/utils/documentExport';
 import type { DXFData } from '@/utils/dxfParser';
-import jsPDF from 'jspdf';
+import type { MemorialPropertyDataLike } from '@/utils/memorialDocument';
+import { getStoredTechnicalSummary } from '@/utils/technicalSummaryStorage';
+import {
+  getProcessingContextStatusLabels,
+  normalizeProcessingContextStatus,
+  resolveTechnicalSummaryProcessingContext
+} from '@/utils/processingContextStatus';
+import {
+  formatIssueCodeLabel,
+  parseTechnicalSummaryIssues,
+  type CorrectiveTool,
+  type ViewerMode
+} from '@/utils/viewerCorrective';
+
+const TECHNICAL_SUMMARY_STORAGE_PREFIX = 'technicalSummaryJson:';
+const PROCESSING_CONTEXT_STATUS_STORAGE_PREFIX = 'processingContextStatus:';
+
+const readStoredProcessingContextStatus = (fileId?: string | null) => {
+  if (!fileId) {
+    return null;
+  }
+
+  try {
+    const rawValue = localStorage.getItem(`${PROCESSING_CONTEXT_STATUS_STORAGE_PREFIX}${fileId}`);
+    return rawValue ? normalizeProcessingContextStatus(JSON.parse(rawValue) as unknown) : null;
+  } catch {
+    return null;
+  }
+};
+
+interface PropertyLinkedFileRef {
+  id?: string;
+  originalName?: string;
+  fileName?: string;
+  contentType?: string;
+  primaryForProperty?: boolean;
+}
 
 interface StoredPropertySelection extends AsyncPropertyData {
   id?: string;
   propertyId?: string;
+  dxfFiles?: PropertyLinkedFileRef[];
+}
+
+interface PropertyDetailsView extends StoredPropertySelection {
+  landmarks?: PropertyLandmarkView[];
 }
 
 interface ErrorLike {
@@ -25,31 +91,9 @@ interface ErrorLike {
   };
 }
 
-interface StoredViewerSelectionState {
-  fileIds: string[];
-  currentFileIndex: number;
+interface ViewerProps {
+  documentOnly?: boolean;
 }
-
-interface InteractiveLotMemorial {
-  lotNumber: number;
-  content: string;
-}
-
-interface LotMemorialParts {
-  header: string;
-  body: string;
-  conclusion: string;
-}
-
-const VIEWER_SELECTION_STORAGE_KEY = 'viewerSelectionState';
-
-const haveSameFileIds = (left: FileMetadata[], right: FileMetadata[]): boolean => {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((file, index) => file.id === right[index]?.id);
-};
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (typeof error === 'object' && error !== null) {
@@ -60,378 +104,406 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
-const normalizeMemorialText = (content: string): string =>
-  content
-    .replace(/“|”/g, '')
-    .replace(/"/g, '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-const LEADING_MEMORIAL_HEADER_PATTERN =
-  /^\s*(Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*\n)?(?:Metodo:.*\n?)?)/i;
-
-const extractLeadingMemorialHeader = (content: string): string => {
-  const normalized = normalizeMemorialText(content);
-  const match = normalized.match(LEADING_MEMORIAL_HEADER_PATTERN);
-  return match?.[1]?.trim() || '';
-};
-
-const stripLeadingMemorialHeader = (content: string): string =>
-  normalizeMemorialText(content)
-    .replace(LEADING_MEMORIAL_HEADER_PATTERN, '')
-    .trim();
-
-const resolveMemorialProjectName = (
-  currentFile: FileMetadata,
-  propertyData: StoredPropertySelection | null
-): string =>
-  propertyData?.registrationNumber ||
-  propertyData?.name ||
-  currentFile.originalName.replace(/\.[^/.]+$/, '');
-
-const buildFallbackMemorialHeader = (
-  currentFile: FileMetadata,
-  propertyData: StoredPropertySelection | null
-): string => {
-  const projectName = resolveMemorialProjectName(currentFile, propertyData);
-  return [
-    'Memorial Descritivo',
-    `Projeto: ${projectName}`,
-    `Arquivo: ${currentFile.originalName}`,
-    `Data: ${new Date().toLocaleDateString('pt-BR')}`
-  ].join('\n');
-};
-
-const deduplicateFinalMemorialHeader = (content: string): string => {
-  const normalized = normalizeMemorialText(content);
-  const headerPattern =
-    /(^|\n)(Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*\n)?(?:Metodo:.*(?:\n|$))?)/gi;
-  const headers = Array.from(normalized.matchAll(headerPattern), (match) => match[2]?.trim()).filter(Boolean);
-
-  if (headers.length <= 1) {
-    return normalized
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  }
-
-  // Quando surgem dois cabecalhos, o ultimo costuma ser o bloco mais completo vindo do backend.
-  const preferredHeader = headers[headers.length - 1];
-  const contentWithoutHeaders = normalized
-    .replace(headerPattern, (_, prefix) => prefix || '')
-    .replace(/^\s+/, '');
-
-  return [preferredHeader, contentWithoutHeaders]
-    .join('\n\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-};
-
-const splitLotMemorialParts = (content: string): LotMemorialParts => {
-  const normalized = normalizeMemorialText(content);
-  const header = extractLeadingMemorialHeader(normalized);
-  const contentWithoutHeader = stripLeadingMemorialHeader(normalized);
-  if (!contentWithoutHeader) {
-    return { header, body: '', conclusion: '' };
-  }
-
-  const declarationMatch = contentWithoutHeader.match(
-    /(?:\n_{5,}\n)?\s*DECLARAÇÃO(?: FINAL)?[\s\S]*$/i
-  );
-
-  if (!declarationMatch) {
-    return { header, body: contentWithoutHeader, conclusion: '' };
-  }
-
-  const body = contentWithoutHeader.slice(0, declarationMatch.index).trim();
-  const conclusion = declarationMatch[0]
-    .replace(/^\n+/, '')
-    .trim();
-
-  return { header, body, conclusion };
-};
-
-const buildInteractiveMemorial = (
-  lotMemorials: InteractiveLotMemorial[],
-  currentFile: FileMetadata,
-  propertyData: StoredPropertySelection | null,
-  conclusion: string,
-  backendHeader: string
-): string => {
-  const sortedMemorials = [...lotMemorials].sort((left, right) => left.lotNumber - right.lotNumber);
-  const memorialHeader = backendHeader || buildFallbackMemorialHeader(currentFile, propertyData);
-
-  const sections: string[] = [memorialHeader];
-
-  for (const lot of sortedMemorials) {
-    sections.push(`================ LOTE ${lot.lotNumber} ================`);
-    sections.push(lot.content);
-  }
-
-  if (conclusion) {
-    sections.push(conclusion);
-  }
-
-  return deduplicateFinalMemorialHeader(sections.join('\n\n'));
-};
-
-const isValidLotMemorial = (content: string, lotNumber: number): boolean => {
-  const normalized = normalizeMemorialText(content);
-  if (!normalized) {
-    return false;
-  }
-
-  const lotHeader = new RegExp(`^LOTE\\s+${lotNumber}\\s*:`, 'i');
-  if (!lotHeader.test(normalized)) {
-    return false;
-  }
-
-  if (normalized.length < 120) {
-    return false;
-  }
-
-  return normalized.includes('AO NORTE:') || normalized.includes('AO SUL:');
-};
-
-const DEBUG_SELECTION_URL = 'http://127.0.0.1:7778/event';
-const DEBUG_SELECTION_SESSION = 'lot-selection-mismatch';
-
-const sendSelectionDebug = (hypothesisId: string, location: string, msg: string, data: Record<string, unknown>) => {
-  // #region debug-point C:viewer-request-report
-  fetch(DEBUG_SELECTION_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: DEBUG_SELECTION_SESSION,
-      runId: 'pre-fix',
-      hypothesisId,
-      location,
-      msg,
-      data,
-      ts: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
-};
-
-// Função para obter propertyId selecionado do localStorage
-function getSelectedPropertyId(): string | null {
-  try {
-    // Tenta buscar propriedade selecionada no localStorage
-    const selectedProperty = JSON.parse(localStorage.getItem('selectedPropertyForMemorial') || 'null') as StoredPropertySelection | null;
-
-    if (selectedProperty) {
-      // Tentar diferentes campos para o ID
-      const propertyId = selectedProperty.propertyId || selectedProperty.id;
-      if (propertyId) {
-                        return propertyId;
-      }
-    }
-
-    // Fallback: tentar buscar da última propriedade criada
-    const properties = JSON.parse(localStorage.getItem('properties') || '[]') as StoredPropertySelection[];
-    if (properties.length > 0) {
-      const lastProperty = properties[properties.length - 1];
-      const fallbackId = lastProperty.propertyId || lastProperty.id;
-      if (fallbackId) {
-                return fallbackId;
-      }
-    }
-
-    return null;
-  } catch (e) {
-    console.error('❌ Erro ao ler propriedade do localStorage:', e);
-    return null;
-  }
-}
-
-function getSelectedPropertyData(): StoredPropertySelection | null {
-  try {
-    return JSON.parse(localStorage.getItem('selectedPropertyForMemorial') || 'null') as StoredPropertySelection | null;
-  } catch (e) {
-    console.error('❌ Erro ao ler dados da propriedade do localStorage:', e);
-    return null;
-  }
-}
-
-function getStoredViewerSelectionState(): StoredViewerSelectionState | null {
-  try {
-    const rawValue = localStorage.getItem(VIEWER_SELECTION_STORAGE_KEY);
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsed = JSON.parse(rawValue) as StoredViewerSelectionState;
-    if (!Array.isArray(parsed.fileIds) || parsed.fileIds.length === 0) {
-      return null;
-    }
-
-    return {
-      fileIds: parsed.fileIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
-      currentFileIndex: Number.isFinite(parsed.currentFileIndex) ? parsed.currentFileIndex : 0
-    };
-  } catch (e) {
-    console.error('❌ Erro ao ler selecao persistida do viewer:', e);
-    localStorage.removeItem(VIEWER_SELECTION_STORAGE_KEY);
-    return null;
-  }
-}
-
-const Viewer: React.FC = () => {
+const Viewer: React.FC<ViewerProps> = ({ documentOnly = false }) => {
   const [searchParams] = useSearchParams();
   const fileId = searchParams.get('fileId');
   const fileIds = searchParams.get('fileIds');
   const shouldGenerateMemorial = searchParams.get('generateMemorial') === 'true';
+  const requestedDocumentKind = searchParams.get('documentKind') === 'resumo-tecnico' ? 'resumo-tecnico' : 'memorial';
+  const documentRequestKey = searchParams.get('requestKey');
 
   const { setViewerActions } = useSidebarActions();
   const { selectedFiles, setSelectedFiles } = useFileContext();
-  const selectedFilesKey = selectedFiles.map((selectedFile) => selectedFile.id).join('|');
-
-  const [file, setFile] = useState<FileMetadata | null>(null);
-  const [files, setFiles] = useState<FileMetadata[]>([]);
-  const [currentFileIndex, setCurrentFileIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { selectedProperty, activePropertyId, setSelectedProperty } = useOperationContext();
   const [dxfData, setDxfData] = useState<DXFData | null>(null);
-  const [memorial, setMemorial] = useState('');
-  const [isGeneratingMemorial, setIsGeneratingMemorial] = useState(false);
-  const [memorialError, setMemorialError] = useState('');
+  const {
+    file,
+    setFile,
+    files,
+    currentFileIndex,
+    setCurrentFileIndex,
+    isLoading,
+    error
+  } = useViewerFileSelection({
+    fileId,
+    fileIds,
+    selectedFiles,
+    selectedProperty: selectedProperty as StoredPropertySelection | null,
+    setSelectedFiles,
+    setSelectedProperty: (property) => setSelectedProperty(property),
+    getErrorMessage
+  });
+  const { propertyDetails } = useViewerPropertyDetails({
+    activePropertyId,
+    selectedProperty: selectedProperty as PropertyDetailsView | null
+  });
+  const {
+    memorial,
+    technicalSummaryJson,
+    processingContextStatus,
+    setTechnicalSummaryJson,
+    setProcessingContextStatus,
+    generatedDocumentKind,
+    setGeneratedDocumentKind,
+    isGeneratingMemorial,
+    memorialError,
+    setMemorialError,
+    memorialTimeElapsed,
+    generationProgress,
+    memorialCurrentStep,
+    beginGeneration,
+    updateGeneration,
+    completeGeneration,
+    failGeneration
+  } = useDocumentGenerationState();
+  const [viewerMode, setViewerMode] = useState<ViewerMode>('view');
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [draftOperations, setDraftOperations] = useState<CorrectiveDraftOperation[]>([]);
+  const [activeCorrectiveTool, setActiveCorrectiveTool] = useState<CorrectiveTool>('inspect');
+  const [correctiveIssueSource, setCorrectiveIssueSource] = useState<'summary' | 'scan' | null>(null);
+  const [manualScanRevision, setManualScanRevision] = useState(0);
 
-  // Timer para geração do memorial
-  const [memorialStartTime, setMemorialStartTime] = useState<number | null>(null);
-  const [memorialTimeElapsed, setMemorialTimeElapsed] = useState(0);
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [memorialCurrentStep, setMemorialCurrentStep] = useState('');
-  const [timerInterval, setTimerInterval] = useState<number | null>(null);
+  const currentViewedFile = files[currentFileIndex] || file;
+  const technicalSummaryIssues = useMemo(
+    () => parseTechnicalSummaryIssues(technicalSummaryJson),
+    [technicalSummaryJson]
+  );
+  const scanSourceDxfData = dxfData;
+  const scannedCorrectiveIssues = useMemo(
+    () => (
+      manualScanRevision > 0
+        ? scanGeoLimitesCorrectiveIssues(scanSourceDxfData)
+        : []
+    ),
+    [manualScanRevision, scanSourceDxfData]
+  );
+  const effectiveCorrectiveIssueSource = useMemo<'summary' | 'scan' | null>(() => {
+    if (correctiveIssueSource === 'scan' && manualScanRevision > 0) {
+      return 'scan';
+    }
+    if (correctiveIssueSource === 'summary' && technicalSummaryIssues.length > 0) {
+      return 'summary';
+    }
+    if (manualScanRevision > 0) {
+      return 'scan';
+    }
+    if (technicalSummaryIssues.length > 0) {
+      return 'summary';
+    }
+    return null;
+  }, [correctiveIssueSource, manualScanRevision, technicalSummaryIssues.length]);
+  const correctiveIssues = useMemo(
+    () => (effectiveCorrectiveIssueSource === 'scan' ? scannedCorrectiveIssues : technicalSummaryIssues),
+    [effectiveCorrectiveIssueSource, scannedCorrectiveIssues, technicalSummaryIssues]
+  );
+  const correctiveIssuesSourceLabel = effectiveCorrectiveIssueSource === 'scan'
+    ? 'scan do arquivo'
+    : 'resumo tecnico';
+  const selectedCorrectiveIssue = useMemo(
+    () => correctiveIssues.find((issue) => issue.id === selectedIssueId) || null,
+    [correctiveIssues, selectedIssueId]
+  );
+  const correctiveFocusLotNumber = selectedCorrectiveIssue?.lotNumber ?? null;
+  const hasCorrectiveMode = effectiveCorrectiveIssueSource === 'scan'
+    ? Boolean(scanSourceDxfData)
+    : (generatedDocumentKind === 'resumo-tecnico' && technicalSummaryIssues.length > 0);
+  const currentCorrectiveFileId = currentViewedFile?.id;
+  const currentDraftOperations = useMemo(
+    () => draftOperations.filter((operation) => !currentCorrectiveFileId || operation.fileId === currentCorrectiveFileId),
+    [draftOperations, currentCorrectiveFileId]
+  );
+  const latestAppliedSuggestion = useMemo(
+    () => [...currentDraftOperations]
+      .reverse()
+      .find((operation) =>
+        operation.status === 'draft' &&
+        operation.label.toLowerCase().includes('aplicar sugestao automatica')
+      ) || null,
+    [currentDraftOperations]
+  );
+  const latestAppliedSuggestionLotNumber = useMemo(() => {
+    if (!latestAppliedSuggestion) {
+      return null;
+    }
 
-  // Carregar metadados do arquivo ou arquivos com tratamento robusto
+    const lotMatch = latestAppliedSuggestion.label.match(/lote\s+(\d+)/i);
+    if (!lotMatch) {
+      return null;
+    }
+
+    const parsedLotNumber = Number(lotMatch[1]);
+    return Number.isFinite(parsedLotNumber) ? parsedLotNumber : null;
+  }, [latestAppliedSuggestion]);
+  const isFocusedSuggestionRecentlyApplied = useMemo(() => {
+    if (!latestAppliedSuggestionLotNumber || !selectedCorrectiveIssue) {
+      return false;
+    }
+
+    return latestAppliedSuggestionLotNumber === selectedCorrectiveIssue.lotNumber;
+  }, [latestAppliedSuggestionLotNumber, selectedCorrectiveIssue]);
+  const {
+    correctiveSnapshotsByFileId,
+    savedCorrectiveSnapshotsByFileId,
+    isSavingCorrectiveSnapshot,
+    correctiveSnapshotSaveMessage,
+    restoredCorrectiveSnapshotsByFileId,
+    correctiveHistoryStatusByFileId,
+    correctiveHistoryCommandsByFileId,
+    correctiveSuggestionCommandsByFileId,
+    correctiveLotInspectionByFileId,
+    isLoadingCorrectiveSnapshot,
+    correctiveSnapshotLoadMessage,
+    resetCorrectiveSnapshotState,
+    registerCorrectiveSnapshot,
+    registerCorrectiveHistoryStatus,
+    dispatchCorrectiveHistoryCommand,
+    dispatchCorrectiveSuggestionCommand,
+    registerCorrectiveLotInspection,
+    saveCorrectiveSnapshot,
+    loadLatestCorrectiveSnapshot
+  } = useCorrectiveSnapshots({
+    selectedProperty: selectedProperty as StoredPropertySelection | null,
+    activePropertyId,
+    propertyDetails,
+    technicalSummaryJson,
+    processingContextStatus,
+    viewerMode,
+    activeCorrectiveTool,
+    selectedIssueId,
+    selectedCorrectiveIssue,
+    draftOperations,
+    setDraftOperations,
+    files,
+    currentFileIndex,
+    setCurrentFileIndex,
+    setFile,
+    setTechnicalSummaryJson,
+    setProcessingContextStatus,
+    setGeneratedDocumentKind,
+    setViewerMode,
+    getErrorMessage
+  });
+  const currentCorrectiveSuggestionCommand = currentCorrectiveFileId
+    ? correctiveSuggestionCommandsByFileId[currentCorrectiveFileId]
+    : undefined;
+  const currentCorrectiveSnapshot = currentCorrectiveFileId
+    ? correctiveSnapshotsByFileId[currentCorrectiveFileId]
+    : undefined;
+  const savedCorrectiveSnapshot = currentCorrectiveFileId
+    ? savedCorrectiveSnapshotsByFileId[currentCorrectiveFileId]
+    : undefined;
+  const restoredCorrectiveSnapshot = currentCorrectiveFileId
+    ? restoredCorrectiveSnapshotsByFileId[currentCorrectiveFileId]
+    : undefined;
+  const correctiveHistoryStatus = currentCorrectiveFileId
+    ? correctiveHistoryStatusByFileId[currentCorrectiveFileId]
+    : undefined;
+  const correctiveLotInspection = currentCorrectiveFileId
+    ? correctiveLotInspectionByFileId[currentCorrectiveFileId]
+    : undefined;
+  const activeFileName = currentViewedFile?.originalName || 'Nao informado';
+  const processingFileName = currentViewedFile?.originalName || 'Arquivo atual';
+
   useEffect(() => {
-    const loadFiles = async () => {
-      try {
-        setIsLoading(true);
-        setError('');
-
-        // Verificar se há IDs duplicados no FileContext
-        // Verificar localStorage também
-        const localStorageFiles = localStorage.getItem('selectedFiles');
-        if (localStorageFiles) {
-          try {
-            const parsedLocalFiles = JSON.parse(localStorageFiles) as FileMetadata[];
-
-            // Verificar se há IDs duplicados no localStorage
-            const allIds = parsedLocalFiles.map((f) => f.id);
-            const uniqueIds = [...new Set(allIds)];
-            if (allIds.length !== uniqueIds.length) {
-              const uniqueFiles = parsedLocalFiles.filter((file, index: number, self) =>
-                index === self.findIndex(f => f.id === file.id)
-              );
-
-              localStorage.setItem('selectedFiles', JSON.stringify(uniqueFiles));
-            }
-          } catch (e) {
-            console.error('❌ Erro ao parsear localStorage:', e);
-          }
-        }
-
-        const storedViewerSelection = getStoredViewerSelectionState();
-        const effectiveFileIds = fileIds || ((!fileId && selectedFiles.length === 0) ? storedViewerSelection?.fileIds.join(',') : null);
-        const effectiveFileId = fileId || ((!effectiveFileIds && selectedFiles.length === 1) ? selectedFiles[0]?.id : null);
-        const preferredIndex = storedViewerSelection?.currentFileIndex ?? 0;
-
-        if (!effectiveFileId && !effectiveFileIds && selectedFiles.length === 0) {
-          setError('Nenhum arquivo especificado');
-          setIsLoading(false);
-          return;
-        }
-
-        if (effectiveFileIds) {
-          // Múltiplos arquivos
-          const ids = effectiveFileIds.split(',').map(id => id.trim()).filter(id => id.length > 0);
-          const uniqueUrlIds = [...new Set(ids)];
-
-          const finalIds = uniqueUrlIds;
-
-          const contextFiles = selectedFiles.filter(f => finalIds.includes(f.id));
-          const uniqueContextFiles = contextFiles.filter((file, index, self) =>
-            index === self.findIndex(f => f.id === file.id)
-          );
-
-          if (uniqueContextFiles.length > 0) {
-            setFiles(uniqueContextFiles);
-            const safeIndex = Math.min(Math.max(preferredIndex, 0), uniqueContextFiles.length - 1);
-            setFile(uniqueContextFiles[safeIndex]);
-            setCurrentFileIndex(safeIndex);
-            setIsLoading(false);
-            return;
-          }
-
-          const filePromises = finalIds.map(id => api.get(`/dxf/${id}`));
-          const responses = await Promise.all(filePromises);
-          const loadedFiles = responses.map(response => response.data);
-          if (!haveSameFileIds(selectedFiles, loadedFiles)) {
-            setSelectedFiles(loadedFiles);
-          }
-          setFiles(loadedFiles);
-          const safeIndex = Math.min(Math.max(preferredIndex, 0), loadedFiles.length - 1);
-          setFile(loadedFiles[safeIndex]);
-          setCurrentFileIndex(safeIndex);
-        } else if (effectiveFileId) {
-          // Arquivo único
-          const contextFile = selectedFiles.find(f => f.id === effectiveFileId);
-          if (contextFile) {
-            setFile(contextFile);
-            setFiles([contextFile]);
-            setIsLoading(false);
-            return;
-          }
-
-          const response = await api.get(`/dxf/${effectiveFileId}`);
-          setFile(response.data);
-          setFiles([response.data]);
-          if (!haveSameFileIds(selectedFiles, [response.data])) {
-            setSelectedFiles([response.data]);
-          }
-        }
-      } catch (err: unknown) {
-        console.error('Erro ao carregar arquivo:', err);
-        setError(getErrorMessage(err, 'Erro ao carregar arquivo'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadFiles();
-  }, [fileId, fileIds, selectedFilesKey, setSelectedFiles]);
+    setCorrectiveIssueSource(null);
+    setManualScanRevision(0);
+  }, [currentViewedFile?.id]);
 
   useEffect(() => {
-    const effectiveFiles = files.length > 0 ? files : (file ? [file] : []);
-    if (effectiveFiles.length === 0) {
+    const currentFileId = currentViewedFile?.id;
+    if (!currentFileId) {
       return;
     }
 
-    const safeIndex = Math.min(Math.max(currentFileIndex, 0), effectiveFiles.length - 1);
-    localStorage.setItem(
-      VIEWER_SELECTION_STORAGE_KEY,
-      JSON.stringify({
-        fileIds: effectiveFiles.map((item) => item.id),
-        currentFileIndex: safeIndex
-      })
-    );
-  }, [files, file, currentFileIndex]);
+    const storedSummary = localStorage.getItem(`${TECHNICAL_SUMMARY_STORAGE_PREFIX}${currentFileId}`);
+    if (!storedSummary || storedSummary.trim().length === 0) {
+      return;
+    }
 
-  // Verificar se deve gerar memorial automaticamente
+    const normalizedStoredStatus = readStoredProcessingContextStatus(currentFileId);
+    const storedRecord = getStoredTechnicalSummary(activePropertyId);
+    const fallbackStoredStatus = storedRecord?.sourceFileId === currentFileId
+      ? normalizeProcessingContextStatus(storedRecord.processingContextStatus)
+      : null;
+    const nextStatus = normalizedStoredStatus || fallbackStoredStatus;
+    const sameStatus = JSON.stringify(processingContextStatus || null) === JSON.stringify(nextStatus || null);
+
+    if (storedSummary === technicalSummaryJson && generatedDocumentKind === 'resumo-tecnico' && sameStatus) {
+      return;
+    }
+
+    setTechnicalSummaryJson(storedSummary);
+    setProcessingContextStatus(nextStatus);
+    setGeneratedDocumentKind('resumo-tecnico');
+  }, [activePropertyId, currentViewedFile?.id, generatedDocumentKind, processingContextStatus, setGeneratedDocumentKind, setProcessingContextStatus, setTechnicalSummaryJson, technicalSummaryJson]);
+
   useEffect(() => {
-    if (shouldGenerateMemorial && file && dxfData && !isGeneratingMemorial) {
+    if (technicalSummaryIssues.length > 0 && correctiveIssueSource === null) {
+      setCorrectiveIssueSource('summary');
+    }
+  }, [correctiveIssueSource, technicalSummaryIssues.length]);
+
+  useEffect(() => {
+    const currentFileId = currentViewedFile?.id;
+    if (!currentFileId) {
+      return;
+    }
+
+    const watchedKey = `${TECHNICAL_SUMMARY_STORAGE_PREFIX}${currentFileId}`;
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== watchedKey) {
+        return;
+      }
+
+      const nextValue = typeof event.newValue === 'string' ? event.newValue : '';
+      if (!nextValue.trim()) {
+        return;
+      }
+
+      setTechnicalSummaryJson(nextValue);
+      setProcessingContextStatus(readStoredProcessingContextStatus(currentFileId));
+      setGeneratedDocumentKind('resumo-tecnico');
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [currentViewedFile?.id, setGeneratedDocumentKind, setProcessingContextStatus, setTechnicalSummaryJson]);
+
+  useEffect(() => {
+    if (!hasCorrectiveMode) {
+      setViewerMode('view');
+      setSelectedIssueId(null);
+      setDraftOperations([]);
+      setActiveCorrectiveTool('inspect');
+      resetCorrectiveSnapshotState();
+      return;
+    }
+
+    if (!selectedIssueId || !correctiveIssues.some((issue) => issue.id === selectedIssueId)) {
+      setSelectedIssueId(correctiveIssues[0]?.id || null);
+    }
+  }, [hasCorrectiveMode, correctiveIssues, selectedIssueId, resetCorrectiveSnapshotState]);
+
+  useEffect(() => {
+    if (!documentOnly && shouldGenerateMemorial && file && dxfData && !isGeneratingMemorial) {
       generateMemorial();
     }
-  }, [shouldGenerateMemorial, file, dxfData]); // Removida dependência isGeneratingMemorial para evitar loop
+  }, [documentOnly, shouldGenerateMemorial, file, dxfData]); // Removida dependência isGeneratingMemorial para evitar loop
+
+  const downloadFile = useCallback(async () => {
+    const currentFile = currentViewedFile || file;
+    if (!currentFile?.id) return;
+    try {
+      await downloadTechnicalFile(currentFile);
+    } catch (err) {
+      console.error('Erro ao baixar arquivo:', err);
+    }
+  }, [currentViewedFile, file]);
+
+  const handleDXFDataLoaded = (data: DXFData) => {
+    setDxfData(data);
+  };
+
+  const openDocumentPage = useCallback((request: ViewerDocumentRequest) => {
+    const fallbackFile = request.sourceFile || currentViewedFile || file;
+    if (!fallbackFile?.id) {
+      setMemorialError('Arquivo de origem nao disponivel para abrir a pagina do documento.');
+      return;
+    }
+
+    const requestKey = persistViewerDocumentRequest(request);
+    const nextUrl = `${window.location.origin}/viewer-document?fileId=${encodeURIComponent(fallbackFile.id)}&documentKind=${encodeURIComponent(request.kind)}&requestKey=${encodeURIComponent(requestKey)}`;
+    window.open(nextUrl, '_blank');
+  }, [currentViewedFile, file]);
+
+  const openMemorialDocumentPage = useCallback((
+    sourceFile: typeof currentViewedFile,
+    selections?: ConfirmedLotSelection[],
+    referencePoints?: ConfirmedReferencePoint[]
+  ) => {
+    openDocumentPage({
+      kind: 'memorial',
+      sourceFile,
+      selections,
+      referencePoints,
+      createdAt: new Date().toISOString()
+    });
+  }, [openDocumentPage]);
+
+  const openTechnicalSummaryDocumentPage = useCallback((
+    sourceFile: typeof currentViewedFile,
+    sourceDxfData?: DXFData | null,
+    referencePoints?: ConfirmedReferencePoint[]
+  ) => {
+    openDocumentPage({
+      kind: 'resumo-tecnico',
+      sourceFile,
+      sourceDxfData,
+      referencePoints,
+      createdAt: new Date().toISOString()
+    });
+  }, [openDocumentPage]);
+
+  const {
+    handlePolygonConfirmed,
+    generateMemorial,
+    generateTechnicalSummary
+  } = useDocumentGenerationActions({
+    file,
+    files,
+    currentFileIndex,
+    dxfData,
+    selectedProperty: selectedProperty as MemorialPropertyDataLike | null,
+    activePropertyId,
+    setCurrentFileIndex,
+    setMemorialError,
+    beginGeneration,
+    updateGeneration,
+    completeGeneration,
+    failGeneration,
+    getErrorMessage
+  });
+
+  useViewerDocumentRequestBootstrap({
+    enabled: documentOnly,
+    requestKey: documentRequestKey,
+    currentFile: currentViewedFile,
+    currentDxfData: dxfData,
+    isGenerating: isGeneratingMemorial,
+    onGenerateTechnicalSummary: generateTechnicalSummary,
+    onHandlePolygonConfirmed: handlePolygonConfirmed,
+    onGenerateMemorial: generateMemorial
+  });
+
+  const downloadMemorial = useCallback(async () => {
+    const currentFile = currentViewedFile || file;
+    if (!memorial || !currentFile) return;
+    await exportGeneratedDocumentPdf({
+      content: memorial,
+      currentFile,
+      generatedDocumentKind
+    });
+  }, [currentViewedFile, file, generatedDocumentKind, memorial]);
+
+  useEffect(() => {
+    return () => {
+      setViewerActions(null);
+    };
+  }, [setViewerActions]);
 
   // Configurar ações do sidebar
   useEffect(() => {
-    if (file) {
+    if (!documentOnly && file) {
       setViewerActions({
         onDownload: downloadFile,
-        onGenerateMemorial: generateMemorial,
+        onGenerateMemorial: () => openDocumentPage({
+          kind: 'memorial',
+          sourceFile: currentViewedFile || file,
+          sourceDxfData: dxfData,
+          createdAt: new Date().toISOString()
+        }),
         onDownloadMemorial: downloadMemorial,
         onBack: () => window.history.back(),
         isGeneratingMemorial,
@@ -440,412 +512,304 @@ const Viewer: React.FC = () => {
         currentFileId: file.id
       });
     }
+  }, [documentOnly, file, currentViewedFile, isGeneratingMemorial, memorial, dxfData, downloadFile, downloadMemorial, openDocumentPage, setViewerActions]); // Dependências específicas
 
-    return () => {
-      setViewerActions(null);
-    };
-  }, [file, isGeneratingMemorial, memorial, dxfData]); // Dependências específicas
-
-  // Timer para geração do memorial com suporte a particionamento
-  useEffect(() => {
-    if (isGeneratingMemorial && memorialStartTime) {
-      const interval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - memorialStartTime) / 1000);
-        setMemorialTimeElapsed(elapsed);
-
-        // Progresso calculado dinamicamente com base nos lotes
-        let progress = 0;
-        let currentStep = '';
-        progress = Math.min(99, elapsed * 2);
-        currentStep = 'Processando memoriais em lote...';
-
-        // Removido progresso mockado pois agora será calculado de forma real
-
-        setGenerationProgress(Math.round(progress));
-        setMemorialCurrentStep(currentStep);
-
-      }, 1000);
-
-      setTimerInterval(interval);
-
-      return () => {
-        clearInterval(interval);
-      };
-    } else if (timerInterval) {
-      clearInterval(timerInterval);
-      setTimerInterval(null);
-    }
-  }, [isGeneratingMemorial, memorialStartTime]);
-
-  const downloadFile = async () => {
-    const currentFile = files[currentFileIndex] || file;
-    const currentFileId = currentFile?.id;
-
-    if (!currentFileId || !currentFile) return;
-    try {
-      const response = await api.get(`/dxf/${currentFileId}/download`, {
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', currentFile.originalName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Erro ao baixar arquivo:', err);
-    }
+  const registerCorrectiveDraftOperation = (operation: CorrectiveDraftOperation) => {
+    setDraftOperations((current) => {
+      if (current.some((item) => item.id === operation.id)) {
+        return current;
+      }
+      return [...current, operation];
+    });
   };
 
-  const handleDXFDataLoaded = (data: DXFData) => {
-    setDxfData(data);
+  const removeCorrectiveDraftOperation = (operationId: string) => {
+    setDraftOperations((current) => current.filter((operation) => operation.id !== operationId));
   };
 
-  const handlePolygonConfirmed = async (selections: ConfirmedLotSelection[], sourceFile?: FileMetadata | null) => {
-    const currentFile = sourceFile || files[currentFileIndex] || file;
-    try {
-      if (!currentFile) {
-        setMemorialError('Arquivo de origem não disponível para gerar o memorial interativo.');
-        return;
-      }
-
-      const fileIndex = files.findIndex(fileItem => fileItem.id === currentFile.id);
-      if (fileIndex >= 0 && fileIndex !== currentFileIndex) {
-        setCurrentFileIndex(fileIndex);
-      }
-
-      setIsGeneratingMemorial(true);
-      setMemorialStartTime(Date.now());
-      setMemorialError('');
-      setMemorial('');
-      setMemorialCurrentStep('Iniciando geração em lote...');
-      setGenerationProgress(0);
-
-      let standardId = null;
-      const savedNorms = localStorage.getItem('selectedMemorialNorms');
-      if (savedNorms) {
-        try {
-          const parsedNorms = JSON.parse(savedNorms);
-          if (parsedNorms && parsedNorms.length > 0) {
-            standardId = parsedNorms[0].id;
-          }
-        } catch (error) {}
-      }
-
-      if (!standardId) {
-        setMemorialError('❌ ERRO: Nenhuma norma selecionada! Vá em "Operação > Normas do Memorial" e selecione uma norma antes de gerar o memorial interativo.');
-        setIsGeneratingMemorial(false);
-        setMemorialStartTime(null);
-        return;
-      }
-
-      const propertyId = getSelectedPropertyId();
-      const propertyData = getSelectedPropertyData();
-      const aiConfig = aiService.getAIConfig();
-      const lotMemorials: InteractiveLotMemorial[] = [];
-      let finalConclusion = '';
-      let finalHeader = '';
-
-      for (let i = 0; i < selections.length; i++) {
-        const selection = selections[i];
-        const lotNumber = selection.lotNumber ?? (i + 1);
-        setMemorialCurrentStep(`Gerando memorial do Lote ${lotNumber} de ${selections.length}...`);
-        setGenerationProgress(Math.round(((i + 1) / selections.length) * 100));
-
-        const interactiveLayer = `Seleção Interativa Lote ${lotNumber}`;
-
-        // Construir uma entidade POLYLINE a partir dos vértices do polígono
-        const polylineEntity = {
-          type: 'POLYLINE',
-          layer: interactiveLayer,
-          vertices: selection.polygon
-        };
-
-        const request = {
-          entities: [polylineEntity],
-          fileName: currentFile.originalName,
-          projectName: resolveMemorialProjectName(currentFile, propertyData),
-          projectDescription: `Lote ${lotNumber} - Memorial gerado a partir de seleção em lote`,
-          standardId,
-          propertyId,
-          lotCount: 1,
-          billableLotCount: selections.length,
-          chargeCredits: i === 0,
-          selectedLayers: [interactiveLayer],
-          propertyData: propertyData ? {
-            registrationNumber: propertyData.registrationNumber,
-            name: propertyData.name,
-            street: propertyData.street,
-            number: propertyData.number || undefined,
-            neighborhood: propertyData.neighborhood,
-            city: propertyData.city,
-            state: propertyData.state,
-            ownerName: propertyData.ownerName,
-            ownerDocument: propertyData.ownerDocument,
-            propertyType: propertyData.propertyType
-          } : null,
-          selectedConfrontationTexts: selection.selectedConfrontationTexts.map((selectedText) => ({
-            text: selectedText.text,
-            x: selectedText.x,
-            y: selectedText.y,
-            layer: selectedText.layer,
-            entityType: selectedText.entityType,
-            inferredDirection: selectedText.inferredDirection,
-            selectionMode: selectedText.selectionMode,
-            segmentStartX: selectedText.segmentStartPoint?.x,
-            segmentStartY: selectedText.segmentStartPoint?.y,
-            segmentEndX: selectedText.segmentEndPoint?.x,
-            segmentEndY: selectedText.segmentEndPoint?.y
-          })),
-          ...aiService.getAIParameters()
-        };
-
-        // #region debug-point C:request-payload
-        sendSelectionDebug(
-          'C',
-          'Viewer:handlePolygonConfirmed:request',
-          '[DEBUG] Payload enviado para gerar lote interativo',
-          {
-            loopIndex: i + 1,
-            requestedLotNumber: lotNumber,
-            interactiveLayer,
-            selectedLayers: request.selectedLayers,
-            projectDescription: request.projectDescription,
-            vertexCount: selection.polygon?.length || 0,
-            firstVertex: selection.polygon?.[0] || null,
-            textsInside: selection.textsInside,
-            selectedConfrontationTexts: request.selectedConfrontationTexts
-          }
-        );
-        // #endregion
-
-        const response = await api.post(aiConfig.endpoint, request);
-        
-        const responseData = response.data;
-        const realMemorial = typeof responseData === 'string' 
-          ? responseData 
-          : (responseData?.memorialText || responseData?.memorial || JSON.stringify(responseData, null, 2));
-
-        const normalizedLotMemorial = normalizeMemorialText(realMemorial);
-        const lotMemorialParts = splitLotMemorialParts(normalizedLotMemorial);
-        if (!isValidLotMemorial(lotMemorialParts.body, lotNumber)) {
-          sendSelectionDebug(
-            'D',
-            'Viewer:handlePolygonConfirmed:skip-invalid-lot',
-            '[DEBUG] Lote descartado no frontend apos validacao final',
-            {
-              lotNumber,
-              normalizedLength: lotMemorialParts.body.length,
-              normalizedPreview: lotMemorialParts.body.slice(0, 180)
-            }
-          );
-          continue;
-        }
-
-        if (!finalHeader && lotMemorialParts.header) {
-          finalHeader = lotMemorialParts.header;
-        }
-
-        if (!finalConclusion && lotMemorialParts.conclusion) {
-          finalConclusion = lotMemorialParts.conclusion;
-        }
-
-        lotMemorials.push({
-          lotNumber,
-          content: lotMemorialParts.body
-        });
-      }
-
-      setMemorial(buildInteractiveMemorial(lotMemorials, currentFile, propertyData, finalConclusion, finalHeader));
-      setGenerationProgress(100);
-      setMemorialCurrentStep('Geração em lote concluída!');
-    } catch (err: unknown) {
-      console.error('Erro ao gerar memorial interativo:', err);
-      setMemorialError(getErrorMessage(err, 'Erro ao gerar memorial descritivo a partir da seleção'));
-      setMemorialCurrentStep('Erro na geração');
-    } finally {
-      setIsGeneratingMemorial(false);
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        setTimerInterval(null);
-      }
-      setMemorialStartTime(null);
-    }
-  };
-
-  const generateMemorial = async () => {
-    const currentFile = files[currentFileIndex] || file;
-    const currentFileId = currentFile?.id;
-
-    if (!currentFileId || !currentFile || !dxfData) {
-      setMemorialError('Dados do arquivo não disponíveis');
+  const clearCorrectiveDraftOperations = (fileIdValue?: string) => {
+    if (!fileIdValue) {
+      setDraftOperations([]);
       return;
     }
 
-    try {
-      setIsGeneratingMemorial(true);
-      setMemorialError('');
-      setMemorial('');
-
-      // Iniciar timer
-      const startTime = Date.now();
-      setMemorialStartTime(startTime);
-      setMemorialTimeElapsed(0);
-      setGenerationProgress(0);
-      setMemorialCurrentStep('Iniciando geração...');
-
-      // Carregar norma do localStorage
-      let standardId = null;
-      const savedNorms = localStorage.getItem('selectedMemorialNorms');
-      if (savedNorms) {
-        try {
-          const parsedNorms = JSON.parse(savedNorms);
-          if (parsedNorms && parsedNorms.length > 0) {
-            standardId = parsedNorms[0].id;
-          }
-        } catch (error) {
-          console.error('❌ Erro ao parsear normas do localStorage no Viewer:', error);
-        }
-      }
-
-      if (!standardId) {
-        setMemorialError('❌ ERRO: Nenhuma norma selecionada! Vá em "Gerenciar Normas" e selecione uma norma antes de gerar o memorial.');
-        return;
-      }
-
-      // Carregar dados da propriedade do localStorage
-      const propertyData = getSelectedPropertyData();
-
-      const memorialRequest = {
-        entities: (dxfData.entities || []).map(entity => {
-          return {
-            type: entity.type,
-            layer: entity.layer,
-            // Extrair coordenadas de properties para campos diretos
-            x: entity.properties?.x || entity.properties?.x1 || entity.properties?.centerX,
-            y: entity.properties?.y || entity.properties?.y1 || entity.properties?.centerY,
-            z: entity.properties?.z || entity.properties?.z1,
-            x2: entity.properties?.x2,
-            y2: entity.properties?.y2,
-            z2: entity.properties?.z2,
-            radius: entity.properties?.radius,
-            startAngle: entity.properties?.startAngle,
-            endAngle: entity.properties?.endAngle,
-            text: entity.properties?.text,
-            textStyle: entity.properties?.textStyle,
-            textHeight: entity.properties?.textHeight,
-            textRotation: entity.properties?.rotation,
-            // ⚡ CRÍTICO: Extrair vertices para campo direto (requerido pelo backend DTO)
-            vertices: entity.properties?.vertices,
-            // Manter properties para compatibilidade
-            properties: entity.properties
-          };
-        }),
-        fileName: currentFile.originalName,
-        projectName: resolveMemorialProjectName(currentFile, propertyData),
-        projectDescription: propertyData ?
-          `Memorial descritivo da propriedade ${propertyData.registrationNumber}` :
-          `Análise técnica do arquivo ${currentFile.originalName}`,
-        standardId,
-        propertyId: getSelectedPropertyId(),
-        propertyData: propertyData ? {
-          registrationNumber: propertyData.registrationNumber,
-          name: propertyData.name,
-          street: propertyData.street,
-          number: propertyData.number || undefined,
-          neighborhood: propertyData.neighborhood,
-          city: propertyData.city,
-          state: propertyData.state,
-          ownerName: propertyData.ownerName,
-          ownerDocument: propertyData.ownerDocument,
-          propertyType: propertyData.propertyType
-        } : null
-      };
-
-      if (!memorialRequest.propertyId) {
-        console.error('❌ CRÍTICO: PropertyId está null/undefined no momento do envio!');
-        const fallbackPropertyId = getSelectedPropertyId();
-        if (fallbackPropertyId) {
-          memorialRequest.propertyId = fallbackPropertyId;
-        } else {
-          console.error('❌ Não foi possível obter propertyId válido');
-        }
-      }
-
-      // Usar aiService para obter endpoint correto
-      const aiConfig = aiService.getAIConfig();
-      const endpoint = aiConfig.endpoint;
-
-      const memorialRequestWithAI = {
-        ...memorialRequest,
-        ...aiService.getAIParameters()
-      };
-
-      const response = await api.post(endpoint, memorialRequestWithAI);
-      setMemorial(
-        normalizeMemorialText(
-          response.data.memorialText || 'Memorial gerado com sucesso, mas sem detalhes técnicos.'
-        )
-      );
-
-      // Finalizar timer
-      setGenerationProgress(100);
-      setMemorialCurrentStep('Memorial gerado com sucesso!');
-
-      } catch (err: unknown) {
-      console.error('Erro ao gerar memorial:', err);
-      setMemorialError(getErrorMessage(err, 'Erro ao gerar memorial descritivo'));
-
-      // Parar timer em caso de erro
-      setMemorialCurrentStep('Erro na geração');
-    } finally {
-      setIsGeneratingMemorial(false);
-
-      // Limpar timer
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        setTimerInterval(null);
-      }
-      setMemorialStartTime(null);
-    }
+    setDraftOperations((current) => current.filter((operation) => operation.fileId !== fileIdValue));
   };
 
-  const downloadMemorial = () => {
-    const currentFile = files[currentFileIndex] || file;
-    if (!memorial || !currentFile) return;
-
-    const doc = new jsPDF();
-    const hasDocumentHeader = /^\s*Memorial Descritivo\b/i.test(memorial);
-    let yPosition = 20;
-
-    if (!hasDocumentHeader) {
-      doc.setFontSize(16);
-      doc.text('Memorial Descritivo', 20, 20);
-      doc.setFontSize(12);
-      doc.text(`Projeto: ${currentFile.originalName.replace(/\.[^/.]+$/, '')}`, 20, 40);
-      doc.text(`Arquivo: ${currentFile.originalName}`, 20, 50);
-      doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 20, 60);
-      doc.line(20, 70, 190, 70);
-      yPosition = 80;
+  const handlePrepareCorrectiveDraft = () => {
+    if (!selectedCorrectiveIssue) {
+      return;
     }
 
-    doc.setFontSize(10);
-    const lines = memorial.split('\n');
-
-    lines.forEach((line) => {
-      if (yPosition > 280) {
-        doc.addPage();
-        yPosition = 20;
-      }
-      const splitLines = doc.splitTextToSize(line, 170);
-      doc.text(splitLines, 20, yPosition);
-      yPosition += splitLines.length * 5;
+    registerCorrectiveDraftOperation({
+      id: `draft-${selectedCorrectiveIssue.id}`,
+      label: `Preparar correcao para o Lote ${selectedCorrectiveIssue.lotNumber} (${formatIssueCodeLabel(selectedCorrectiveIssue.code)})`,
+      status: 'draft',
+      fileId: currentViewedFile?.id
     });
-
-    doc.save(`memorial_${currentFile.originalName.replace(/\.[^/.]+$/, '')}.pdf`);
   };
+
+  const handleRevalidateCorrectiveSummary = () => {
+    openTechnicalSummaryDocumentPage(
+      currentViewedFile,
+      currentCorrectiveSnapshot?.dxfData || dxfData,
+      currentCorrectiveSnapshot?.referencePoints || []
+    );
+  };
+
+  const handleSelectViewMode = useCallback(() => {
+    setViewerMode('view');
+  }, []);
+
+  const handleSelectCorrectiveMode = useCallback(() => {
+    if (hasCorrectiveMode) {
+      setViewerMode('correct');
+    }
+  }, [hasCorrectiveMode]);
+
+  const handleScanErrors = useCallback(() => {
+    if (!scanSourceDxfData) {
+      return;
+    }
+
+    setManualScanRevision((current) => current + 1);
+    setCorrectiveIssueSource('scan');
+    setViewerMode('correct');
+  }, [scanSourceDxfData]);
+
+  const handleReopenLatestSnapshot = useCallback(() => {
+    void loadLatestCorrectiveSnapshot(currentViewedFile);
+  }, [currentViewedFile, loadLatestCorrectiveSnapshot]);
+
+  const handleClearCorrectiveFocus = useCallback(() => {
+    setDraftOperations([]);
+    setSelectedIssueId(correctiveIssues[0]?.id || null);
+  }, [correctiveIssues]);
+
+  const handleApplyCorrectiveSuggestion = useCallback(() => {
+    if (correctiveLotInspection) {
+      setActiveCorrectiveTool(correctiveLotInspection.suggestedTool);
+    }
+    dispatchCorrectiveSuggestionCommand(currentViewedFile?.id);
+  }, [correctiveLotInspection, currentViewedFile?.id, dispatchCorrectiveSuggestionCommand]);
+
+  const handleUndoCorrective = useCallback(() => {
+    dispatchCorrectiveHistoryCommand(currentViewedFile?.id, 'undo');
+  }, [currentViewedFile?.id, dispatchCorrectiveHistoryCommand]);
+
+  const handleRedoCorrective = useCallback(() => {
+    dispatchCorrectiveHistoryCommand(currentViewedFile?.id, 'redo');
+  }, [currentViewedFile?.id, dispatchCorrectiveHistoryCommand]);
+
+  const handleClearCurrentDraft = useCallback(() => {
+    clearCorrectiveDraftOperations(currentViewedFile?.id);
+  }, [currentViewedFile?.id]);
+
+  const handleSaveCurrentCorrectiveSnapshot = useCallback(() => {
+    void saveCorrectiveSnapshot(currentViewedFile, currentCorrectiveSnapshot);
+  }, [currentViewedFile, currentCorrectiveSnapshot, saveCorrectiveSnapshot]);
+
+  const renderMultiFileViewer = useCallback((fileItem: typeof files[number], index: number) => (
+                  <GeoLimitesViewerDXF
+      key={fileItem.id}
+      fileId={fileItem.id}
+      className="drawing-viewer"
+      onDXFDataLoaded={index === currentFileIndex ? handleDXFDataLoaded : undefined}
+      interactive={true}
+      onPolygonConfirmed={({ selections, referencePoints }) => openMemorialDocumentPage(
+        fileItem,
+        selections,
+        referencePoints || []
+      )}
+      onGenerateTechnicalSummary={({ viewerData, referencePoints }) => openTechnicalSummaryDocumentPage(
+        fileItem,
+        viewerData,
+        referencePoints || []
+      )}
+      isGeneratingTechnicalSummary={isGeneratingMemorial}
+      propertyLandmarks={propertyDetails?.landmarks}
+      viewerMode={viewerMode}
+      correctiveFocusLotNumber={index === currentFileIndex ? correctiveFocusLotNumber : null}
+      recentlyCorrectedLotNumber={index === currentFileIndex ? latestAppliedSuggestionLotNumber : null}
+      activeCorrectiveTool={activeCorrectiveTool}
+      onRegisterCorrectiveDraftOperation={registerCorrectiveDraftOperation}
+      correctiveSnapshotFileId={fileItem.id}
+      onCorrectiveSnapshotChanged={registerCorrectiveSnapshot}
+      correctiveHistoryCommand={correctiveHistoryCommandsByFileId[fileItem.id]}
+      correctiveSuggestionCommand={correctiveSuggestionCommandsByFileId[fileItem.id]}
+      onCorrectiveHistoryStatusChange={registerCorrectiveHistoryStatus}
+      correctiveIssues={index === currentFileIndex ? correctiveIssues : []}
+      onCorrectiveLotInspectionChange={registerCorrectiveLotInspection}
+      restoredCorrectiveSnapshot={restoredCorrectiveSnapshotsByFileId[fileItem.id] || null}
+    />
+  ), [
+    activeCorrectiveTool,
+    correctiveFocusLotNumber,
+    correctiveHistoryCommandsByFileId,
+    correctiveIssues,
+    correctiveSuggestionCommandsByFileId,
+    currentFileIndex,
+    isGeneratingMemorial,
+    openMemorialDocumentPage,
+    openTechnicalSummaryDocumentPage,
+    propertyDetails?.landmarks,
+    registerCorrectiveDraftOperation,
+    registerCorrectiveHistoryStatus,
+    registerCorrectiveLotInspection,
+    registerCorrectiveSnapshot,
+    restoredCorrectiveSnapshotsByFileId,
+    viewerMode
+  ]);
+
+  const getMultiFileStatusBadge = useCallback((fileItem: typeof files[number]) => {
+    const restoredSnapshot = restoredCorrectiveSnapshotsByFileId[fileItem.id];
+    const processingContextStatus = restoredSnapshot?.processingContextStatus;
+    if (!processingContextStatus) {
+      return null;
+    }
+
+    const assessment = resolveTechnicalSummaryProcessingContext('', processingContextStatus);
+    const labels = getProcessingContextStatusLabels(assessment.status);
+
+    return {
+      label: labels.listBadge,
+      title: assessment.detail,
+      status: assessment.status
+    };
+  }, [restoredCorrectiveSnapshotsByFileId]);
+
+  const singleViewerNode = useMemo(() => (
+    <GeoLimitesViewerDXF
+      key={files[currentFileIndex]?.id || fileId || 'no-file'}
+      fileId={files[currentFileIndex]?.id || fileId || undefined}
+      className="main-viewer"
+      onDXFDataLoaded={handleDXFDataLoaded}
+      interactive={true}
+      onPolygonConfirmed={({ selections, referencePoints }) => openMemorialDocumentPage(
+        files[currentFileIndex] || file,
+        selections,
+        referencePoints || []
+      )}
+      onGenerateTechnicalSummary={({ viewerData, referencePoints }) => openTechnicalSummaryDocumentPage(
+        files[currentFileIndex] || file,
+        viewerData,
+        referencePoints || []
+      )}
+      isGeneratingTechnicalSummary={isGeneratingMemorial}
+      propertyLandmarks={propertyDetails?.landmarks}
+      viewerMode={viewerMode}
+      correctiveFocusLotNumber={correctiveFocusLotNumber}
+      recentlyCorrectedLotNumber={latestAppliedSuggestionLotNumber}
+      activeCorrectiveTool={activeCorrectiveTool}
+      onRegisterCorrectiveDraftOperation={registerCorrectiveDraftOperation}
+      correctiveSnapshotFileId={(files[currentFileIndex] || file)?.id}
+      onCorrectiveSnapshotChanged={registerCorrectiveSnapshot}
+      correctiveHistoryCommand={correctiveHistoryCommandsByFileId[(files[currentFileIndex] || file)?.id || '']}
+      correctiveSuggestionCommand={currentCorrectiveSuggestionCommand}
+      onCorrectiveHistoryStatusChange={registerCorrectiveHistoryStatus}
+      correctiveIssues={correctiveIssues}
+      onCorrectiveLotInspectionChange={registerCorrectiveLotInspection}
+      restoredCorrectiveSnapshot={restoredCorrectiveSnapshotsByFileId[(files[currentFileIndex] || file)?.id || ''] || null}
+    />
+  ), [
+    activeCorrectiveTool,
+    correctiveFocusLotNumber,
+    correctiveHistoryCommandsByFileId,
+    correctiveIssues,
+    currentCorrectiveSuggestionCommand,
+    currentFileIndex,
+    file,
+    fileId,
+    files,
+    isGeneratingMemorial,
+    latestAppliedSuggestionLotNumber,
+    openMemorialDocumentPage,
+    openTechnicalSummaryDocumentPage,
+    propertyDetails?.landmarks,
+    registerCorrectiveDraftOperation,
+    registerCorrectiveHistoryStatus,
+    registerCorrectiveLotInspection,
+    registerCorrectiveSnapshot,
+    restoredCorrectiveSnapshotsByFileId,
+    viewerMode
+  ]);
+
+  const correctivePanelNode = useMemo(() => {
+    if (viewerMode !== 'correct') {
+      return undefined;
+    }
+
+    return (
+      <CorrectivePanel
+        hasCorrectiveMode={hasCorrectiveMode}
+        correctiveIssuesSourceLabel={correctiveIssuesSourceLabel}
+        correctiveIssues={correctiveIssues}
+        selectedIssueId={selectedIssueId}
+        selectedCorrectiveIssue={selectedCorrectiveIssue}
+        activeCorrectiveTool={activeCorrectiveTool}
+        currentCorrectiveSnapshot={currentCorrectiveSnapshot}
+        currentDraftOperations={currentDraftOperations}
+        latestAppliedSuggestion={latestAppliedSuggestion}
+        isFocusedSuggestionRecentlyApplied={isFocusedSuggestionRecentlyApplied}
+        currentDxfDataAvailable={Boolean(dxfData)}
+        savedCorrectiveSnapshot={savedCorrectiveSnapshot}
+        restoredCorrectiveSnapshot={restoredCorrectiveSnapshot}
+        correctiveHistoryStatus={correctiveHistoryStatus}
+        correctiveLotInspection={correctiveLotInspection}
+        correctiveSnapshotSaveMessage={correctiveSnapshotSaveMessage}
+        correctiveSnapshotLoadMessage={correctiveSnapshotLoadMessage}
+        isGeneratingMemorial={isGeneratingMemorial}
+        isLoadingCorrectiveSnapshot={isLoadingCorrectiveSnapshot}
+        isSavingCorrectiveSnapshot={isSavingCorrectiveSnapshot}
+        onSelectIssue={setSelectedIssueId}
+        onClearFocus={handleClearCorrectiveFocus}
+        onSetActiveCorrectiveTool={setActiveCorrectiveTool}
+        onApplySuggestion={handleApplyCorrectiveSuggestion}
+        onUndo={handleUndoCorrective}
+        onRedo={handleRedoCorrective}
+        onPrepareDraft={handlePrepareCorrectiveDraft}
+        onRemoveDraftOperation={removeCorrectiveDraftOperation}
+        onClearDraft={handleClearCurrentDraft}
+        onReopenSnapshot={handleReopenLatestSnapshot}
+        onSaveSnapshot={handleSaveCurrentCorrectiveSnapshot}
+        onRevalidateSummary={handleRevalidateCorrectiveSummary}
+      />
+    );
+  }, [
+    activeCorrectiveTool,
+    correctiveHistoryStatus,
+    correctiveIssues,
+    isFocusedSuggestionRecentlyApplied,
+    latestAppliedSuggestionLotNumber,
+    correctiveLotInspection,
+    correctiveSnapshotLoadMessage,
+    correctiveSnapshotSaveMessage,
+    currentCorrectiveSnapshot,
+    currentDraftOperations,
+    dxfData,
+    handleApplyCorrectiveSuggestion,
+    handleClearCorrectiveFocus,
+    handleClearCurrentDraft,
+    handlePrepareCorrectiveDraft,
+    handleRedoCorrective,
+    handleReopenLatestSnapshot,
+    handleRevalidateCorrectiveSummary,
+    handleSaveCurrentCorrectiveSnapshot,
+    handleScanErrors,
+    handleUndoCorrective,
+    hasCorrectiveMode,
+    isGeneratingMemorial,
+    isLoadingCorrectiveSnapshot,
+    isSavingCorrectiveSnapshot,
+    latestAppliedSuggestion,
+    removeCorrectiveDraftOperation,
+    restoredCorrectiveSnapshot,
+    savedCorrectiveSnapshot,
+    correctiveIssuesSourceLabel,
+    selectedCorrectiveIssue,
+    selectedIssueId,
+    viewerMode
+  ]);
 
   if (isLoading) {
     return (
@@ -855,7 +819,7 @@ const Viewer: React.FC = () => {
     );
   }
 
-  if (error || (!fileId && !fileIds)) {
+  if (error || (!file && files.length === 0)) {
     return (
       <div className="viewer-page">
         <div className="viewer-error">
@@ -870,211 +834,53 @@ const Viewer: React.FC = () => {
     <ErrorBoundary fallback={
       <div className="viewer-page">
         <div className="viewer-error">
-          <h2>🚨 Erro no Visualizador</h2>
-          <p>Ocorreu um erro ao carregar o visualizador de arquivos.</p>
+          <h2>🚨 Erro no Memorial</h2>
+          <p>Ocorreu um erro ao carregar o ambiente do memorial.</p>
           <button onClick={() => window.location.reload()}>🔄 Recarregar</button>
         </div>
       </div>
     }>
       <div className="viewer-page">
-
-
-        {/* Timer Visual do Memorial - MODAL EM TELA CHEIA */}
         {isGeneratingMemorial && (
-          <div className="memorial-timer-overlay" style={{
-            position: 'fixed',
-            top: '0',
-            left: '0',
-            right: '0',
-            bottom: '0',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            backdropFilter: 'blur(5px)'
-          }}>
-            <div className="memorial-timer-modal" style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              padding: '40px',
-              borderRadius: '20px',
-              textAlign: 'center',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-              maxWidth: '500px',
-              width: '90%',
-              animation: 'modalSlideIn 0.3s ease-out'
-            }}>
-              <div style={{ fontSize: '1.6rem', marginBottom: '20px', fontWeight: '700', letterSpacing: '0.12em' }}>GEO</div>
-              <h2 style={{ fontSize: '1.8rem', marginBottom: '10px', fontWeight: '700' }}>
-                Gerando Memorial Descritivo
-              </h2>
-              <p style={{ fontSize: '1.1rem', opacity: '0.9', marginBottom: '30px' }}>
-                Processando arquivo DXF e organizando dados tecnicos...
-              </p>
-
-              {/* Timer Grande e Visível */}
-              <div className="timer-display-large" style={{
-                background: 'rgba(255,255,255,0.2)',
-                padding: '20px',
-                borderRadius: '15px',
-                marginBottom: '25px',
-                border: '2px solid rgba(255,255,255,0.3)'
-              }}>
-                <div style={{ fontSize: '0.9rem', opacity: '0.8', marginBottom: '10px' }}>
-                  ⏱️ TEMPO DECORRIDO
-                </div>
-                <div style={{
-                  fontSize: '3rem',
-                  fontWeight: 'bold',
-                  fontFamily: 'monospace',
-                  color: '#FFD700',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                }}>
-                  {Math.floor(memorialTimeElapsed / 60)}:{(memorialTimeElapsed % 60).toString().padStart(2, '0')}
-                </div>
-                <div style={{ fontSize: '0.8rem', opacity: '0.7' }}>
-                  minutos:segundos
-                </div>
-              </div>
-
-              {/* Barra de Progresso */}
-              <div className="progress-container" style={{ marginBottom: '25px' }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '10px'
-                }}>
-                  <span style={{ fontSize: '1rem', fontWeight: '600' }}>Progresso</span>
-                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{generationProgress}%</span>
-                </div>
-                <div style={{
-                  background: 'rgba(255,255,255,0.2)',
-                  height: '12px',
-                  borderRadius: '6px',
-                  overflow: 'hidden',
-                  position: 'relative'
-                }}>
-                  <div style={{
-                    background: 'linear-gradient(90deg, #FFD700, #FFA500)',
-                    height: '100%',
-                    width: `${generationProgress}%`,
-                    borderRadius: '6px',
-                    transition: 'width 0.5s ease'
-                  }}></div>
-                </div>
-              </div>
-
-              {/* Status Atual */}
-              <div className="status-display" style={{
-                background: 'rgba(255,255,255,0.1)',
-                padding: '15px',
-                borderRadius: '10px',
-                marginBottom: '25px'
-              }}>
-                <div style={{ fontSize: '0.9rem', opacity: '0.8', marginBottom: '5px' }}>
-                  🔄 STATUS ATUAL
-                </div>
-                <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '10px' }}>
-                  {memorialCurrentStep || 'Processando...'}
-                </div>
-                
-                {/* Indicador Visual de Chunks */}
-                {memorialCurrentStep.includes('etapa') && (
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '10px' }}>
-                    <div style={{
-                      width: '30px',
-                      height: '6px',
-                      borderRadius: '3px',
-                      backgroundColor: memorialCurrentStep.includes('1/3') ? '#FFD700' : 
-                                     generationProgress > 40 ? '#4CAF50' : 'rgba(255,255,255,0.3)'
-                    }}></div>
-                    <div style={{
-                      width: '30px',
-                      height: '6px',
-                      borderRadius: '3px',
-                      backgroundColor: memorialCurrentStep.includes('2/3') ? '#FFD700' : 
-                                     generationProgress > 70 ? '#4CAF50' : 'rgba(255,255,255,0.3)'
-                    }}></div>
-                    <div style={{
-                      width: '30px',
-                      height: '6px',
-                      borderRadius: '3px',
-                      backgroundColor: memorialCurrentStep.includes('3/3') ? '#FFD700' : 
-                                     generationProgress > 95 ? '#4CAF50' : 'rgba(255,255,255,0.3)'
-                    }}></div>
-                  </div>
-                )}
-              </div>
-
-              {/* Informações do Processo */}
-              <div className="process-info" style={{
-                background: 'rgba(255,255,255,0.1)',
-                padding: '15px',
-                borderRadius: '10px',
-                fontSize: '0.9rem',
-                textAlign: 'left'
-              }}>
-                <div style={{ fontWeight: '600', marginBottom: '8px' }}>Etapas do processamento:</div>
-                <div style={{ opacity: '0.9', lineHeight: '1.4' }}>
-                  • <strong>Processamento em etapas:</strong> 25 lotes distribuidos em 3 fases<br />
-                  • <strong>Etapa 1:</strong> lotes 1-10 (~9 segundos)<br />
-                  • <strong>Etapa 2:</strong> lotes 11-20 (~10 segundos)<br />
-                  • <strong>Etapa 3:</strong> lotes 21-25 (~5 segundos)<br />
-                  • <strong>Analise documental:</strong> fluxo otimizado para consolidacao do memorial
-                </div>
-              </div>
-            </div>
-          </div>
+          <DocumentProcessingOverlay
+            generatedDocumentKind={generatedDocumentKind}
+            currentFileName={processingFileName}
+            memorialCurrentStep={memorialCurrentStep}
+            memorialTimeElapsed={memorialTimeElapsed}
+            generationProgress={generationProgress}
+          />
         )}
 
-        <div className="viewer-header">
-          <div className="file-info">
-            <h1 className="file-name">{file?.originalName}</h1>
-            {files.length > 1 && (
-              <div className="file-navigation">
-                <span>Visualizando {files.length} arquivos</span>
-              </div>
-            )}
-          </div>
-        </div>
+        {!documentOnly && (
+          <ViewerHeader
+            viewerMode={viewerMode}
+            activeFileName={activeFileName}
+            hasCorrectiveMode={hasCorrectiveMode}
+            canScanErrors={Boolean(scanSourceDxfData)}
+            correctiveIssuesSourceLabel={correctiveIssuesSourceLabel}
+            correctiveIssueCount={correctiveIssues.length}
+            isLoadingCorrectiveSnapshot={isLoadingCorrectiveSnapshot}
+            correctiveSnapshotLoadMessage={correctiveSnapshotLoadMessage}
+            restoredCorrectiveSnapshot={restoredCorrectiveSnapshot}
+            onSelectViewMode={handleSelectViewMode}
+            onSelectCorrectiveMode={handleSelectCorrectiveMode}
+            onScanErrors={handleScanErrors}
+            onReopenLatestSnapshot={handleReopenLatestSnapshot}
+          />
+        )}
 
-        {/* Layout para múltiplos arquivos - exibir todos os arquivos selecionados */}
-        {files.length > 1 ? (
-          <div className="multiple-drawings-layout">
-
-            {files.map((fileItem, index) => (
-              <div key={fileItem.id} className="drawing-container">
-                <div className="drawing-header">
-                  Arquivo {index + 1}: {fileItem.originalName} (ID: {fileItem.id.substring(0, 8)}...)
-                </div>
-                <div className="drawing-content">
-                  <ViewerDXF
-                    key={fileItem.id}
-                    fileId={fileItem.id}
-                    className="drawing-viewer"
-                    onDXFDataLoaded={index === currentFileIndex ? handleDXFDataLoaded : undefined}
-                    interactive={true}
-                    onPolygonConfirmed={(polygons) => handlePolygonConfirmed(polygons, fileItem)}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+        {!documentOnly && (files.length > 1 ? (
+          <ViewerMultiFileLayout
+            files={files}
+            renderViewer={renderMultiFileViewer}
+            getFileStatusBadge={getMultiFileStatusBadge}
+          />
         ) : (
-          /* Layout para arquivo único */
-          <div className="viewer-content">
-            <ViewerDXF
-              key={files[currentFileIndex]?.id || fileId || 'no-file'} // Force re-render when fileId changes
-              fileId={files[currentFileIndex]?.id || fileId || undefined}
-              className="main-viewer"
-              onDXFDataLoaded={handleDXFDataLoaded}
-              interactive={true}
-              onPolygonConfirmed={(polygons) => handlePolygonConfirmed(polygons, files[currentFileIndex] || file)}
-            />
-          </div>
-        )}
+          <ViewerSingleFileLayout
+            viewerNode={singleViewerNode}
+            correctivePanelNode={correctivePanelNode}
+          />
+        ))}
 
         {memorialError && (
           <div className="memorial-error">
@@ -1082,31 +888,18 @@ const Viewer: React.FC = () => {
           </div>
         )}
 
-        {memorial && (
-          <div className="memorial-section">
-            <div className="memorial-header">
-              <h2>Memorial Descritivo Gerado</h2>
-              <div className="memorial-actions">
-                <button
-                  onClick={downloadMemorial}
-                  className="btn-download-memorial"
-                  title="Exportar memorial como PDF"
-                >
-                  📄 Exportar PDF
-                </button>
-                <button
-                  onClick={() => navigator.clipboard.writeText(memorial)}
-                  className="btn-copy-memorial"
-                  title="Copiar memorial para área de transferência"
-                >
-                  📋 Copiar Texto
-                </button>
-              </div>
-            </div>
-            <div className="memorial-content">
-              <pre>{memorial}</pre>
-            </div>
-          </div>
+        {documentOnly && (
+          <GeneratedDocumentPanel
+            generatedDocumentKind={generatedDocumentKind}
+            requestedDocumentKind={requestedDocumentKind}
+            memorial={memorial}
+            technicalSummaryJson={technicalSummaryJson}
+            processingContextStatus={processingContextStatus}
+            isGenerating={isGeneratingMemorial}
+            memorialError={memorialError}
+            onDownloadMemorial={generatedDocumentKind !== 'resumo-tecnico' ? downloadMemorial : undefined}
+            onCopyMemorial={generatedDocumentKind !== 'resumo-tecnico' ? () => copyGeneratedDocumentText(memorial) : undefined}
+          />
         )}
       </div>
     </ErrorBoundary>
