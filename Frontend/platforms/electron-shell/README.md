@@ -62,12 +62,44 @@ npm --prefix platforms/electron-shell run start:local-build
 
 Quando o shell estiver empacotado, ele tenta carregar automaticamente `Frontend/dist/index.html` se `SIGEVE_FRONTEND_URL` nao for informado.
 
+## Executavel Windows
+
+O executavel do usuario final deve ser gerado a partir do frontend principal, porque ele primeiro precisa montar `Frontend/dist` e depois empacotar o shell.
+
+Na pasta `Frontend`, rode:
+
+```bash
+npm install
+npm --prefix platforms/electron-shell install
+npm run desktop:dist
+```
+
+Saidas esperadas:
+
+- arquivo zipado pronto para distribuicao em `platforms/electron-shell/release/`
+- pasta interna de stage com o app desempacotado em `platforms/electron-shell/release/.portable-stage/`
+
+O empacotamento validado usa `electron-packager` e cache local em `platforms/electron-shell/.cache/`, evitando depender do cache global do Windows.
+
+Se tambem quisermos gerar um instalador Windows e um executavel portatil pelo `electron-builder`, existe a trilha:
+
+```bash
+npm --prefix platforms/electron-shell run installer:win
+```
+
+Saidas esperadas em `platforms/electron-shell/release/`:
+
+- `GeoLimites-Desktop-Setup-<versao>-x64.exe`: instalador NSIS
+- `GeoLimites-Desktop-Portable-<versao>-x64.exe`: executavel portatil gerado pelo electron-builder
+
+Por padrao, o app empacotado aponta para `https://www.geolimites.com.br` como backend. Se precisar gerar um build apontando para outro ambiente, defina `SIGEVE_BACKEND_BASE_URL` antes do empacotamento ou da execucao.
+
 ## Variaveis Opcionais
 
 - `SIGEVE_FRONTEND_URL`
   Usa outra URL do frontend em vez de `http://localhost:3004`
 - `SIGEVE_BACKEND_BASE_URL`
-  Usa outra URL do backend em vez de `http://localhost:9010`
+  Usa outra URL do backend em vez de `https://www.geolimites.com.br`
 
 ## Arquivos Base
 

@@ -66,13 +66,20 @@ Recomendacao:
 
 ## Desktop
 
-O desktop esta funcional para uso local, mas o instalador ainda nao esta preparado.
+O desktop ja esta validado para distribuicao Windows.
 
-Hoje o shell possui:
+Artefatos validados:
 
-- `build`
-- `check`
-- `start`
-- `start:local-build`
+- `GeoLimites-Desktop-Setup-0.1.0-x64.exe`
+- `GeoLimites-Desktop-Portable-0.1.0-x64.exe`
+- `GeoLimites-Desktop-0.1.0-win-x64-portable.zip`
 
-Ainda falta adicionar a etapa de empacotamento do instalador.
+Comandos principais desta trilha:
+
+- `npm run build:desktop`
+- `npm run desktop:dist`
+- `npm --prefix platforms/electron-shell run installer:win`
+
+Referencia operacional:
+
+- `Frontend/docs/sigeve-electron-desktop/ENTREGA_WINDOWS_0.1.0.md`

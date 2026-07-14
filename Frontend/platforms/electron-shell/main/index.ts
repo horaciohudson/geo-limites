@@ -197,9 +197,16 @@ const resolvePreloadEntry = (preloadEntry: string) => {
   return path.resolve(__dirname, '..', preloadEntry.replace(/^\.\//, ''));
 };
 
-const resolvePackagedFrontendEntry = () => (
-  path.resolve(__dirname, '../../../../dist/index.html')
-);
+const resolvePackagedFrontendEntry = () => {
+  const packagedResourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  const candidates = [
+    path.resolve(packagedResourcesPath || path.resolve(__dirname, '../../..'), 'frontend-dist', 'index.html'),
+    path.resolve(__dirname, '../../frontend-dist/index.html'),
+    path.resolve(__dirname, '../../../../dist/index.html')
+  ];
+
+  return candidates.find((candidate) => fsSync.existsSync(candidate)) || candidates[0];
+};
 
 const resolveFrontendEntry = () => {
   const explicitFrontendUrl = overridesSafeTrim(process.env.SIGEVE_FRONTEND_URL);
@@ -370,7 +377,9 @@ export const createElectronShellMainConfig = (
 ): ElectronShellMainConfig => ({
   appId: overrides?.appId ?? 'br.com.sigeve.desktop',
   preloadEntry: overrides?.preloadEntry ?? './preload/index.js',
-  backendBaseUrl: overrides?.backendBaseUrl ?? process.env.SIGEVE_BACKEND_BASE_URL ?? 'http://localhost:9010',
+  backendBaseUrl: overrides?.backendBaseUrl
+    ?? process.env.SIGEVE_BACKEND_BASE_URL
+    ?? 'https://www.geolimites.com.br',
   mainWindow: {
     title: overrides?.mainWindow?.title ?? 'Sigeve Desktop',
     width: overrides?.mainWindow?.width ?? 1440,

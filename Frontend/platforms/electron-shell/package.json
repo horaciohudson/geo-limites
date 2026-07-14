@@ -1,19 +1,74 @@
 {
   "name": "@sigeve/electron-shell",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
-  "description": "Casca desktop futura para o ecossistema Sigeve.",
+  "description": "Shell Electron do GeoLimites Desktop.",
   "main": "dist/main/index.js",
   "types": "dist/renderer-bridge/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "npm run build && electron .",
-    "start:local-build": "node ./scripts/start-local-build.cjs"
+    "start:local-build": "node ./scripts/start-local-build.cjs",
+    "pack": "npm run build && node ./scripts/package-portable.cjs --dir",
+    "dist": "npm run build && node ./scripts/package-portable.cjs",
+    "dist:win": "npm run build && node ./scripts/package-portable.cjs",
+    "installer:win": "npm run build && node ./scripts/run-electron-builder.cjs --win nsis portable"
   },
+  "author": "Horacio Hudson",
   "devDependencies": {
     "@types/node": "^24.7.0",
     "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "electron-packager": "^17.1.2",
     "typescript": "^5.6.3"
+  },
+  "build": {
+    "appId": "br.com.geolimites.desktop",
+    "productName": "GeoLimites Desktop",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../dist",
+        "to": "frontend-dist",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "GeoLimites-Desktop-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GeoLimites Desktop"
+    },
+    "portable": {
+      "artifactName": "GeoLimites-Desktop-Portable-${version}-${arch}.${ext}"
+    }
   }
 }

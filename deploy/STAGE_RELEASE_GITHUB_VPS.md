@@ -70,4 +70,12 @@ Depois do push:
 
 ## Observacao
 
-O shell Electron esta funcional para build local e smoke test, mas ainda nao possui empacotamento de instalador. O release de GitHub/VPS pode seguir antes dessa etapa.
+O shell Electron ja possui trilha validada de distribuicao Windows, incluindo:
+
+- instalador `NSIS`
+- executavel portatil
+- pacote `.zip` portatil
+
+Referencia operacional:
+
+- `Frontend/docs/sigeve-electron-desktop/ENTREGA_WINDOWS_0.1.0.md`
