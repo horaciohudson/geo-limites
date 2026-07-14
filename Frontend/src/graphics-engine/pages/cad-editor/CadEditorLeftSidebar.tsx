@@ -60,8 +60,14 @@ export const CadEditorLeftSidebar: React.FC<CadEditorLeftSidebarProps> = ({
   onApplySavedPartialReplacementsInEditor,
   removableLotNumbers,
   onRemoveSelectedLotsFromDrawing
-}) => (
-  <div
+}) => {
+  const canApplyPersistentReplacement = (
+    technicalSummaryScopeMode === 'partial'
+    || technicalSummaryScopeMode === 'mixed'
+  );
+
+  return (
+    <div
     className="cad-editor-left"
     style={{ width: `${leftPanelWidth}px`, minWidth: `${leftPanelWidth}px` }}
   >
@@ -166,12 +172,12 @@ export const CadEditorLeftSidebar: React.FC<CadEditorLeftSidebarProps> = ({
                 <button
                   type="button"
                   className="cad-editor-tool-row"
-                  disabled={technicalSummaryScopeMode !== 'partial' || replaceableSelectionCount === 0}
+                  disabled={!canApplyPersistentReplacement || replaceableSelectionCount === 0}
                   onClick={onApplySavedPartialReplacementsInEditor}
-                  aria-disabled={technicalSummaryScopeMode !== 'partial' || replaceableSelectionCount === 0}
+                  aria-disabled={!canApplyPersistentReplacement || replaceableSelectionCount === 0}
                   title={
-                    technicalSummaryScopeMode !== 'partial'
-                      ? 'Ative o modo Parciais em Operacao nos lotes para aplicar a substituicao persistente.'
+                    !canApplyPersistentReplacement
+                      ? 'Ative o modo Parciais ou Total + Parciais em Operacao nos lotes para aplicar a substituicao persistente.'
                       : replaceableLotNumbers.length > 0
                         ? `Substitui de forma persistente no DXF os lotes ${replaceableLotNumbers.join(', ')} usando a selecao atual ou os parciais salvos.`
                         : replaceableSelectionCount > 0
@@ -214,4 +220,5 @@ export const CadEditorLeftSidebar: React.FC<CadEditorLeftSidebarProps> = ({
       ))}
     </aside>
   </div>
-);
+  );
+};

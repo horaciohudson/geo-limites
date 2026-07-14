@@ -1514,8 +1514,8 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     if (mode === 'partial') {
       setEditorNotice(
         savedPartialSelectionLotNumbers.length > 0 || currentSelectedLotNumbersForTechnicalSummary.length > 0
-          ? 'Modo Parciais ativado. O Resumo Tecnico saira apenas com os lotes do recorte manual.'
-          : 'Modo Parciais ativado. Salve ao menos um recorte manual com Alt + Select antes de gerar o resumo.'
+          ? 'Modo Parciais ativado. O Resumo Tecnico saira apenas com os lotes do recorte manual. Use Substituir Lote em Utilitarios para gravar o parcial no desenho.'
+          : 'Modo Parciais ativado. Salve ao menos um recorte manual com Alt + Select antes de gerar o resumo ou aplicar a substituicao persistente.'
       );
       return;
     }
@@ -1523,8 +1523,8 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     if (mode === 'mixed') {
       setEditorNotice(
         savedPartialSelectionLotNumbers.length > 0
-          ? 'Modo Total + Parciais ativado. O resumo saira para o terreno todo, e os parciais salvos substituirao os lotes automaticos correspondentes.'
-          : 'Modo Total + Parciais ativado. Salve ao menos um parcial com Alt + Select para substituir lotes dentro do resumo total.'
+          ? 'Modo Total + Parciais ativado. O resumo saira para o terreno todo, e os parciais salvos substituirao os lotes automaticos correspondentes. Use Substituir Lote em Utilitarios para tornar essa troca permanente no desenho.'
+          : 'Modo Total + Parciais ativado. Salve ao menos um parcial com Alt + Select para substituir lotes dentro do resumo total ou gravar a substituicao no desenho.'
       );
       return;
     }
