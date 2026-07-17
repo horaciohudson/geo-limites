@@ -52,17 +52,17 @@ public class MemorialPromptContextService {
         boolean strictManualSegmentMode = manualFrontageAnalysisService.hasManualSegmentSelections(selectedConfrontationTexts);
 
         if (estimatedLots == 1) {
-            promptBuilder.append("GERE APENAS 1 LOTE COMPLETO com base exclusiva nas entidades filtradas/selecionadas. ");
+            promptBuilder.append("PREENCHA APENAS 1 LOTE COMPLETO com base exclusiva nas entidades filtradas/selecionadas. ");
         } else {
-            promptBuilder.append("GERE ").append(estimatedLots).append(" LOTES COMPLETOS (1 a ").append(estimatedLots).append("). ");
+            promptBuilder.append("PREENCHA ").append(estimatedLots).append(" LOTES COMPLETOS (1 a ").append(estimatedLots).append("). ");
         }
-        promptBuilder.append("Descreva cada lote individualmente com base nos dados reais da propriedade e do DXF. ");
-        promptBuilder.append("O endereco cadastral da propriedade/empresa pertence ao cabecalho e NAO deve ser repetido no corpo de cada lote. ");
+        promptBuilder.append("Preencha cada lote individualmente com base nos dados reais da propriedade e do DXF. ");
+        promptBuilder.append("O endereco cadastral da propriedade/empresa pertence ao cabecalho e NAO deve ser repetido no corpo de cada lote, exceto se o template exigir. ");
         promptBuilder.append("Quando citar ruas, use apenas vias efetivamente identificadas no desenho/DXF. ");
         promptBuilder.append("NAO use '...' ou 'demais lotes'. ");
-        promptBuilder.append("NAO invente area, perimetro, testada, profundidade, confrontantes ou coordenadas quando esses dados nao puderem ser inferidos com seguranca. ");
+        promptBuilder.append("NAO invente area, perimetro, testada, profundidade, confrontantes ou coordenadas. USE APENAS OS DADOS DO JSON. ");
         promptBuilder.append("Respeite a ordem crescente dos lotes e a sequencia grafica dos pontos/estacas associada a cada poligono. ");
-        promptBuilder.append("Atue apenas como redatora com base no resumo tecnico validado pelo backend.\n\n");
+        promptBuilder.append("Atue EXCLUSIVAMENTE como Strict Template Engine preenchendo os placeholders com base no Resumo Técnico JSON validado pelo backend.\n\n");
         if (strictManualSegmentMode) {
             promptBuilder.append("MODO ESTRITO DE CONFRONTACAO MANUAL: quando houver trecho manual selecionado no frontend, somente os lados com evidencia geometrica manual confirmada podem receber nome de via publica.\n");
             promptBuilder.append("Nao replique rua de outro terreno para fundos ou laterais sem toque manual confiavel; mantenha os demais lados como 'divisa interna do loteamento' ou 'nao identificado no DXF' conforme o resumo tecnico.\n\n");
@@ -127,7 +127,7 @@ public class MemorialPromptContextService {
             promptBuilder.append("MEMORIAL_BASE_JSON VALIDADO PELO BACKEND:\n");
             promptBuilder.append(memorialBaseJson).append("\n");
             promptBuilder.append("Esse JSON e a fonte da verdade do backend. Se houver conflito entre texto livre e JSON, siga o JSON.\n");
-            promptBuilder.append("Atue apenas como redatora, convertendo o JSON tecnico em memorial coerente sem alterar os fatos.\n\n");
+            promptBuilder.append("Atue apenas como um Strict Template Engine, preenchendo os placeholders com base nos dados do JSON sem alterar os fatos ou inventar formatacoes.\n\n");
         }
 
         promptBuilder.append("ORIENTACAO DE ENDERECO E VIAS:\n");
@@ -255,14 +255,14 @@ public class MemorialPromptContextService {
         StringBuilder promptBuilder = new StringBuilder();
         int estimatedLots = summaries != null ? summaries.size() : 0;
 
-        promptBuilder.append("GERE O MEMORIAL DESCRITIVO USANDO EXCLUSIVAMENTE O RESUMO TECNICO VALIDADO PELO BACKEND. ");
-        promptBuilder.append("Aja apenas como redatora. ");
+        promptBuilder.append("PREENCHA O TEMPLATE USANDO EXCLUSIVAMENTE O RESUMO TECNICO VALIDADO PELO BACKEND. ");
+        promptBuilder.append("Aja estritamente como um Strict Template Engine. ");
         promptBuilder.append("Nao recalcule a geometria, nao invente confrontacoes, nao troque a ordem dos pontos e nao busque dados fora do JSON recebido.\n\n");
 
         if (estimatedLots == 1) {
-            promptBuilder.append("GERE APENAS 1 LOTE COMPLETO.\n\n");
+            promptBuilder.append("PREENCHA APENAS 1 LOTE COMPLETO.\n\n");
         } else {
-            promptBuilder.append("GERE ").append(estimatedLots).append(" LOTES COMPLETOS EM ORDEM CRESCENTE.\n\n");
+            promptBuilder.append("PREENCHA ").append(estimatedLots).append(" LOTES COMPLETOS EM ORDEM CRESCENTE.\n\n");
         }
 
         if (standard != null && standard.getStandardText() != null && !standard.getStandardText().isBlank()) {

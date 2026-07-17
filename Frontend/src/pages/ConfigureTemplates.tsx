@@ -11,6 +11,8 @@ import {
   type TechnicalSummaryExampleRecord
 } from '@/utils/technicalSummaryExamples';
 import { saveTextWithPicker } from '@/utils/fileSave';
+import { desktopApi } from '@/services/desktopApi';
+import { getLastDesktopFileDialogDirectory, rememberDesktopFileDialogDirectory } from '@/utils/desktopFileDialogState';
 
 interface ErrorLike {
   name?: string;
@@ -28,6 +30,7 @@ interface SaveFileHandle {
 
 interface PreparedTemplateSaveTarget {
   handle: SaveFileHandle | null;
+  desktopPath?: string;
   status: 'ready' | 'cancelled' | 'unavailable';
 }
 
@@ -282,6 +285,28 @@ const buildJsonSavePickerOptions = (suggestedName: string) => ({
 });
 
 const prepareTemplateSaveTarget = async (suggestedName: string): Promise<PreparedTemplateSaveTarget> => {
+  if (desktopApi.hasBridge()) {
+    const result = await desktopApi.saveFile({
+      suggestedName,
+      contents: '', // Create an empty file to reserve the path and prompt user
+      defaultPath: getLastDesktopFileDialogDirectory()
+        ? `${getLastDesktopFileDialogDirectory()}\\${suggestedName}`
+        : undefined
+    });
+    if (result.saved && result.path) {
+      rememberDesktopFileDialogDirectory(result.path);
+      return {
+        handle: null,
+        desktopPath: result.path,
+        status: 'ready'
+      };
+    }
+    return {
+      handle: null,
+      status: 'cancelled'
+    };
+  }
+
   const fileSystemWindow = window as FileSystemAccessWindow;
 
   if (!fileSystemWindow.showSaveFilePicker) {
@@ -321,15 +346,26 @@ const saveTemplateWithBrowserDialog = async (
   suggestedName: string,
   preparedTarget?: PreparedTemplateSaveTarget
 ) => {
-  if (preparedTarget?.status === 'ready' && preparedTarget.handle) {
-    const writable = await preparedTarget.handle.createWritable();
-    await writable.write(templateContent);
-    await writable.close();
-    return 'saved';
-  }
-
   if (preparedTarget?.status === 'cancelled') {
     return 'cancelled';
+  }
+
+  if (preparedTarget?.status === 'ready') {
+    if (preparedTarget.handle) {
+      const writable = await preparedTarget.handle.createWritable();
+      await writable.write(templateContent);
+      await writable.close();
+      return 'saved';
+    }
+    
+    if (preparedTarget.desktopPath) {
+      await desktopApi.saveFile({
+        suggestedName,
+        contents: templateContent,
+        targetPath: preparedTarget.desktopPath
+      });
+      return 'saved';
+    }
   }
 
   const saved = await saveTextWithPicker({
@@ -391,6 +427,7 @@ const ConfigureTemplates: React.FC = () => {
   const [processingSeconds, setProcessingSeconds] = useState(0);
   const [processingLabel, setProcessingLabel] = useState('');
   const [processingFileName, setProcessingFileName] = useState('');
+  const [selectedModelFile, setSelectedModelFile] = useState<File | null>(null);
   const [showStandardsHelp, setShowStandardsHelp] = useState(false);
   const [showTemplatesHelp, setShowTemplatesHelp] = useState(false);
   const [showTechnicalSummaryHelp, setShowTechnicalSummaryHelp] = useState(false);
@@ -528,8 +565,17 @@ const ConfigureTemplates: React.FC = () => {
     }
   };
 
-  const handleModelUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleModelUploadSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    setSelectedModelFile(file);
+    event.target.value = '';
+  };
+
+  const handleModelUploadProcess = async () => {
+    const file = selectedModelFile;
     if (!file) {
       return;
     }
@@ -541,21 +587,20 @@ const ConfigureTemplates: React.FC = () => {
 
     if (!isJson && !isPdf && !isTxt) {
       alert('Selecione apenas arquivos JSON, PDF ou TXT.');
-      event.target.value = '';
+      setSelectedModelFile(null);
       return;
     }
 
     try {
-      setUploadingModel(true);
-      setProcessingFileName(file.name);
-      setProcessingLabel(isJson ? 'Importando modelo base...' : 'Gerando modelo base com a IA...');
-
       let requestName = sanitizeTemplateName(file.name);
       let requestDescription = `Modelo base criado a partir do arquivo ${file.name}`;
       const suggestedSaveName = `${requestName || 'template'}.json`;
       let preparedSaveTarget: PreparedTemplateSaveTarget | undefined;
 
       if (isJson) {
+        setUploadingModel(true);
+        setProcessingFileName(file.name);
+        setProcessingLabel('Importando modelo base...');
         const rawJson = await file.text();
         const parsedJson = JSON.parse(rawJson) as LocalTemplateRecord;
         requestName = sanitizeTemplateName((parsedJson.template_id || parsedJson.name || requestName).toString());
@@ -567,11 +612,21 @@ const ConfigureTemplates: React.FC = () => {
           templateContent: normalizedTemplateContent
         });
         await loadTemplates();
+        setSelectedModelFile(null);
         alert(`✅ Modelo "${requestName}" importado com sucesso.`);
         return;
       }
 
       preparedSaveTarget = await prepareTemplateSaveTarget(suggestedSaveName);
+
+      if (preparedSaveTarget.status === 'cancelled') {
+        setSelectedModelFile(null);
+        return;
+      }
+
+      setUploadingModel(true);
+      setProcessingFileName(file.name);
+      setProcessingLabel('Gerando modelo base com a IA...');
 
       const response = await templatesService.generateTemplate(file, {
         name: requestName,
@@ -594,6 +649,7 @@ const ConfigureTemplates: React.FC = () => {
 
         if (saveResult === 'cancelled') {
           await loadTemplates();
+          setSelectedModelFile(null);
           alert(`✅ Modelo "${requestName}" processado e salvo no sistema. O arquivo local nao foi salvo porque a escolha do local foi cancelada.`);
           return;
         }
@@ -604,6 +660,7 @@ const ConfigureTemplates: React.FC = () => {
         throw error;
       }
 
+      setSelectedModelFile(null);
       alert(`✅ Modelo "${requestName}" processado com sucesso.`);
     } catch (error: unknown) {
       console.error('Erro ao processar modelo:', error);
@@ -612,7 +669,6 @@ const ConfigureTemplates: React.FC = () => {
       setUploadingModel(false);
       setProcessingLabel('');
       setProcessingFileName('');
-      event.target.value = '';
     }
   };
 
@@ -864,7 +920,7 @@ const ConfigureTemplates: React.FC = () => {
         type="file"
         accept=".json,.pdf,.txt"
         style={{ display: 'none' }}
-        onChange={handleModelUpload}
+        onChange={handleModelUploadSelect}
       />
 
       <input
@@ -917,24 +973,69 @@ const ConfigureTemplates: React.FC = () => {
               </div>
             )}
           </div>
-          <button
-            onClick={() => document.getElementById('templateUploadDirect')?.click()}
-            disabled={uploadingModel}
-            style={{
-              backgroundColor: uploadingModel ? '#95a5a6' : '#8e44ad',
-              color: 'white',
-              padding: '0.75rem 1.25rem',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: uploadingModel ? 'not-allowed' : 'pointer',
-              fontSize: '0.95rem',
-              fontWeight: 600,
-              opacity: uploadingModel ? 0.7 : 1,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {uploadingModel ? '⏳ Processando...' : 'Buscar Modelo/Template'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {!selectedModelFile ? (
+              <button
+                onClick={() => document.getElementById('templateUploadDirect')?.click()}
+                disabled={uploadingModel}
+                style={{
+                  backgroundColor: uploadingModel ? '#95a5a6' : '#8e44ad',
+                  color: 'white',
+                  padding: '0.75rem 1.25rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: uploadingModel ? 'not-allowed' : 'pointer',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  opacity: uploadingModel ? 0.7 : 1,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {uploadingModel ? '⏳ Processando...' : 'Buscar Modelo/Template'}
+              </button>
+            ) : (
+              <>
+                <span style={{ fontSize: '0.9rem', color: '#2c3e50', fontWeight: 600, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selectedModelFile.name}
+                </span>
+                <button
+                  onClick={handleModelUploadProcess}
+                  disabled={uploadingModel}
+                  style={{
+                    backgroundColor: uploadingModel ? '#95a5a6' : '#27ae60',
+                    color: 'white',
+                    padding: '0.75rem 1.25rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    cursor: uploadingModel ? 'not-allowed' : 'pointer',
+                    fontSize: '0.95rem',
+                    fontWeight: 600,
+                    opacity: uploadingModel ? 0.7 : 1,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {uploadingModel ? '⏳ Gerando...' : 'Gerar / Importar'}
+                </button>
+                <button
+                  onClick={() => setSelectedModelFile(null)}
+                  disabled={uploadingModel}
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: '#e74c3c',
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid #e74c3c',
+                    cursor: uploadingModel ? 'not-allowed' : 'pointer',
+                    fontSize: '0.95rem',
+                    fontWeight: 600,
+                    opacity: uploadingModel ? 0.7 : 1
+                  }}
+                >
+                  Cancelar
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         <div style={{ padding: '1.5rem' }}>

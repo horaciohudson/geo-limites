@@ -30,6 +30,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      "@/graphics-engine": ["src/graphics-engine/index.ts"],
+      "@/graphics-engine/*": ["src/graphics-engine/*"],
       "@/components/*": ["src/components/*"],
       "@/pages/*": ["src/pages/*"],
       "@/services/*": ["src/services/*"],

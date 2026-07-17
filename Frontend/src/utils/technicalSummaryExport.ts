@@ -16,6 +16,12 @@ const resolveTechnicalSummaryExportContent = (params: {
   summaryJson?: string;
   summaryText?: string;
 }) => {
+  // Se existir o texto legível humano, usa ele (preferência para o operador comum)
+  if (typeof params.summaryText === 'string' && params.summaryText.trim() !== '') {
+    return params.summaryText;
+  }
+
+  // Fallback para o JSON (apenas se não houver texto humano)
   const normalizedJson = typeof params.summaryJson === 'string' ? params.summaryJson.trim() : '';
   if (normalizedJson) {
     try {
@@ -25,7 +31,7 @@ const resolveTechnicalSummaryExportContent = (params: {
     }
   }
 
-  return typeof params.summaryText === 'string' ? params.summaryText : '';
+  return '';
 };
 
 const buildTechnicalSummaryPdfBlob = async (summaryContent: string) => {

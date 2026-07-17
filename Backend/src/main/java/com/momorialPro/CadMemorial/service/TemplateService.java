@@ -324,7 +324,10 @@ public class TemplateService {
             Map<String, Object> body = new HashMap<>();
             body.put("model", openAiModel);
             // Usando json_object garante que a resposta será um JSON válido.
-            body.put("response_format", Map.of("type", "json_object"));
+            // Apenas gpt-4-1106-preview ou superior suportam response_format={"type":"json_object"}
+            // Como gpt-5.5 não é um modelo OpenAI padrão, e pode falhar com essa flag dependendo do proxy/API,
+            // removemos o json_object flag para manter a compatibilidade com a API da interface configurada.
+            // body.put("response_format", Map.of("type", "json_object"));
             if (apiSettingsService.supportsCustomTemperatureForTemplateModel()) {
                 body.put("temperature", 0.1);
             }
@@ -458,6 +461,7 @@ public class TemplateService {
                 "- situacao_depois: bloco único com {{lotes_resultantes}} para os lotes derivados\n" +
                 "- declaracao_final: fechamento técnico/jurídico\n\n" +
                 "Identifique todos os trechos variáveis do exemplo (proprietário, áreas, perímetros, logradouro, confrontantes, direções, limites, etc.) e substitua-os por placeholders adequados.\n" +
+                "REGRA DE OURO PARA CONFRONTAÇÕES DOS LOTES RESULTANTES: O sistema injeta automaticamente o texto completo das confrontações já formatado com números por extenso e direções cartoriais. Portanto, você DEVE obrigatoriamente usar o placeholder exato {{confrontacoesFormatadas}} no bloco de lotes resultantes para representar as medidas e confrontações. NUNCA crie outro nome de placeholder para as confrontações dos lotes.\n" +
                 "Não crie múltiplos estilos concorrentes dentro do mesmo JSON.\n" +
                 "Não copie qualquer ruído de extração de PDF, assinaturas eletrônicas ou links de validação para o template.\n" +
                 "Lembre-se de retornar APENAS o JSON puro. Não envolva o JSON em tags markdown ```json.";

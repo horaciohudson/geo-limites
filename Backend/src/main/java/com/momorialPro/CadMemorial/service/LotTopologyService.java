@@ -639,13 +639,22 @@ public class LotTopologyService {
                     : strictDetectedLotMode
                     ? nextSyntheticLotNumber++
                     : index + 1;
+                    
+            String areaExtenso = orderedLot.area() != null ? com.momorialPro.CadMemorial.util.NumberToWordsConverter.convertArea(orderedLot.area()) : null;
+            String perimeterExtenso = orderedLot.perimeter() != null ? com.momorialPro.CadMemorial.util.NumberToWordsConverter.convertDistance(orderedLot.perimeter()) : null;
+            
+            String confrontacoesFormatadas = buildConfrontacoesFormatadas(sideSummaries, resolvedLotNumber);
+
             LotTechnicalSummary summary = new LotTechnicalSummary(
                     resolvedLotNumber,
                     orderedLot.area(),
+                    areaExtenso,
                     orderedLot.perimeter(),
+                    perimeterExtenso,
                     vertexSequence,
                     sideSummaries,
                     Map.of(),
+                    confrontacoesFormatadas,
                     streetFrontages,
                     isCornerLot,
                     hasDualFrontage,
@@ -661,6 +670,51 @@ public class LotTopologyService {
                 .collect(Collectors.toList());
     }
 
+    private String buildConfrontacoesFormatadas(List<TechnicalSideSummary> sideSummaries, int lotNumber) {
+        if (sideSummaries == null || sideSummaries.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        List<String> order = List.of("NORTE", "SUL", "LESTE", "OESTE");
+        for (String dir : order) {
+            List<TechnicalSideSummary> sides = sideSummaries.stream()
+                    .filter(s -> dir.equals(s.direction()))
+                    .collect(Collectors.toList());
+            
+            if (sides.isEmpty()) continue;
+
+            for (TechnicalSideSummary side : sides) {
+                String posicao = side.posicaoCartorial() != null ? side.posicaoCartorial() : "";
+                String sentido = side.sentidoCaminhamento() != null ? side.sentidoCaminhamento() : "";
+                String ext = side.lengthExtenso() != null ? side.lengthExtenso() : "";
+                String ref = side.reference() != null ? side.reference() : "não identificada";
+                
+                if (ref.endsWith(".")) {
+                    ref = ref.substring(0, ref.length() - 1);
+                }
+
+                sb.append("AO ").append(dir);
+                if (!posicao.isBlank()) {
+                    sb.append(" (").append(posicao).append(")");
+                }
+                sb.append(", do ponto ").append(side.startLabel())
+                  .append(" ao ponto ").append(side.endLabel());
+                
+                if (!sentido.isBlank()) {
+                    sb.append(", com o sentido de caminhamento ").append(sentido);
+                }
+                
+                sb.append(String.format(Locale.US, ", medindo %.2fm", side.length()));
+                if (!ext.isBlank()) {
+                    sb.append(" (").append(ext).append(")");
+                }
+                
+                sb.append(", confrontando com ").append(ref).append(".\n");
+            }
+        }
+        return sb.toString().trim();
+    }
+
     private List<LotTechnicalSummary> renumberLotTechnicalSummaries(
             List<LotTechnicalSummary> summaries,
             int startLotNumber) {
@@ -674,10 +728,13 @@ public class LotTopologyService {
             renumbered.add(new LotTechnicalSummary(
                     startLotNumber + index,
                     summary.area(),
+                    summary.areaExtenso(),
                     summary.perimeter(),
+                    summary.perimeterExtenso(),
                     summary.vertexSequence(),
                     summary.sideSummaries(),
                     summary.consolidatedConfrontations(),
+                    summary.confrontacoesFormatadas(),
                     summary.streetFrontages(),
                     summary.isCornerLot(),
                     summary.hasDualFrontage(),
@@ -783,9 +840,12 @@ public class LotTopologyService {
                 lotNumber,
                 null,
                 null,
+                null,
+                null,
                 List.of(),
                 List.of(),
                 Map.of(),
+                null,
                 List.of(),
                 false,
                 false,
@@ -973,9 +1033,9 @@ public class LotTopologyService {
         boolean strictManualSegmentMode = manualFrontageAnalysisService.hasManualSegmentSelections(selectedConfrontationTexts);
         List<TechnicalSideSummary> sideSummaries = new ArrayList<>();
 
+        List<FrontageReference> resolvedFrontages = new ArrayList<>();
+        Set<String> frontSides = new LinkedHashSet<>();
         for (int i = 0; i < vertexSequence.size(); i++) {
-            VertexTechnicalPoint start = vertexSequence.get(i);
-            VertexTechnicalPoint end = vertexSequence.get((i + 1) % vertexSequence.size());
             PolygonEdge edge = edges.get(i);
             FrontageReference frontage = resolveFrontageReference(
                     edge.side(),
@@ -983,14 +1043,46 @@ public class LotTopologyService {
                     confrontations,
                     strictManualSegmentMode
             );
+            resolvedFrontages.add(frontage);
+            if (frontage.reference() != null && manualFrontageAnalysisService.looksLikeStreetReference(frontage.reference())) {
+                frontSides.add(edge.side());
+            }
+        }
+
+        String mainFrontSide = frontSides.isEmpty() ? null : frontSides.iterator().next();
+
+        for (int i = 0; i < vertexSequence.size(); i++) {
+            VertexTechnicalPoint start = vertexSequence.get(i);
+            VertexTechnicalPoint end = vertexSequence.get((i + 1) % vertexSequence.size());
+            PolygonEdge edge = edges.get(i);
+            FrontageReference frontage = resolvedFrontages.get(i);
             double azimuth = calculateAzimuth(start.x(), start.y(), end.x(), end.y());
+
+            String lengthExtenso = com.momorialPro.CadMemorial.util.NumberToWordsConverter.convertDistance(edge.length());
+            String sentidoCaminhamento = com.momorialPro.CadMemorial.util.DirectionConverter.getSentidoCaminhamento(start.x(), start.y(), end.x(), end.y(), edge.side());
+
+            String posicaoCartorial = "Lateral";
+            if (frontSides.contains(edge.side())) {
+                posicaoCartorial = "Frente";
+            } else if (mainFrontSide != null) {
+                if (isOppositeSide(mainFrontSide, edge.side())) {
+                    posicaoCartorial = "Fundos";
+                } else if (isRightSide(mainFrontSide, edge.side())) {
+                    posicaoCartorial = "Lado Direito";
+                } else if (isLeftSide(mainFrontSide, edge.side())) {
+                    posicaoCartorial = "Lado Esquerdo";
+                }
+            }
 
             sideSummaries.add(new TechnicalSideSummary(
                     i + 1,
                     start.label(),
                     end.label(),
                     edge.length(),
+                    lengthExtenso,
                     edge.side(),
+                    posicaoCartorial,
+                    sentidoCaminhamento,
                     CoordinateUtils.azimuthToTechnicalBearing(azimuth),
                     frontage.reference(),
                     frontage.source(),
@@ -999,6 +1091,30 @@ public class LotTopologyService {
         }
 
         return sideSummaries;
+    }
+
+    private boolean isOppositeSide(String side1, String side2) {
+        if ("NORTE".equals(side1) && "SUL".equals(side2)) return true;
+        if ("SUL".equals(side1) && "NORTE".equals(side2)) return true;
+        if ("LESTE".equals(side1) && "OESTE".equals(side2)) return true;
+        if ("OESTE".equals(side1) && "LESTE".equals(side2)) return true;
+        return false;
+    }
+
+    private boolean isRightSide(String frontSide, String currentSide) {
+        if ("SUL".equals(frontSide) && "LESTE".equals(currentSide)) return true;
+        if ("NORTE".equals(frontSide) && "OESTE".equals(currentSide)) return true;
+        if ("LESTE".equals(frontSide) && "NORTE".equals(currentSide)) return true;
+        if ("OESTE".equals(frontSide) && "SUL".equals(currentSide)) return true;
+        return false;
+    }
+
+    private boolean isLeftSide(String frontSide, String currentSide) {
+        if ("SUL".equals(frontSide) && "OESTE".equals(currentSide)) return true;
+        if ("NORTE".equals(frontSide) && "LESTE".equals(currentSide)) return true;
+        if ("LESTE".equals(frontSide) && "SUL".equals(currentSide)) return true;
+        if ("OESTE".equals(frontSide) && "NORTE".equals(currentSide)) return true;
+        return false;
     }
 
     private List<PolygonEdge> buildPolygonEdges(List<VertexTechnicalPoint> vertexSequence) {

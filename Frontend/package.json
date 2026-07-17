@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "build:desktop": "tsc && vite build --mode desktop",
     "desktop:smoke": "npm run build:desktop && npm --prefix platforms/electron-shell run start:local-build",
+    "desktop:pack": "npm run build:desktop && npm --prefix platforms/electron-shell run pack",
+    "desktop:dist": "npm run build:desktop && npm --prefix platforms/electron-shell run dist:win",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "validate:technical-summary-payload": "node ./node_modules/esbuild/bin/esbuild scripts/validateTechnicalSummaryPayload.ts --bundle --platform=node --format=esm --tsconfig=tsconfig.json --outfile=.tmp/validateTechnicalSummaryPayload.mjs && node .tmp/validateTechnicalSummaryPayload.mjs"

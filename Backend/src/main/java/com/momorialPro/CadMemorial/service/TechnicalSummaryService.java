@@ -180,10 +180,13 @@ public class TechnicalSummaryService {
         return new LotTechnicalSummary(
                 lotNumber,
                 doubleValue(lotNode, "area"),
+                textValue(lotNode, "areaExtenso"),
                 doubleValue(lotNode, "perimeter"),
+                textValue(lotNode, "perimeterExtenso"),
                 vertices,
                 sides,
                 parseConsolidatedConfrontations(lotNode.path("consolidatedConfrontations"), sides, lotNumber),
+                textValue(lotNode, "confrontacoesFormatadas"),
                 parseStringList(lotNode.path("streetFrontages")),
                 booleanValue(lotNode, "isCornerLot"),
                 booleanValue(lotNode, "hasDualFrontage"),
@@ -427,7 +430,10 @@ public class TechnicalSummaryService {
                     startLabel != null ? startLabel : String.format(Locale.US, "P%02d", fallbackSideIndex),
                     endLabel != null ? endLabel : String.format(Locale.US, "P%02d", fallbackSideIndex + 1),
                     doubleValue(sideNode, "length") != null ? doubleValue(sideNode, "length") : 0d,
+                    textValue(sideNode, "lengthExtenso"),
                     defaultText(textValue(sideNode, "direction"), "NAO_IDENTIFICADA"),
+                    textValue(sideNode, "posicaoCartorial"),
+                    textValue(sideNode, "sentidoCaminhamento"),
                     defaultText(textValue(sideNode, "technicalBearing"), "nao informado"),
                     normalizeReferenceForLotSummary(reference, lotNumber),
                     defaultText(textValue(sideNode, "referenceSource"), "technicalSummaryJson"),
@@ -1118,7 +1124,10 @@ public class TechnicalSummaryService {
         lot.put("lotNumber", summary.lotNumber());
         lot.put("manualReviewRequested", manualReviewRequested);
         lot.put("area", summary.area());
+        lot.put("areaExtenso", summary.areaExtenso());
         lot.put("perimeter", summary.perimeter());
+        lot.put("perimeterExtenso", summary.perimeterExtenso());
+        lot.put("confrontacoesFormatadas", summary.confrontacoesFormatadas());
         lot.put("isCornerLot", summary.isCornerLot());
         lot.put("hasDualFrontage", summary.hasDualFrontage());
         lot.put("hasGeoreferencedVertices", summary.hasGeoreferencedVertices());
@@ -1942,13 +1951,28 @@ public class TechnicalSummaryService {
             return null;
         }
         String normalized = reference.trim();
+        
+        // Remove espaços extras (duplos, tabulações)
+        normalized = normalized.replaceAll("\\s+", " ");
+        
+        // Remove pontuações repetidas no final, como ".." ou "..."
+        normalized = normalized.replaceAll("\\.+$", "");
+        
+        // Remove ponto final solto
+        if (normalized.endsWith(".")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+
+        // Padroniza a capitalização: tudo em maiúsculas (ou título) dependendo do padrão. O DXF normalmente vem em maiúsculo.
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        
         if (normalized.isBlank()) {
             return null;
         }
         if (POINT_LIKE_REFERENCE_PATTERN.matcher(normalized).matches()) {
             return null;
         }
-        return normalized;
+        return normalized.trim();
     }
 
     private MeasurementFormatting resolveMeasurementFormatting() {
