@@ -498,7 +498,9 @@ public class TemplateService {
             throw new IllegalArgumentException("O template gerado pela IA não retornou um objeto JSON válido.");
         }
 
-        String resolvedTemplateId = resolveGeneratedField(root.path("template_id"), templateName != null && !templateName.isBlank() ? templateName : "template");
+        String resolvedTemplateId = templateName != null && !templateName.isBlank()
+                ? templateName
+                : resolveGeneratedField(root.path("template_id"), "template");
         String resolvedDescription = resolveGeneratedField(root.path("descricao"), DEFAULT_TEMPLATE_DESCRIPTION);
         String resolvedVersion = resolveGeneratedField(root.path("versao"), "1.0");
         String resolvedNorm = resolveGeneratedField(root.path("norma_referencia"), norm != null && !norm.isBlank() ? norm : "NBR-17047:2024");

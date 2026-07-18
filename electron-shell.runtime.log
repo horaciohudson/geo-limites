@@ -1,0 +1,8 @@
+[2026-07-14T12:59:09.620Z] Entrada principal detectada via require.main === module.
+[2026-07-14T12:59:09.626Z] Bootstrap iniciado. {"appId":"br.com.sigeve.desktop","backendBaseUrl":"https://www.geolimites.com.br","frontendUrl":"C:\\Desenvolvimento\\GeoLimites\\Sistema\\geo-limites\\Frontend\\platforms\\electron-shell\\release\\.portable-stage\\GeoLimites Desktop-win32-x64\\resources\\app\\frontend-dist\\index.html"}
+[2026-07-14T12:59:09.681Z] Electron app pronta.
+[2026-07-14T12:59:09.682Z] Criando janela principal... {"url":"C:\\Desenvolvimento\\GeoLimites\\Sistema\\geo-limites\\Frontend\\platforms\\electron-shell\\release\\.portable-stage\\GeoLimites Desktop-win32-x64\\resources\\app\\frontend-dist\\index.html","preload":"C:\\Desenvolvimento\\GeoLimites\\Sistema\\geo-limites\\Frontend\\platforms\\electron-shell\\release\\.portable-stage\\GeoLimites Desktop-win32-x64\\resources\\app\\dist\\preload\\index.js"}
+[2026-07-14T12:59:09.761Z] Carregando arquivo local... C:\Desenvolvimento\GeoLimites\Sistema\geo-limites\Frontend\platforms\electron-shell\release\.portable-stage\GeoLimites Desktop-win32-x64\resources\app\frontend-dist\index.html
+[2026-07-14T12:59:10.381Z] did-finish-load disparado.
+[2026-07-14T12:59:10.383Z] Janela principal carregada com sucesso.
+[2026-07-14T12:59:10.394Z] Evento ready-to-show recebido.

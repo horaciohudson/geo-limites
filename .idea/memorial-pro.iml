@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module type="JAVA_MODULE" version="4">
-  <component name="NewModuleRootManager" inherit-compiler-output="true">
+  <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_17" inherit-compiler-output="true">
     <exclude-output />
-    <content url="file://$MODULE_DIR$" />
+    <content url="file://$PROJECT_DIR$">
+      <sourceFolder url="file://$PROJECT_DIR$/Backend/src/main/java" isTestSource="false" />
+      <sourceFolder url="file://$PROJECT_DIR$/Backend/src/test/java" isTestSource="true" />
+      <sourceFolder url="file://$PROJECT_DIR$/Backend/src/main/resources" type="java-resource" />
+      <excludeFolder url="file://$PROJECT_DIR$/Backend/target" />
+      <excludeFolder url="file://$PROJECT_DIR$/Backend/bin" />
+      <excludeFolder url="file://$PROJECT_DIR$/Frontend/node_modules" />
+    </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>

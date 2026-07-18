@@ -3492,6 +3492,7 @@ body {
   min-height: 0;
   padding: 0;
   background: #eef1f4;
+  position: relative;
 }
 
 .cad-editor-canvas-frame--studio {
@@ -3514,6 +3515,42 @@ body {
     linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
   background-size: 40px 40px, 40px 40px, 10px 10px, 10px 10px;
   overflow: hidden;
+}
+
+.cad-editor-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(243, 245, 247, 0.72);
+  backdrop-filter: blur(2px);
+  z-index: 8;
+  pointer-events: none;
+}
+
+.cad-editor-loading-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(680px, calc(100% - 32px));
+  padding: 18px 20px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #334155;
+}
+
+.cad-editor-loading-card strong {
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.cad-editor-loading-card span {
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .cad-editor-empty-state {

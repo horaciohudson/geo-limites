@@ -15,6 +15,10 @@ Frontend/.tmp/
 .trae-*.txt
 Backend/cp.txt
 Backend/mvn-output.txt
+Frontend/platforms/electron-shell/.cache/
+Frontend/platforms/electron-shell/frontend-dist/
+Frontend/platforms/electron-shell/release/
+Frontend/platforms/electron-shell/electron-shell.runtime.log
 
 # Generated memorial/summary outputs
 Backend/Memoriais/ResumoTecnico*.md
