@@ -1,5 +1,9 @@
 package com.momorialPro.CadMemorial.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.momorialPro.CadMemorial.dto.*;
 import com.momorialPro.CadMemorial.model.Template;
 import com.momorialPro.CadMemorial.repository.TemplateRepository;
@@ -37,6 +41,19 @@ import com.itextpdf.text.pdf.parser.PdfTextExtractor;
 @Slf4j
 @Transactional
 public class TemplateService {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String DEFAULT_TEMPLATE_DESCRIPTION =
+            "Template para memorial descritivo cartorial de desmembramento de area urbana, contendo cabecalho com dados do imovel e do levantamento, descricao da situacao antes do desmembramento, descricao consolidada dos lotes resultantes na situacao depois e declaracao final tecnico-juridica do responsavel pelo levantamento topografico.";
+    private static final String CANONICAL_TEMPLATE_MODE = "texto corrido cartorial";
+    private static final String CANONICAL_HEADER =
+            "MEMORIAL DESCRITIVO DE DESMEMBRAMENTO DE AREA\n\nTerreno: {{tipo_terreno}} | Proprietario: {{proprietario}} Localizacao: {{logradouro_principal}} | Bairro: {{bairro}} | Municipio: {{municipio}}/{{uf}} Objetivo: {{objetivo_levantamento}} Georreferenciado no Datum {{datum_referencia}} para fins de {{finalidade_memorial}}.";
+    private static final String CANONICAL_SITUATION_BEFORE =
+            "SITUACAO ANTES DESTE DESMEMBRAMENTO DE AREA\n\nTERRENO {{terreno_original_identificacao}}\nUm imovel {{natureza_imovel_original}}, localizado na {{logradouro_original}}, bairro {{bairro}}, {{municipio}}/{{uf}}, possuindo formato {{formato_terreno_original}}, conforme seus pontos {{pontos_coordenadas_terreno_original}}, perfazendo assim, um perimetro de {{perimetro_terreno_original}} ({{perimetro_terreno_original_extenso}}), com uma area territorial total de {{area_terreno_original}} ({{area_terreno_original_extenso}}), com as seguintes medidas e confrontacoes:\n{{confrontacoes_terreno_original_formatadas}}";
+    private static final String CANONICAL_SITUATION_AFTER =
+            "SITUACAO DEPOIS DESTE DESMEMBRAMENTO DE AREA\n{{lotes_resultantes}}";
+    private static final String CANONICAL_FINAL_DECLARATION =
+            "DECLARACAO\n\nDeclaro para todos os fins e efeitos de direito que o levantamento topografico respeitou as divisas consolidadas e o alinhamento do logradouro publico, importando sujeitar-se ao que dispoe o § 14, do artigo 213, da LRP. Verificado a qualquer tempo nao serem verdadeiros os fatos constantes no memorial descritivo, responderao o requerente e o profissional que o elaborou pelos prejuizos causados, independentemente das sancoes disciplinares e penais. {{local_declaracao}}, {{data_declaracao}}.\n\n_________________________________________________\n{{responsavel_tecnico_nome}} | {{responsavel_tecnico_conselho}}: {{responsavel_tecnico_registro}} | RNP: {{responsavel_tecnico_rnp}}";
 
     private final TemplateRepository templateRepository;
     private final UserRepository userRepository;
@@ -368,10 +385,7 @@ public class TemplateService {
                 }
             }
 
-            // Validar se o retorno é um JSON estruturalmente válido
-            new com.fasterxml.jackson.databind.ObjectMapper().readTree(content);
-
-            return content;
+            return normalizeGeneratedTemplateToCanonicalLocal(content, templateName, norm);
         } catch (Exception e) {
             log.error("Erro ao chamar OpenAI API para gerar o template", e);
             throw new RuntimeException("Erro ao gerar template com IA: " + e.getMessage(), e);
@@ -410,8 +424,7 @@ public class TemplateService {
 
             String content = extractContentFromClaudeResponse(response.getBody());
             content = sanitizeGeneratedJson(content);
-            new com.fasterxml.jackson.databind.ObjectMapper().readTree(content);
-            return content;
+            return normalizeGeneratedTemplateToCanonicalLocal(content, templateName, norm);
         } catch (Exception e) {
             log.error("Erro ao chamar Claude API para gerar o template", e);
             throw new RuntimeException("Erro ao gerar template com IA: " + e.getMessage(), e);
@@ -477,6 +490,93 @@ public class TemplateService {
             }
         }
         return sanitized;
+    }
+
+    private String normalizeGeneratedTemplateToCanonicalLocal(String content, String templateName, String norm) throws IOException {
+        JsonNode parsed = OBJECT_MAPPER.readTree(content);
+        if (!(parsed instanceof ObjectNode root)) {
+            throw new IllegalArgumentException("O template gerado pela IA nao retornou um objeto JSON valido.");
+        }
+
+        String resolvedTemplateId = resolveGeneratedField(root.path("template_id"), templateName != null && !templateName.isBlank() ? templateName : "template");
+        String resolvedDescription = resolveGeneratedField(root.path("descricao"), DEFAULT_TEMPLATE_DESCRIPTION);
+        String resolvedVersion = resolveGeneratedField(root.path("versao"), "1.0");
+        String resolvedNorm = resolveGeneratedField(root.path("norma_referencia"), norm != null && !norm.isBlank() ? norm : "NBR-17047:2024");
+
+        ObjectNode normalized = OBJECT_MAPPER.createObjectNode();
+        normalized.put("template_id", resolvedTemplateId);
+        normalized.put("descricao", resolvedDescription);
+        normalized.put("versao", resolvedVersion);
+        normalized.put("norma_referencia", resolvedNorm);
+        normalized.put("modo_texto", CANONICAL_TEMPLATE_MODE);
+
+        ObjectNode structure = normalized.putObject("estrutura");
+        structure.put("cabecalho", CANONICAL_HEADER);
+        structure.put("situacao_antes", CANONICAL_SITUATION_BEFORE);
+        structure.put("situacao_depois", CANONICAL_SITUATION_AFTER);
+        structure.put("declaracao_final", CANONICAL_FINAL_DECLARATION);
+
+        ObjectNode placeholders = normalized.putObject("placeholders");
+        placeholders.put("tipo_terreno", "Classificacao do terreno objeto do memorial, por exemplo: Urbano, Rural ou outra denominacao aplicavel.");
+        placeholders.put("proprietario", "Nome ou razao social do proprietario do imovel objeto do desmembramento, podendo incluir qualificacao complementar quando exigida.");
+        placeholders.put("logradouro_principal", "Logradouro principal de localizacao do imovel, conforme cadastro municipal, matricula ou levantamento topografico.");
+        placeholders.put("bairro", "Bairro onde se localiza o imovel.");
+        placeholders.put("municipio", "Municipio onde se localiza o imovel.");
+        placeholders.put("uf", "Unidade federativa do municipio do imovel, em formato abreviado, por exemplo: CE.");
+        placeholders.put("objetivo_levantamento", "Descricao do objetivo tecnico do trabalho, por exemplo: Levantamento Topografico Planimetrico de imovel urbano.");
+        placeholders.put("datum_referencia", "Datum geodesico utilizado no georreferenciamento, por exemplo: SIRGAS 2000.");
+        placeholders.put("finalidade_memorial", "Finalidade juridica ou administrativa do memorial, por exemplo: Desmembramento de Area.");
+        placeholders.put("terreno_original_identificacao", "Identificacao do terreno na situacao anterior ao desmembramento, por exemplo: 1, A, Gleba 01 ou denominacao equivalente.");
+        placeholders.put("natureza_imovel_original", "Natureza do imovel original, por exemplo: urbano ou rural.");
+        placeholders.put("logradouro_original", "Logradouro de localizacao do terreno original antes do desmembramento.");
+        placeholders.put("formato_terreno_original", "Descricao do formato geometrico do terreno original, por exemplo: poligonal e irregular.");
+        placeholders.put("pontos_coordenadas_terreno_original", "Sequencia dos vertices do terreno original com suas respectivas coordenadas Este e Norte, no padrao cartorial: P01 (coordenadas E ...m e N ...m), P02 (...), etc.");
+        placeholders.put("perimetro_terreno_original", "Perimetro numerico do terreno original, com unidade de medida, por exemplo: 292,78m.");
+        placeholders.put("perimetro_terreno_original_extenso", "Perimetro do terreno original escrito por extenso, incluindo metros e centimetros.");
+        placeholders.put("area_terreno_original", "Area numerica total do terreno original, com unidade de medida, por exemplo: 3.334,51m2.");
+        placeholders.put("area_terreno_original_extenso", "Area total do terreno original escrita por extenso, incluindo metros quadrados e decimetros quadrados quando aplicavel.");
+        placeholders.put("confrontacoes_terreno_original_formatadas", "Texto completo das medidas e confrontacoes do terreno original, organizado por orientacao cardeal ou lado, com direcoes, distancias, pontos de partida e chegada, confrontantes, matriculas, proprietarios e demais informacoes cartoriais pertinentes.");
+        placeholders.put("lotes_resultantes", "Bloco estrutural repetivel contendo todos os lotes gerados pelo desmembramento. Cada lote deve seguir o padrao: LOTE {{lote_identificacao}}:\\nUm imovel {{lote_natureza_imovel}}, localizado na {{lote_logradouro}}, bairro {{lote_bairro}}, {{lote_municipio}}/{{lote_uf}}, possuindo formato {{lote_formato}}, conforme seus pontos {{lote_pontos_coordenadas}}, perfazendo assim, um perimetro de {{lote_perimetro}} ({{lote_perimetro_extenso}}), com uma area territorial de {{lote_area}} ({{lote_area_extenso}}), com as seguintes medidas e confrontacoes:\\n{{confrontacoesFormatadas}}");
+        placeholders.put("lote_identificacao", "Numero, letra ou denominacao do lote resultante, por exemplo: 1, 2, 23, A ou Lote Remanescente.");
+        placeholders.put("lote_natureza_imovel", "Natureza do lote resultante, por exemplo: urbano ou rural.");
+        placeholders.put("lote_logradouro", "Logradouro de localizacao ou frente principal do lote resultante.");
+        placeholders.put("lote_bairro", "Bairro do lote resultante, quando diferente ou quando preenchido individualmente.");
+        placeholders.put("lote_municipio", "Municipio do lote resultante, quando preenchido individualmente.");
+        placeholders.put("lote_uf", "Unidade federativa do lote resultante, quando preenchida individualmente.");
+        placeholders.put("lote_formato", "Descricao do formato geometrico do lote resultante, por exemplo: poligonal, irregular ou poligonal irregular.");
+        placeholders.put("lote_pontos_coordenadas", "Sequencia dos vertices do lote resultante com suas respectivas coordenadas Este e Norte, no padrao cartorial.");
+        placeholders.put("lote_perimetro", "Perimetro numerico do lote resultante, com unidade de medida.");
+        placeholders.put("lote_perimetro_extenso", "Perimetro do lote resultante escrito por extenso, incluindo metros e centimetros.");
+        placeholders.put("lote_area", "Area numerica do lote resultante, com unidade de medida.");
+        placeholders.put("lote_area_extenso", "Area do lote resultante escrita por extenso, incluindo metros quadrados e decimetros quadrados quando aplicavel.");
+        placeholders.put("confrontacoesFormatadas", "Texto completo das confrontacoes do lote resultante, ja formatado pelo sistema com orientacoes, faces, medidas, sentidos, pontos, confrontantes, numeros por extenso e redacao cartorial. Este placeholder deve ser usado obrigatoriamente para as confrontacoes dos lotes resultantes.");
+        placeholders.put("local_declaracao", "Municipio ou local de emissao/assinatura da declaracao final.");
+        placeholders.put("data_declaracao", "Data completa da declaracao final, escrita no padrao cartorial, por exemplo: 13 de julho de 2024.");
+        placeholders.put("responsavel_tecnico_nome", "Nome completo do profissional responsavel tecnico pelo memorial e levantamento.");
+        placeholders.put("responsavel_tecnico_conselho", "Conselho profissional e unidade regional do responsavel tecnico, por exemplo: CREA/CE.");
+        placeholders.put("responsavel_tecnico_registro", "Numero de registro do responsavel tecnico no conselho profissional.");
+        placeholders.put("responsavel_tecnico_rnp", "Numero do Registro Nacional Profissional do responsavel tecnico.");
+
+        ArrayNode observations = normalized.putArray("observacoes");
+        observations.add("Em memoriais de desmembramento, preservar a ordem: cabecalho, situacao antes, situacao depois e declaracao final.");
+        observations.add("O bloco {{lotes_resultantes}} deve ser repetido uma vez para cada lote resultante do desmembramento, mantendo a redacao cartorial em texto corrido.");
+        observations.add("Nas confrontacoes dos lotes resultantes, utilizar obrigatoriamente o placeholder {{confrontacoesFormatadas}}, pois o sistema injeta automaticamente o texto completo das medidas e confrontacoes.");
+        observations.add("As coordenadas devem ser apresentadas com indicacao dos pontos e dos valores E e N, observando o datum informado no cabecalho.");
+        observations.add("Areas, perimetros e distancias devem ser informados numericamente e tambem por extenso quando o campo correspondente existir.");
+        observations.add("As confrontacoes devem indicar orientacao, posicao da face quando aplicavel, sentido, distancia, ponto inicial, ponto final e confrontante.");
+        observations.add("Nao incluir no template links de validacao, manifestos de assinatura, signatarios, carimbos digitais ou quaisquer ruidos de PDF assinado.");
+
+        return OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(normalized);
+    }
+
+    private String resolveGeneratedField(JsonNode node, String fallback) {
+        if (node != null && node.isTextual()) {
+            String value = node.asText().trim();
+            if (!value.isEmpty()) {
+                return value;
+            }
+        }
+        return fallback;
     }
 
     private String extractContentFromOpenAIResponse(Map<String, Object> responseBody) {
