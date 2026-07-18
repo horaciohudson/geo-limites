@@ -56,6 +56,7 @@ interface LocalTemplateRecord {
 interface TemplateListItem {
   id: string;
   name: string;
+  displayName: string;
   description?: string;
   createdAt?: string;
   source: 'backend' | 'local';
@@ -73,14 +74,20 @@ Requisitos:
 - nao inventar coordenadas nem informacoes ausentes
 - sinalizar quando o texto da norma precisar de revisao complementar`;
 
-const sanitizeTemplateName = (rawName: string): string =>
+const getOriginalTemplateName = (rawName: string): string =>
   rawName
     .trim()
     .replace(/\.[^/.]+$/, '')
-    .replace(/\s+/g, '_')
-    .replace(/[^\w-]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase() || 'template';
+    .trim() || 'template';
+
+const ensureJsonDisplayName = (rawName: string): string => {
+  const trimmedName = rawName.trim();
+  if (!trimmedName) {
+    return 'template.json';
+  }
+
+  return /\.json$/i.test(trimmedName) ? trimmedName : `${trimmedName}.json`;
+};
 
 const getErrorName = (error: unknown): string | undefined => {
   if (typeof error === 'object' && error !== null && 'name' in error) {
@@ -203,6 +210,7 @@ const buildTemplateSummary = (backendTemplates: Template[], localTemplates: Loca
     items.push({
       id: template.id,
       name: normalizedName,
+      displayName: ensureJsonDisplayName(normalizedName),
       description: template.description,
       createdAt: template.createdAt,
       source: 'backend'
@@ -219,6 +227,7 @@ const buildTemplateSummary = (backendTemplates: Template[], localTemplates: Loca
     items.push({
       id: `local-${index}-${normalizedName}`,
       name: normalizedName,
+      displayName: ensureJsonDisplayName(normalizedName),
       description: template.descricao,
       createdAt: template.createdAt,
       source: 'local'
@@ -381,9 +390,18 @@ const saveTemplateWithBrowserDialog = async (
   return saved ? 'saved' : 'cancelled';
 };
 
-const normalizeTemplateContent = (rawContent: string): string => {
+const normalizeTemplateContent = (rawContent: string, templateName?: string): string => {
   const extractedJson = extractTemplateJson(rawContent);
-  return JSON.stringify(JSON.parse(extractedJson), null, 2);
+  const parsedJson = JSON.parse(extractedJson) as LocalTemplateRecord;
+
+  if (templateName) {
+    parsedJson.template_id = templateName;
+    if (typeof parsedJson.name === 'string' || 'name' in parsedJson) {
+      parsedJson.name = templateName;
+    }
+  }
+
+  return JSON.stringify(parsedJson, null, 2);
 };
 
 const helpButtonStyle: React.CSSProperties = {
@@ -592,7 +610,7 @@ const ConfigureTemplates: React.FC = () => {
     }
 
     try {
-      let requestName = sanitizeTemplateName(file.name);
+      let requestName = getOriginalTemplateName(file.name);
       let requestDescription = `Modelo base criado a partir do arquivo ${file.name}`;
       const suggestedSaveName = `${requestName || 'template'}.json`;
       let preparedSaveTarget: PreparedTemplateSaveTarget | undefined;
@@ -603,9 +621,8 @@ const ConfigureTemplates: React.FC = () => {
         setProcessingLabel('Importando modelo base...');
         const rawJson = await file.text();
         const parsedJson = JSON.parse(rawJson) as LocalTemplateRecord;
-        requestName = sanitizeTemplateName((parsedJson.template_id || parsedJson.name || requestName).toString());
         requestDescription = (parsedJson.descricao || requestDescription).toString();
-        const normalizedTemplateContent = normalizeTemplateContent(rawJson);
+        const normalizedTemplateContent = normalizeTemplateContent(rawJson, requestName);
         await templatesService.create({
           name: requestName,
           description: requestDescription,
@@ -638,7 +655,7 @@ const ConfigureTemplates: React.FC = () => {
         throw new Error('A IA nao retornou o conteudo do template em JSON.');
       }
 
-      const normalizedTemplateContent = normalizeTemplateContent(templateContent);
+      const normalizedTemplateContent = normalizeTemplateContent(templateContent, requestName);
 
       try {
         const saveResult = await saveTemplateWithBrowserDialog(
@@ -673,7 +690,7 @@ const ConfigureTemplates: React.FC = () => {
   };
 
   const handleDeleteTemplate = async (template: TemplateListItem) => {
-    if (!window.confirm(`Deseja excluir o modelo "${template.name}"?`)) {
+    if (!window.confirm(`Deseja excluir o modelo "${template.displayName}"?`)) {
       return;
     }
 
@@ -684,7 +701,7 @@ const ConfigureTemplates: React.FC = () => {
 
       removeLocalTemplate(template.name);
       await loadTemplates();
-      alert(`✅ Modelo "${template.name}" excluido com sucesso.`);
+      alert(`✅ Modelo "${template.displayName}" excluido com sucesso.`);
     } catch (error: unknown) {
       console.error('Erro ao excluir modelo:', error);
       alert(`❌ Falha ao excluir o modelo: ${getErrorMessage(error, 'Erro desconhecido.')}`);
@@ -1060,7 +1077,7 @@ const ConfigureTemplates: React.FC = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: '0.25rem' }}>
-                        {template.name}
+                        {template.displayName}
                       </div>
                       {template.description && (
                         <div style={{ color: '#5f6b7a', fontSize: '0.92rem' }}>{template.description}</div>
