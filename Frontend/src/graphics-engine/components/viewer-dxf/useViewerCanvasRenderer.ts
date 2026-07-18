@@ -31,6 +31,7 @@ import type {
 } from '@/graphics-engine/components/viewer-dxf/viewerState';
 import type { DrawingBounds, DrawingTextAlignment, DrawingTextVerticalAlignment } from '@/graphics-engine/components/viewer-dxf/viewerContracts';
 import { buildEntitySelectionId } from '@/graphics-engine/components/viewer-dxf/entitySelectionUtils';
+import { getAciColorHex } from '@/graphics-engine/shared/aciColors';
 
 interface CorrectiveInspectionEntry {
   lotNumber: number;
@@ -240,6 +241,7 @@ interface UseViewerCanvasRendererParams {
   setGridOrigin: React.Dispatch<React.SetStateAction<Point2D>>;
   setScale: React.Dispatch<React.SetStateAction<number>>;
   setValidPoints: React.Dispatch<React.SetStateAction<Point2D[]>>;
+  onInitialCanvasRendered?: () => void;
   showGrid?: boolean;
   showDetectedPolygonMeasurements?: boolean;
   showHoverCoordinates?: boolean;
@@ -578,6 +580,7 @@ export const useViewerCanvasRenderer = ({
   setGridOrigin,
   setScale,
   setValidPoints,
+  onInitialCanvasRendered,
   showGrid = true,
   showDetectedPolygonMeasurements = false,
   showHoverCoordinates = true,
@@ -587,7 +590,7 @@ export const useViewerCanvasRenderer = ({
 }: UseViewerCanvasRendererParams) => {
   const resolvedMessages = messages ?? DEFAULT_VIEWER_RENDERER_MESSAGES;
   const resolveCanvasTextAlign = (alignment?: DrawingTextAlignment | number): CanvasTextAlign => {
-    if (alignment === 'center' || alignment === 1) {
+    if (alignment === 'center' || alignment === 1 || alignment === 4 || alignment === 3 || alignment === 5) {
       return 'center';
     }
     if (alignment === 'right' || alignment === 2) {
@@ -596,7 +599,10 @@ export const useViewerCanvasRenderer = ({
     return 'left';
   };
 
-  const resolveCanvasTextBaseline = (alignment?: DrawingTextVerticalAlignment | number | 'bottom'): CanvasTextBaseline => {
+  const resolveCanvasTextBaseline = (alignment?: DrawingTextVerticalAlignment | number | 'bottom', horizontalAlign?: number): CanvasTextBaseline => {
+    if (horizontalAlign === 4) {
+      return 'middle';
+    }
     if (alignment === 'middle' || alignment === 2) {
       return 'middle';
     }
@@ -606,30 +612,65 @@ export const useViewerCanvasRenderer = ({
     if (alignment === 'bottom' || alignment === 1) {
       return 'bottom';
     }
+    // Retornamos 'alphabetic' para não estragar o alinhamento com a caixa delimitadora,
+    // que foi o que fez a linha do P 01 "subir" acidentalmente no ajuste anterior.
+    // 'alphabetic' é o padrão matemático natural para textos no Canvas e AutoCAD.
     return 'alphabetic';
   };
 
-  const normalizeMTextContent = (text: string) =>
-    text
+  const normalizeDxTextContent = (text: string) => {
+    if (!text) return '';
+
+    return text
+      // Códigos de formatação sem ponto e vírgula
+      .replace(/\\[LlOo]/g, '') // Underline/Overline on/off
+      // Quebras e espacos especiais do MTEXT
       .replace(/\\P/gi, '\n')
       .replace(/\\X/gi, '\n')
-      .replace(/\\~/g, ' ');
+      .replace(/\\~/g, ' ')
+      // Texto empilhado, ex.: \S1/2; (pega a primeira parte antes da barra)
+      .replace(/\\S([^;]+);/gi, (_match, p1) => p1.replace(/[\^#]/g, '/')) 
+      // Unicode \U+XXXX (muito usado no AutoCAD para acentos e símbolos)
+      .replace(/\\U\+([0-9A-Fa-f]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      // Símbolos clássicos do AutoCAD
+      .replace(/%%c/gi, 'Ø')
+      .replace(/%%d/gi, '°')
+      .replace(/%%p/gi, '±')
+      .replace(/%%u/gi, '')
+      .replace(/%%o/gi, '')
+      // Marcadores de formato em linha (com ponto e vírgula), ex.: \C6; \ptz; \pxqc; \H1.5x; \W1.2;
+      .replace(/\\[A-Za-z0-9][^;\\{}]*;/g, '')
+      // Chaves de agrupamento de estilo do AutoCAD
+      .replace(/[{}]/g, '')
+      // Barra invertida escapada remanescente
+      .replace(/\\\\/g, '\\')
+      // Correção de double encoding comum em DXF (ANSI lido como UTF-8 gerando cp437)
+      .replace(/V├ëRTICE/g, 'VÉRTICE')
+      .replace(/V├\+RTICE/g, 'VÉRTICE')
+      .replace(/VÃ‰RTICE/g, 'VÉRTICE')
+      .replace(/├ë/g, 'É')
+      .replace(/Ã‰/g, 'É')
+      .replace(/Ã‡/g, 'Ç')
+      .replace(/Ã£/g, 'ã')
+      .replace(/Ã¡/g, 'á')
+      .replace(/Ã©/g, 'é')
+      .replace(/Ã³/g, 'ó')
+      .replace(/Ãº/g, 'ú')
+      .replace(/Ãª/g, 'ê')
+      .replace(/Ã§/g, 'ç')
+      .replace(/Ãµ/g, 'õ')
+      .replace(/Ã¢/g, 'â')
+      // Higienizacao final
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  };
 
-  const isReferencePointLabelText = (text: string) => /^[Pp]\d+[A-Za-z]?$/.test(text.trim());
-
-  const resolveEntityCanvasTextBaseline = (entity: DXFEntity, props: DXFEntityProperties): CanvasTextBaseline => {
-    if (entity.type === 'MTEXT' && typeof props.attachmentPoint === 'number') {
-      const attachmentRow = Math.ceil(props.attachmentPoint / 3);
-      if (attachmentRow === 1) {
-        return 'top';
-      }
-      if (attachmentRow === 2) {
-        return 'middle';
-      }
-      return 'bottom';
-    }
-
-    return resolveCanvasTextBaseline(typeof props.verticalAlign === 'number' ? props.verticalAlign : undefined);
+  const resolveEntityCanvasTextBaseline = (_entity: DXFEntity, _props: DXFEntityProperties): CanvasTextBaseline => {
+    // Retornamos 'alphabetic' para todos os textos para garantir consistência no baseline,
+    // que é o padrão matemático natural para textos no Canvas e AutoCAD.
+    // Ajustes verticais específicos para MTEXT são tratados via offset no momento do desenho.
+    return 'alphabetic';
   };
 
   const configureReadableStrokeContext = (ctx: CanvasRenderingContext2D) => {
@@ -666,19 +707,17 @@ export const useViewerCanvasRenderer = ({
 
   const drawDxTextContent = ({
     ctx,
-    entity,
     props,
     fillStyle,
     fontSize
   }: {
     ctx: CanvasRenderingContext2D;
-    entity: DXFEntity;
     props: DXFEntityProperties;
     fillStyle: string;
     fontSize: number;
   }) => {
-    const rawText = typeof props.text === 'string' ? props.text : '';
-    const normalizedText = entity.type === 'MTEXT' ? normalizeMTextContent(rawText) : rawText;
+    const rawText = typeof props.text === 'string' ? props.text : '';       
+    const normalizedText = normalizeDxTextContent(rawText);
     const lines = normalizedText.split(/\r?\n/);
     const safeLines = lines.length > 0 ? lines : [''];
     const lineHeightFactor = typeof props.lineSpacing === 'number' && props.lineSpacing > 0
@@ -686,13 +725,29 @@ export const useViewerCanvasRenderer = ({
       : 1.18;
     const lineHeight = Math.max(fontSize * lineHeightFactor, fontSize);
     const totalBlockHeight = lineHeight * Math.max(safeLines.length - 1, 0);
-    const baseline = ctx.textBaseline;
     let startY = 0;
+    const vAlign = props.verticalAlign;
 
-    if (baseline === 'middle') {
-      startY = -(totalBlockHeight / 2);
-    } else if (baseline === 'bottom') {
-      startY = -totalBlockHeight;
+    // Calcula o offset inicial baseado no alinhamento vertical.
+    // Como textBaseline é 'alphabetic', o Y passado para fillText será a linha de base.
+    // fontSize * 0.8 aproxima a altura do ascent (acima da linha de base).
+    // fontSize * 0.2 aproxima a altura do descent (abaixo da linha de base).
+    
+    if (vAlign === 3) {
+      // Top: A coordenada indica o topo do texto.
+      // Precisamos descer a linha de base em fontSize * 0.8 para que o topo fique na coordenada.
+      startY = fontSize * 0.8;
+    } else if (vAlign === 2) {
+      // Middle: A coordenada indica o meio do bloco de texto.
+      // Metade do bloco fica para cima, metade para baixo.
+      startY = -(totalBlockHeight / 2) + (fontSize * 0.3); // Aproximação do meio visual
+    } else if (vAlign === 1) {
+      // Bottom: A coordenada indica a base inferior do bloco.
+      // Precisamos subir a linha de base do último texto, então a do primeiro texto sobe ainda mais.
+      startY = -totalBlockHeight - (fontSize * 0.2);
+    } else {
+      // 0 ou undefined (Baseline): A coordenada já é a linha de base do primeiro texto.
+      startY = 0;
     }
 
     safeLines.forEach((line, index) => {
@@ -705,6 +760,25 @@ export const useViewerCanvasRenderer = ({
         fontSize
       });
     });
+  };
+
+  const resolveDxFontSize = (height: number | undefined, scale: number): number => {
+    const baseHeight = typeof height === 'number' && height > 0 ? height : 2.5;
+
+    // Achatamento mais agressivo apenas para textos muito grandes (como nomes de ruas)
+    const compressedHeight = baseHeight <= 5
+      ? baseHeight
+      : 5 + ((baseHeight - 5) * 0.35);
+
+    // O fator base original do AutoCAD é 1.0 (altura exata).
+    // O boost inflava textos pequenos, o que estourava os textos das tabelas (que são ~0.5)
+    // Reduzindo o boost para garantir fidelidade às dimensões do Model Space.
+    const boost = 1.0;
+
+    // Piso mínimo pequeno apenas para garantir legibilidade mínima sem estragar tabelas
+    const minimumSize = 1.5;
+
+    return Math.max(compressedHeight * scale * boost, minimumSize);
   };
 
   const traceDisplayPathFromWorldPoints = (
@@ -1177,12 +1251,12 @@ export const useViewerCanvasRenderer = ({
               if (displayRotationDegrees) {
                 ctx.rotate((-displayRotationDegrees * Math.PI) / 180);
               }
-              const fontSize = Math.max((previewProps.height || 2.5) * nextScale * 0.8, 8);
+              const fontSize = resolveDxFontSize(previewProps.height, nextScale);
               const textHorizontalAlign = typeof previewProps.horizontalAlign === 'number' ? previewProps.horizontalAlign : undefined;
               ctx.font = `bold ${fontSize}px Arial`;
-              ctx.textAlign = resolveCanvasTextAlign(textHorizontalAlign);
+              ctx.textAlign = resolveCanvasTextAlign(textHorizontalAlign); 
               ctx.textBaseline = resolveEntityCanvasTextBaseline(previewEntity, previewProps);
-              drawDxTextContent({ ctx, entity: previewEntity, props: previewProps, fillStyle: previewStrokeColor, fontSize });
+              drawDxTextContent({ ctx, props: previewProps, fillStyle: previewStrokeColor, fontSize });
               ctx.restore();
               return;
             }
@@ -1209,9 +1283,21 @@ export const useViewerCanvasRenderer = ({
         ? applyPreviewTransformToEntity(entity, selectedEntityPreviewTransform)
         : entity;
       const props = renderEntity.properties as DXFEntityProperties;
-      const entityLineColor = typeof props.lineColor === 'string' && props.lineColor.trim()
-        ? props.lineColor
-        : '#212529';
+      
+      let entityLineColor = '#212529';
+      if (typeof props.aciColor === 'number' && props.aciColor !== 256) {
+        const hex = getAciColorHex(props.aciColor);
+        if (hex) entityLineColor = hex;
+      } else if (typeof props.originalLayer === 'string' && dxfData.originalLayerColors) {
+        const layerColor = dxfData.originalLayerColors[props.originalLayer];
+        if (layerColor !== undefined) {
+          const hex = getAciColorHex(layerColor);
+          if (hex) entityLineColor = hex;
+        }
+      } else if (typeof props.lineColor === 'string' && props.lineColor.trim()) {
+        entityLineColor = props.lineColor;
+      }
+
       const entityFillColor = typeof props.fillColor === 'string' && props.fillColor.trim()
         ? props.fillColor
         : null;
@@ -1412,26 +1498,17 @@ export const useViewerCanvasRenderer = ({
               ctx.rotate((-displayRotationDegrees * Math.PI) / 180);
             }
 
-            const fontSize = Math.max((props.height || 2.5) * nextScale * 0.8, 8);
+            const fontSize = resolveDxFontSize(props.height, nextScale);
             const textHorizontalAlign = typeof props.horizontalAlign === 'number' ? props.horizontalAlign : undefined;
             const textFillStyle = isSelectedEntity
               ? '#2563eb'
               : (isActiveConfrontationText
                 ? '#7b1fa2'
                 : (isHoverConfrontationText ? '#c2185b' : (isConfrontationTextSelected ? '#d63384' : entityLineColor)));
-            const isReferencePointLabel = isReferencePointLabelText(String(props.text || ''));
-            const textVerticalOffset = isReferencePointLabel
-              ? Math.max(fontSize * 0.42, 6)
-              : 0;
             ctx.font = `${fontSize}px Arial`;
             ctx.textAlign = resolveCanvasTextAlign(textHorizontalAlign);
-            ctx.textBaseline = isReferencePointLabel
-              ? 'top'
-              : resolveEntityCanvasTextBaseline(renderEntity, props);
-            if (textVerticalOffset !== 0) {
-              ctx.translate(0, textVerticalOffset);
-            }
-            drawDxTextContent({ ctx, entity: renderEntity, props, fillStyle: textFillStyle, fontSize });
+            ctx.textBaseline = resolveEntityCanvasTextBaseline(renderEntity, props);
+            drawDxTextContent({ ctx, props, fillStyle: textFillStyle, fontSize });
             ctx.restore();
           }
           break;
@@ -2688,6 +2765,12 @@ export const useViewerCanvasRenderer = ({
       ctx.fillText(labelText, drawX + paddingX, drawY + boxHeight / 2);
       ctx.restore();
     }
+
+    if (typeof window !== 'undefined' && onInitialCanvasRendered) {
+      window.requestAnimationFrame(() => {
+        onInitialCanvasRendered();
+      });
+    }
   }, [
     activeConfrontationTextId,
     activeCorrectiveTool,
@@ -2754,6 +2837,7 @@ export const useViewerCanvasRenderer = ({
     selectedSegments,
     setDrawingBounds,
     setGridOrigin,
+    onInitialCanvasRendered,
     setScale,
     setValidPoints,
     showGrid,

@@ -27,6 +27,21 @@ const hasUtf8Bom = (bytes: Uint8Array): boolean => (
   && UTF8_BOM.every((value, index) => bytes[index] === value)
 );
 
+const isUtf8MisinterpretedAsAnsi = (ansiText: string): boolean => {
+  // Padrões muito comuns quando UTF-8 é lido como Windows-1252 (Português)
+  // Ã‰ = É, Ã‡ = Ç, Ã£ = ã, Ã¡ = á, Ã© = é, Ã³ = ó, Ãº = ú, Ãª = ê, Ã§ = ç, Ã = À/Á/Â/Ã
+  const mojibakePatterns = [
+    'Ã‰', 'Ã‡', 'Ã£', 'Ã¡', 'Ã©', 'Ã³', 'Ãº', 'Ãª', 'Ã§', 'Ãµ', 'Ã¢', 'Ãµes', 'Ã§Ãµes'
+  ];
+  let score = 0;
+  for (const pattern of mojibakePatterns) {
+    if (ansiText.includes(pattern)) {
+      score += 1;
+    }
+  }
+  return score > 0;
+};
+
 const extractDeclaredDxfEncoding = (probeText: string): string | null => {
   const lines = probeText.split(/\r?\n/).map((line) => line.trim());
   for (let index = 0; index < lines.length - 3; index += 1) {
@@ -53,16 +68,26 @@ export const decodeDxfTextBuffer = (buffer: ArrayBuffer): string => {
     return decodeWithEncoding(buffer, 'utf-8');
   }
 
-  const singleByteProbe = decodeWithEncoding(buffer, 'windows-1252');
-  const declaredEncoding = extractDeclaredDxfEncoding(singleByteProbe);
-  if (declaredEncoding) {
-    return decodeWithEncoding(buffer, declaredEncoding);
-  }
-
+  // Se o arquivo for um UTF-8 válido (sem replacement characters), confiamos nisso primeiro.
   const utf8Text = decodeWithEncoding(buffer, 'utf-8');
   const utf8ReplacementCount = countReplacementCharacters(utf8Text);
   if (utf8ReplacementCount === 0) {
     return utf8Text;
+  }
+
+  // Faz um probe com Windows-1252
+  const singleByteProbe = decodeWithEncoding(buffer, 'windows-1252');
+  
+  // Se o probe ANSI contiver muitos padrões de Mojibake (ex: VÃ‰RTICE), 
+  // significa que o arquivo é na verdade UTF-8, mas tem alguns bytes binários inválidos
+  // que fizeram o utf8ReplacementCount > 0. Nesse caso, é melhor usar o UTF-8.
+  if (isUtf8MisinterpretedAsAnsi(singleByteProbe)) {
+    return utf8Text;
+  }
+
+  const declaredEncoding = extractDeclaredDxfEncoding(singleByteProbe);
+  if (declaredEncoding) {
+    return decodeWithEncoding(buffer, declaredEncoding);
   }
 
   return singleByteProbe;

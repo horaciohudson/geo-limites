@@ -61,7 +61,7 @@ import {
   type CadViewportState,
   type TextToolSessionState
 } from '@/graphics-engine/pages/cad-editor/cadEditorConfig';
-import { buildSelectedEntityInfo, isTextLikeEntity } from '@/graphics-engine/components/viewer-dxf/entitySelectionUtils';
+import { buildSelectedEntityInfo, getEntityBounds, isTextLikeEntity } from '@/graphics-engine/components/viewer-dxf/entitySelectionUtils';
 import { CadEditorContextMenus } from '@/graphics-engine/pages/cad-editor/CadEditorContextMenus';
 import { CadEditorLayerDialog } from '@/graphics-engine/pages/cad-editor/CadEditorLayerDialog';
 import { CadEditorTextDialog } from '@/graphics-engine/pages/cad-editor/CadEditorTextDialog';
@@ -114,6 +114,49 @@ const PRIMARY_BOUNDARY_POINT_TOLERANCE = 0.001;
 // mesmo quando o usuario fecha a perimetral corretamente com snap.
 const PRIMARY_BOUNDARY_GRAPH_TOLERANCE = 0.5;
 const PRIMARY_BOUNDARY_COLLINEAR_EPSILON = 0.001;
+type SimpleBounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+const buildPolygonBounds = (polygon: Point2D[]): SimpleBounds | null => {
+  if (polygon.length === 0) {
+    return null;
+  }
+
+  return polygon.reduce<SimpleBounds>((bounds, point) => ({
+    minX: Math.min(bounds.minX, point.x),
+    minY: Math.min(bounds.minY, point.y),
+    maxX: Math.max(bounds.maxX, point.x),
+    maxY: Math.max(bounds.maxY, point.y)
+  }), {
+    minX: polygon[0].x,
+    minY: polygon[0].y,
+    maxX: polygon[0].x,
+    maxY: polygon[0].y
+  });
+};
+
+const mergeSimpleBounds = (left: SimpleBounds, right: SimpleBounds): SimpleBounds => ({
+  minX: Math.min(left.minX, right.minX),
+  minY: Math.min(left.minY, right.minY),
+  maxX: Math.max(left.maxX, right.maxX),
+  maxY: Math.max(left.maxY, right.maxY)
+});
+
+const boundsIntersectWithPadding = (
+  left: SimpleBounds,
+  right: SimpleBounds,
+  paddingX: number,
+  paddingY: number
+) => !(
+  left.maxX < right.minX - paddingX
+  || left.minX > right.maxX + paddingX
+  || left.maxY < right.minY - paddingY
+  || left.minY > right.maxY + paddingY
+);
 
 const buildBoundaryReferencePoints = (
   vertices: Array<{ x: number; y: number }>,
@@ -1151,6 +1194,122 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
       layerCounts
     };
   }, [currentEditorData, hiddenLayerNameSet, resolveFunctionalLayerName]);
+  const viewportBoundsData = useMemo<DXFData | null>(() => {
+    // Usar sempre o currentEditorData (DXF completo) para calcular os bounds,
+    // para que desligar camadas não faça o canvas dar zoom/pan (mudar de lugar).
+    const sourceData = currentEditorData;
+    if (!sourceData) {
+      return null;
+    }
+
+    const detectedEntries = analyzeGeoLimitesLotDetection({
+      dxfData: sourceData,
+      manualBridgeSegments: []
+    }).detectedPolygonEntries
+      .filter((entry) => entry.lotNumber !== null && entry.polygon.length >= 3)
+      .map((entry) => {
+        const bounds = buildPolygonBounds(entry.polygon);
+        if (!bounds) {
+          return null;
+        }
+
+        return {
+          ...entry,
+          bounds,
+          width: Math.max(bounds.maxX - bounds.minX, 0.001),
+          height: Math.max(bounds.maxY - bounds.minY, 0.001)
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    if (detectedEntries.length === 0) {
+      return sourceData;
+    }
+
+    const clusters: Array<{
+      bounds: SimpleBounds;
+      entries: typeof detectedEntries;
+      totalArea: number;
+      maxSpan: number;
+    }> = [];
+
+    detectedEntries.forEach((entry) => {
+      const entrySpan = Math.max(entry.width, entry.height, Math.sqrt(Math.max(entry.area, 0.001)));
+      const clusterIndex = clusters.findIndex((cluster) => {
+        const padding = Math.max(cluster.maxSpan, entrySpan) * 2.4;
+        return boundsIntersectWithPadding(cluster.bounds, entry.bounds, padding, padding);
+      });
+
+      if (clusterIndex === -1) {
+        clusters.push({
+          bounds: entry.bounds,
+          entries: [entry],
+          totalArea: entry.area,
+          maxSpan: entrySpan
+        });
+        return;
+      }
+
+      const cluster = clusters[clusterIndex];
+      cluster.bounds = mergeSimpleBounds(cluster.bounds, entry.bounds);
+      cluster.entries.push(entry);
+      cluster.totalArea += entry.area;
+      cluster.maxSpan = Math.max(cluster.maxSpan, entrySpan);
+    });
+
+    const focusCluster = [...clusters].sort((left, right) => {
+      if (right.entries.length !== left.entries.length) {
+        return right.entries.length - left.entries.length;
+      }
+      return right.totalArea - left.totalArea;
+    })[0];
+
+    if (!focusCluster) {
+      return sourceData;
+    }
+
+    const clusterWidth = Math.max(focusCluster.bounds.maxX - focusCluster.bounds.minX, 1);
+    const clusterHeight = Math.max(focusCluster.bounds.maxY - focusCluster.bounds.minY, 1);
+    const focusBounds: SimpleBounds = {
+      minX: focusCluster.bounds.minX - Math.max(clusterWidth * 0.45, 20),
+      minY: focusCluster.bounds.minY - Math.max(clusterHeight * 0.5, 20),
+      maxX: focusCluster.bounds.maxX + Math.max(clusterWidth * 1.35, 60),
+      maxY: focusCluster.bounds.maxY + Math.max(clusterHeight * 0.65, 20)
+    };
+
+    const focusEntities = sourceData.entities.filter((entity) => {
+      const bounds = getEntityBounds(entity);
+      if (!bounds) {
+        return false;
+      }
+
+      return boundsIntersectWithPadding(bounds, focusBounds, 0, 0);
+    });
+
+    if (focusEntities.length === 0 || focusEntities.length >= sourceData.entities.length) {
+      return sourceData;
+    }
+
+    const entityCounts = focusEntities.reduce<Record<string, number>>((counts, entity) => {
+      counts[entity.type] = (counts[entity.type] || 0) + 1;
+      return counts;
+    }, {});
+    const layerCounts = sourceData.layers.reduce<Record<string, number>>((counts, layer) => {
+      counts[layer.name] = 0;
+      return counts;
+    }, {});
+
+    focusEntities.forEach((entity) => {
+      layerCounts[entity.layer] = (layerCounts[entity.layer] || 0) + 1;
+    });
+
+    return {
+      ...sourceData,
+      entities: focusEntities,
+      entityCounts,
+      layerCounts
+    };
+  }, [currentEditorData, viewerData]);
   const summaryConfrontationSelectionScope = useMemo(() => {
     const summaryConfrontationSourceData = viewerData || currentEditorData;
     if (!summaryConfrontationSourceData) {
@@ -1991,6 +2150,9 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     canInteractWithEntity
   });
   const {
+    finishOpeningDocumentRender,
+    isOpeningDocument,
+    openingDocumentNotice,
     handleCloseOpenedFile,
     handleCreateNewDocument,
     handleApplyMeasurementUnit,
@@ -2007,6 +2169,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     setOpenedDocument,
     setLoadedDxfData,
     setActiveLayerName,
+    setHiddenLayerNames,
     setSelectedEntities,
     setViewerSelectionOverride,
     setUndoStack,
@@ -2397,8 +2560,35 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
       return;
     }
 
+    if (currentEditorData) {
+      setHiddenLayerNames((current) => {
+        const availableLayerNames = currentEditorData.layers.map((layer) => layer.name);
+        if (!availableLayerNames.includes(normalizedLayerName)) {
+          return current;
+        }
+
+        const hiddenLayerSet = new Set(current);
+        const visibleLayerNames = availableLayerNames.filter((layerName) => !hiddenLayerSet.has(layerName));
+        const isSoloVisibleActiveLayer = (
+          visibleLayerNames.length === 1
+          && visibleLayerNames[0] === activeLayerName
+          && activeLayerName !== normalizedLayerName
+        );
+
+        if (isSoloVisibleActiveLayer) {
+          return availableLayerNames.filter((layerName) => layerName !== normalizedLayerName);
+        }
+
+        if (hiddenLayerSet.has(normalizedLayerName)) {
+          return current.filter((layerName) => layerName !== normalizedLayerName);
+        }
+
+        return current;
+      });
+    }
+
     handleActiveLayerChange(normalizedLayerName);
-  }, [handleActiveLayerChange]);
+  }, [activeLayerName, currentEditorData, handleActiveLayerChange, setHiddenLayerNames]);
   const handleMoveActiveLayer = useCallback((direction: 'up' | 'down') => {
     if (!currentEditorData) {
       setEditorNotice('Abra ou crie um desenho antes de reorganizar camadas.');
@@ -3202,11 +3392,19 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
             onCanvasAreaMouseLeave={handleCanvasAreaMouseLeave}
           >
             <div className="cad-editor-canvas-frame cad-editor-canvas-frame--studio">
+              {isOpeningDocument ? (
+                <div className="cad-editor-loading-overlay" role="status" aria-live="polite">
+                  <div className="cad-editor-loading-card">
+                    <strong>Abrindo desenho DXF</strong>
+                    <span>{openingDocumentNotice || 'Processando arquivo selecionado...'}</span>
+                  </div>
+                </div>
+              ) : null}
               {openedDocument ? (
                 <ViewerComponent
                   key={`${openedDocument.name}-${openedDocument.sizeBytes}`}
                   data={viewerData || currentEditorData || openedDocument.dxfData}
-                  boundsData={currentEditorData || openedDocument.dxfData}
+                  boundsData={viewportBoundsData || currentEditorData || openedDocument.dxfData}
                   className="cad-editor-embedded-viewer"
                   embeddedMode={true}
                   embeddedToolMode={embeddedToolMode}
@@ -3267,6 +3465,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
                   onPolygonConfirmed={handleViewerPolygonConfirmed}
                   onSelectionSummaryChange={handleViewerSelectionSummaryChange}
                   onManualReviewLotSelectionChange={handleManualReviewLotSelectionChange}
+                  onInitialCanvasRendered={finishOpeningDocumentRender}
                   interactive={false}
                   primaryBoundaryReady={savedBaseAreaReferencePoints.length > 0}
                   allowLotSelectionWithoutPrimaryBoundary={

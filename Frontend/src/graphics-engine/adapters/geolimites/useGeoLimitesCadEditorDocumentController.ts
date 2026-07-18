@@ -30,6 +30,7 @@ interface UseGeoLimitesCadEditorDocumentControllerParams<SelectionItem = unknown
   setOpenedDocument: React.Dispatch<React.SetStateAction<CadOpenedDocument | null>>;
   setLoadedDxfData: React.Dispatch<React.SetStateAction<DXFData | null>>;
   setActiveLayerName: React.Dispatch<React.SetStateAction<string>>;
+  setHiddenLayerNames: React.Dispatch<React.SetStateAction<string[]>>;
   setSelectedEntities: React.Dispatch<React.SetStateAction<SelectionItem[]>>;
   setViewerSelectionOverride: React.Dispatch<React.SetStateAction<string[] | undefined>>;
   setUndoStack: React.Dispatch<React.SetStateAction<DXFData[]>>;
@@ -65,6 +66,7 @@ export const useGeoLimitesCadEditorDocumentController = <SelectionItem = unknown
   setOpenedDocument,
   setLoadedDxfData,
   setActiveLayerName,
+  setHiddenLayerNames,
   setSelectedEntities,
   setViewerSelectionOverride,
   setUndoStack,
@@ -103,6 +105,7 @@ export const useGeoLimitesCadEditorDocumentController = <SelectionItem = unknown
   setOpenedDocument,
   setLoadedDxfData,
   setActiveLayerName,
+  setHiddenLayerNames,
   setSelectedEntities,
   setViewerSelectionOverride,
   setUndoStack,

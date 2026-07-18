@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type React from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type {
@@ -6,9 +6,10 @@ import type {
   CadOpenedDocumentFileHandle,
   CadOpenedDocument
 } from '@/graphics-engine/pages/cad-editor/cadEditorConfig';
-import type { DXFData } from '@/graphics-engine/shared/dxf';
 import { readDxfFileAsText } from '@/graphics-engine/shared/dxfTextCodec';
-import { parseDXF } from '@/graphics-engine/shared/dxf';
+import { type DXFData } from '@/graphics-engine/shared/dxf';
+import { parseDxfAsync } from '@/graphics-engine/shared/dxfParseAsync';
+import { analyzeDxfImportComplexity, buildDxfImportNotice } from '@/graphics-engine/shared/dxfDiagnostics';
 import { buildDXFString, downloadDXF } from '@/utils/dxfExporter';
 import { desktopApi } from '@/services/desktopApi';
 import { buildUpdatedDxfData } from '@/graphics-engine/pages/cad-editor/cadEditorEntityUtils';
@@ -36,6 +37,7 @@ interface UseCadEditorDocumentControllerParams<
   setOpenedDocument: Dispatch<SetStateAction<CadOpenedDocument | null>>;
   setLoadedDxfData: Dispatch<SetStateAction<DXFData | null>>;
   setActiveLayerName: Dispatch<SetStateAction<string>>;
+  setHiddenLayerNames: Dispatch<SetStateAction<string[]>>;
   setSelectedEntities: Dispatch<SetStateAction<SelectionItem[]>>;
   setViewerSelectionOverride: Dispatch<SetStateAction<string[] | undefined>>;
   setUndoStack: Dispatch<SetStateAction<DXFData[]>>;
@@ -125,6 +127,47 @@ const getFileNameFromPath = (filePath: string) => {
 };
 
 const getDxfBlobSize = (contents: string) => new Blob([contents], { type: 'application/dxf;charset=utf-8' }).size;
+
+const formatElapsedTime = (elapsedMs: number) => {
+  const totalSeconds = Math.max(1, Math.round(elapsedMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes <= 0) {
+    return `${totalSeconds}s`;
+  }
+
+  return `${minutes}min ${String(seconds).padStart(2, '0')}s`;
+};
+
+const buildDxfOpenProgressNotice = ({
+  fileName,
+  stage,
+  elapsedMs
+}: {
+  fileName: string;
+  stage: string;
+  elapsedMs: number;
+}) => `Abrindo ${fileName}... ${stage} Tempo decorrido: ${formatElapsedTime(elapsedMs)}.`;
+
+const waitForNextUiPaint = async () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(resolve, 0);
+    });
+  });
+};
+
+const collectHiddenLayerNamesFromDxf = (dxfData: DXFData): string[] => (
+  dxfData.layers
+    .filter((layer) => layer.hiddenByDefault)
+    .map((layer) => layer.name.trim())
+    .filter((layerName) => layerName.length > 0)
+);
 
 const saveDxfContents = async ({
   fileName,
@@ -298,6 +341,7 @@ export const useCadEditorDocumentController = <
   setOpenedDocument,
   setLoadedDxfData,
   setActiveLayerName,
+  setHiddenLayerNames,
   setSelectedEntities,
   setViewerSelectionOverride,
   setUndoStack,
@@ -321,6 +365,18 @@ export const useCadEditorDocumentController = <
   messages
 }: UseCadEditorDocumentControllerParams<MeasurementUnitId, MenuId, SelectionItem>) => {
   const resolvedMessages = messages ?? DEFAULT_DOCUMENT_CONTROLLER_MESSAGES;
+  const [isOpeningDocument, setIsOpeningDocument] = useState(false);
+  const [openingDocumentNotice, setOpeningDocumentNotice] = useState('');
+  const openingProgressTimerRef = useRef<number | null>(null);
+  const openingStartedAtRef = useRef<number | null>(null);
+  const openingSuccessNoticeRef = useRef<string | null>(null);
+
+  const clearOpeningProgressTimer = useCallback(() => {
+    if (openingProgressTimerRef.current !== null) {
+      window.clearInterval(openingProgressTimerRef.current);
+      openingProgressTimerRef.current = null;
+    }
+  }, []);
 
   const resetEditorTransientState = useCallback((notice: string) => {
     setSelectedEntities([]);
@@ -359,6 +415,28 @@ export const useCadEditorDocumentController = <
     setSelectedGuideId,
     suppressViewerCanvasClickRef
   ]);
+  const finishOpeningDocumentRender = useCallback(() => {
+    if (!isOpeningDocument) {
+      return;
+    }
+
+    clearOpeningProgressTimer();
+    setIsOpeningDocument(false);
+    setOpeningDocumentNotice('');
+
+    const successNotice = openingSuccessNoticeRef.current;
+    openingSuccessNoticeRef.current = null;
+    if (successNotice) {
+      resetEditorTransientState(successNotice);
+      return;
+    }
+
+    resetEditorTransientState(
+      `Desenho aberto no editor. Tempo total: ${formatElapsedTime(
+        Date.now() - (openingStartedAtRef.current || Date.now())
+      )}.`
+    );
+  }, [clearOpeningProgressTimer, isOpeningDocument, resetEditorTransientState]);
   const openSelectedDxfFile = useCallback(async (
     selectedFile: File,
     options?: {
@@ -366,45 +444,103 @@ export const useCadEditorDocumentController = <
       savedFilePath?: string | null;
     }
   ) => {
-    const content = await readDxfFileAsText(selectedFile);
-    const rawParsedData = parseDXF(content);
-    const mergedParsedData = buildUpdatedDxfData(rawParsedData, rawParsedData.entities);
-    const extension = selectedFile.name.split('.').pop()?.toLowerCase() || 'dxf';
-
-    const normalizedParsedData = normalizeImportedDxfData
-      ? normalizeImportedDxfData(mergedParsedData)
-      : mergedParsedData;
-
-    setOpenedDocument({
-      name: selectedFile.name,
-      sizeBytes: selectedFile.size,
-      extension,
-      dxfData: normalizedParsedData,
-      source: 'local-dxf',
-      fileHandle: options?.fileHandle ?? null,
-      savedFilePath: options?.savedFilePath ?? null
+    const importStartTime = Date.now();
+    openingStartedAtRef.current = importStartTime;
+    openingSuccessNoticeRef.current = null;
+    let currentStage = 'Lendo arquivo.';
+    const buildProgressMessage = () => buildDxfOpenProgressNotice({
+      fileName: selectedFile.name,
+      stage: currentStage,
+      elapsedMs: Date.now() - importStartTime
     });
-    setLoadedDxfData(normalizedParsedData);
-    setActiveLayerName(normalizedParsedData.layers[0]?.name || defaultActiveLayerName);
-    resetDocumentGuideState();
-    resetEditorTransientState(resolvedMessages.buildOpenSuccessNotice({ fileName: selectedFile.name }));
+    const publishProgressNoticeAndFlushUi = async () => {
+      const notice = buildProgressMessage();
+      setOpeningDocumentNotice(notice);
+      setEditorNotice(notice);
+      await waitForNextUiPaint();
+    };
+
+    setIsOpeningDocument(true);
+    await publishProgressNoticeAndFlushUi();
+    clearOpeningProgressTimer();
+    openingProgressTimerRef.current = window.setInterval(() => {
+      const notice = buildDxfOpenProgressNotice({
+        fileName: selectedFile.name,
+        stage: currentStage,
+        elapsedMs: Date.now() - importStartTime
+      });
+      setOpeningDocumentNotice(notice);
+      setEditorNotice(notice);
+    }, 1000);
+
+    try {
+      const content = await readDxfFileAsText(selectedFile);
+      currentStage = 'Analisando estrutura do DXF.';
+      await publishProgressNoticeAndFlushUi();
+
+      const importDiagnostics = analyzeDxfImportComplexity(content, selectedFile.size);
+      currentStage = 'Processando entidades do desenho.';
+      await publishProgressNoticeAndFlushUi();
+
+      const rawParsedData = await parseDxfAsync(content);
+      currentStage = 'Normalizando camadas e metadados do editor.';
+      await publishProgressNoticeAndFlushUi();
+
+      const mergedParsedData = buildUpdatedDxfData(rawParsedData, rawParsedData.entities);
+      const extension = selectedFile.name.split('.').pop()?.toLowerCase() || 'dxf';
+
+      const normalizedParsedData = normalizeImportedDxfData
+        ? normalizeImportedDxfData(mergedParsedData)
+        : mergedParsedData;
+
+      currentStage = 'Montando visualizacao inicial do desenho.';
+      await publishProgressNoticeAndFlushUi();
+
+      setOpenedDocument({
+        name: selectedFile.name,
+        sizeBytes: selectedFile.size,
+        extension,
+        dxfData: normalizedParsedData,
+        source: 'local-dxf',
+        fileHandle: options?.fileHandle ?? null,
+        savedFilePath: options?.savedFilePath ?? null
+      });
+      setLoadedDxfData(normalizedParsedData);
+      setActiveLayerName(normalizedParsedData.layers[0]?.name || defaultActiveLayerName);
+      setHiddenLayerNames(collectHiddenLayerNamesFromDxf(normalizedParsedData));
+      resetDocumentGuideState();
+      openingSuccessNoticeRef.current = `${buildDxfImportNotice(
+        selectedFile.name,
+        importDiagnostics
+      )} Tempo de abertura: ${formatElapsedTime(Date.now() - importStartTime)}.`;
+    } catch (error) {
+      clearOpeningProgressTimer();
+      setIsOpeningDocument(false);
+      setOpeningDocumentNotice('');
+      openingSuccessNoticeRef.current = null;
+      throw error;
+    }
   }, [
+    clearOpeningProgressTimer,
     defaultActiveLayerName,
     normalizeImportedDxfData,
     resetDocumentGuideState,
-    resetEditorTransientState,
-    resolvedMessages,
     setActiveLayerName,
+    setEditorNotice,
+    setHiddenLayerNames,
     setLoadedDxfData,
+    setOpeningDocumentNotice,
+    setIsOpeningDocument,
     setOpenedDocument
   ]);
 
   const handleCloseOpenedFile = useCallback(() => {
     setOpenedDocument(null);
     setLoadedDxfData(null);
+    setHiddenLayerNames([]);
     resetDocumentGuideState();
     resetEditorTransientState(resolvedMessages.closeOpenedFileNotice);
-  }, [resetDocumentGuideState, resetEditorTransientState, resolvedMessages.closeOpenedFileNotice, setLoadedDxfData, setOpenedDocument]);
+  }, [resetDocumentGuideState, resetEditorTransientState, resolvedMessages.closeOpenedFileNotice, setHiddenLayerNames, setLoadedDxfData, setOpenedDocument]);
 
   const handleCreateNewDocument = useCallback(() => {
     const emptyDxfData = createEmptyDxfData();
@@ -421,6 +557,7 @@ export const useCadEditorDocumentController = <
     });
     setLoadedDxfData(emptyDxfData);
     setActiveLayerName(emptyDxfData.layers[0]?.name || defaultActiveLayerName);
+    setHiddenLayerNames([]);
     resetDocumentGuideState();
     resetEditorTransientState(
       resolvedMessages.buildNewDocumentNotice({
@@ -436,6 +573,7 @@ export const useCadEditorDocumentController = <
     resetEditorTransientState,
     resolvedMessages,
     setActiveLayerName,
+    setHiddenLayerNames,
     setLoadedDxfData,
     setOpenedDocument,
     workspaceSizeLabel
@@ -589,6 +727,9 @@ export const useCadEditorDocumentController = <
   ]);
 
   return {
+    finishOpeningDocumentRender,
+    isOpeningDocument,
+    openingDocumentNotice,
     resetEditorTransientState,
     resetDocumentGuideState,
     handleCloseOpenedFile,

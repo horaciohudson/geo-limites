@@ -130,6 +130,7 @@ export interface ViewerDXFProps extends ViewerDXFCorrectiveProps {
   onEntityEditNode?: ViewerEntityEditNodeHandler;
   onEntityTransform?: ViewerEntityTransformHandler;
   onDXFDataLoaded?: (data: DXFData) => void;
+  onInitialCanvasRendered?: () => void;
   interactive?: boolean;
   activeLayerName?: string;
   selectedEntityIdsOverride?: string[];

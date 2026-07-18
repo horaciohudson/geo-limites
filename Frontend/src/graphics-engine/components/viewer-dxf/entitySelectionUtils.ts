@@ -30,8 +30,30 @@ export const isTextLikeEntity = (entity: DXFEntity): boolean =>
 
 export const extractTextPosition = (entity: DXFEntity): Point2D | null => {
   const props = entity.properties as DXFEntityProperties;
-  const x = props.x ?? props.alignmentX ?? props.x1;
-  const y = props.y ?? props.alignmentY ?? props.y1;
+  
+  // No DXF, se hAlign > 0 ou vAlign > 0, o ponto de ancoragem real é o alignmentX/Y (códigos 11 e 21).
+  // Se forem 0 ou ausentes, o ponto real é o x/y (códigos 10 e 20).
+  // Exceção: Para hAlign = 3 (Aligned) ou 5 (Fit), os pontos 10 e 11 definem a linha base.
+  // Como não suportamos o esticamento perfeito no canvas ainda, usamos o ponto inicial (10, 20)
+  // ou o ponto médio entre eles para melhor aproximação visual.
+  const isAlignedOrFit = props.horizontalAlign === 3 || props.horizontalAlign === 5;
+  const hasAlignmentPoint = !isAlignedOrFit && ((typeof props.horizontalAlign === 'number' && props.horizontalAlign > 0) || 
+                            (typeof props.verticalAlign === 'number' && props.verticalAlign > 0));
+  
+  let x: number | undefined;
+  let y: number | undefined;
+  
+  if (isAlignedOrFit && typeof props.x === 'number' && typeof props.alignmentX === 'number') {
+    x = (props.x + props.alignmentX) / 2;
+    y = (props.y! + (props.alignmentY ?? props.y!)) / 2;
+  } else if (hasAlignmentPoint) {
+    x = props.alignmentX ?? props.x ?? props.x1;
+    y = props.alignmentY ?? props.y ?? props.y1;
+  } else {
+    x = props.x ?? props.alignmentX ?? props.x1;
+    y = props.y ?? props.alignmentY ?? props.y1;
+  }
+
   if (typeof x !== 'number' || typeof y !== 'number') {
     return null;
   }

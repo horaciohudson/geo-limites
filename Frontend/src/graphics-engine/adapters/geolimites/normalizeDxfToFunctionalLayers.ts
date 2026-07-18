@@ -1,6 +1,13 @@
 import type { CadLayerDefinition } from '@/graphics-engine/pages/cad-editor/cadEditorConfig';
 import type { DXFData, DXFEntity, DXFLayer, DXFVertex } from '@/graphics-engine/shared/dxf';
-import { resolveGeoLimitesFunctionalLayerNameFromEntity } from '@/graphics-engine/adapters/geolimites/functionalLayerUtils';
+import {
+  GEO_LIMITES_FUNCTIONAL_LAYER_APOIO_GEORREF,
+  GEO_LIMITES_FUNCTIONAL_LAYER_AUXILIAR,
+  GEO_LIMITES_FUNCTIONAL_LAYER_CONFRONTACOES_TXT,
+  GEO_LIMITES_FUNCTIONAL_LAYER_LOTES_GEOM,
+  GEO_LIMITES_FUNCTIONAL_LAYER_LOTES_TXT,
+  resolveGeoLimitesFunctionalLayerNameFromEntity
+} from '@/graphics-engine/adapters/geolimites/functionalLayerUtils';
 
 const normalizeLayerName = (layerName: string | undefined | null) => {
   const normalized = String(layerName || '').trim();
@@ -35,19 +42,34 @@ export const normalizeDxfToFunctionalLayers = (
 ): DXFData => {
   const baseLayerNameSet = new Set(baseLayers.map((layer) => normalizeLayerName(layer.name)));
   const editorCreatedLayerNames = new Set<string>();
+  const originalLayerVisibilityMap = new Map<string, boolean>();
 
   dxfData.layers.forEach((layer) => {
     const normalizedLayerName = normalizeLayerName(layer.name);
+    originalLayerVisibilityMap.set(normalizedLayerName, !layer.hiddenByDefault);
     if (!baseLayerNameSet.has(normalizedLayerName) && layer.editorCreated) {
       editorCreatedLayerNames.add(normalizedLayerName);
     }
   });
 
+  const normalizedLayerVisibility = new Map<string, { hasVisibleSource: boolean; hasHiddenSource: boolean }>();
   const normalizedEntities = dxfData.entities.map((entity) => {
     const normalizedOriginalLayerName = normalizeLayerName(entity.layer);
     const resolvedLayerName = editorCreatedLayerNames.has(normalizedOriginalLayerName)
       ? normalizedOriginalLayerName
       : resolveGeoLimitesFunctionalLayerNameFromEntity(entity);
+    const sourceIsVisible = originalLayerVisibilityMap.get(normalizedOriginalLayerName) ?? true;
+    const currentVisibility = normalizedLayerVisibility.get(resolvedLayerName) || {
+      hasVisibleSource: false,
+      hasHiddenSource: false
+    };
+
+    if (sourceIsVisible) {
+      currentVisibility.hasVisibleSource = true;
+    } else {
+      currentVisibility.hasHiddenSource = true;
+    }
+    normalizedLayerVisibility.set(resolvedLayerName, currentVisibility);
 
     return cloneEntityWithLayer(entity, resolvedLayerName);
   });
@@ -60,7 +82,26 @@ export const normalizeDxfToFunctionalLayers = (
     orderedLayerNames.add(normalizeLayerName(entity.layer));
   });
 
-  const layers: DXFLayer[] = Array.from(orderedLayerNames).map((layerName) => ({ name: layerName }));
+  const hasPrimaryDrawingContent = normalizedEntities.some((entity) => (
+    entity.layer === GEO_LIMITES_FUNCTIONAL_LAYER_LOTES_GEOM
+      || entity.layer === GEO_LIMITES_FUNCTIONAL_LAYER_LOTES_TXT
+      || entity.layer === GEO_LIMITES_FUNCTIONAL_LAYER_CONFRONTACOES_TXT
+  ));
+
+  const layers: DXFLayer[] = Array.from(orderedLayerNames).map((layerName) => {
+    const visibility = normalizedLayerVisibility.get(layerName);
+    const hiddenByImportedState = Boolean(visibility?.hasHiddenSource && !visibility.hasVisibleSource);
+    const hiddenByRelevanceFocus = hasPrimaryDrawingContent
+      && (
+        layerName === GEO_LIMITES_FUNCTIONAL_LAYER_AUXILIAR
+        || layerName === GEO_LIMITES_FUNCTIONAL_LAYER_APOIO_GEORREF
+      );
+
+    return {
+      name: layerName,
+      hiddenByDefault: hiddenByImportedState || hiddenByRelevanceFocus
+    };
+  });
   const entityCounts = normalizedEntities.reduce<Record<string, number>>((counts, entity) => {
     counts[entity.type] = (counts[entity.type] || 0) + 1;
     return counts;

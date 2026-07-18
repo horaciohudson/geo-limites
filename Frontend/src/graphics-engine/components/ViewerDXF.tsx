@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
-import { parseDXF, type DXFData, type DXFEntity, type DXFEntityProperties } from '@/graphics-engine/shared/dxf';
+import { type DXFData, type DXFEntity, type DXFEntityProperties } from '@/graphics-engine/shared/dxf';
 import { calculateDistance, calculatePolygonArea, type Point2D } from '@/graphics-engine/shared/geometry';
+import { parseDxfAsync } from '@/graphics-engine/shared/dxfParseAsync';
 import {
   buildSelectedEntityInfo,
   findNearestSelectableEntityInfo,
@@ -250,6 +251,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   onEntityTranslate,
   onEntityTransform,
   onDXFDataLoaded,
+  onInitialCanvasRendered,
   interactive,
   activeLayerName,
   selectedEntityIdsOverride,
@@ -1232,7 +1234,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
         setError('');
 
         const dxfText = await resolvedDxfTextLoader(fileId);
-        const parsedData = parseDXF(dxfText);
+        const parsedData = await parseDxfAsync(dxfText);
 
         if (isMounted) {
           setDxfData(parsedData);
@@ -1761,6 +1763,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     selectedSegments,
     setDrawingBounds,
     setGridOrigin,
+    onInitialCanvasRendered,
     setScale,
     setValidPoints,
     showGrid,

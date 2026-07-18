@@ -10,6 +10,8 @@ export type GeoLimitesFunctionalLayerInput = {
   layer: string;
   type?: string;
   text?: string | null;
+  sourceEntityType?: string | null;
+  sourceBlockName?: string | null;
 };
 
 const GEORREF_LAYER_HINTS = [
@@ -37,6 +39,22 @@ const AUXILIARY_LAYER_HINTS = [
   'layout',
   'viewport',
   'title'
+];
+
+const AUXILIARY_BLOCK_HINTS = [
+  'archtick',
+  'refer',
+  'rosa',
+  'norte',
+  'nv',
+  'selo',
+  'carimbo',
+  'margem',
+  'borda',
+  'layout',
+  'viewport',
+  'title',
+  'legenda'
 ];
 
 const CONFRONTATION_TEXT_HINTS = [
@@ -132,16 +150,28 @@ export const isGeoLimitesCustomLayerName = (layerName: string | null | undefined
 export const resolveGeoLimitesFunctionalLayerName = ({
   layer,
   type,
-  text
+  text,
+  sourceEntityType,
+  sourceBlockName
 }: GeoLimitesFunctionalLayerInput): string => {
   const normalizedLayer = normalizeText(layer);
   const normalizedType = normalizeText(type);
   const normalizedText = normalizeText(text);
+  const normalizedSourceEntityType = normalizeText(sourceEntityType);
+  const normalizedSourceBlockName = normalizeText(sourceBlockName);
   const isTextLike = isTextLikeType(normalizedType.toUpperCase());
   const mappedLegacyLayerName = LEGACY_FUNCTIONAL_LAYER_NAME_MAP[normalizedLayer];
 
   if (mappedLegacyLayerName) {
     return mappedLegacyLayerName;
+  }
+
+  if (
+    normalizedSourceEntityType === 'dimension'
+    || normalizedSourceEntityType === 'arc_dimension'
+    || AUXILIARY_BLOCK_HINTS.some((hint) => normalizedSourceBlockName.includes(hint))
+  ) {
+    return GEO_LIMITES_FUNCTIONAL_LAYER_AUXILIAR;
   }
 
   if (
@@ -189,6 +219,8 @@ export const resolveGeoLimitesFunctionalLayerNameFromEntity = (entity: DXFEntity
   resolveGeoLimitesFunctionalLayerName({
     layer: entity.layer,
     type: entity.type,
-    text: typeof entity.properties.text === 'string' ? entity.properties.text : null
+    text: typeof entity.properties.text === 'string' ? entity.properties.text : null,
+    sourceEntityType: typeof entity.properties.sourceEntityType === 'string' ? entity.properties.sourceEntityType : null,
+    sourceBlockName: typeof entity.properties.sourceBlockName === 'string' ? entity.properties.sourceBlockName : null
   })
 );
