@@ -79,6 +79,8 @@ public class DeterministicMemorialService {
     private static final String DEFAULT_TERRAIN_ID = "1";
     private static final String DEFAULT_LEGAL_BASIS = "§ 14 do art. 213 da Lei nº 6.015/1973";
     private static final String DEFAULT_PROFESSIONAL_REGISTRY = "Registro profissional a confirmar";
+    private static final String DEFAULT_PROFESSIONAL_COUNCIL = "Conselho profissional a confirmar";
+    private static final String DEFAULT_PROFESSIONAL_RNP = "RNP a confirmar";
     private static final CanonicalPlaceholderField[] TOKEN_MATCH_CANONICAL_FIELDS = {
             CanonicalPlaceholderField.OWNER_NAME,
             CanonicalPlaceholderField.OWNER_DOCUMENT,
