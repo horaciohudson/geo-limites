@@ -5,6 +5,11 @@ export interface DXFVertex {
   bulge?: number;
 }
 
+interface DXFHatchLoop {
+  vertices: DXFVertex[];
+  closed: boolean;
+}
+
 type DXFPropertyValue = string | number | boolean | DXFVertex[] | Array<string | number>;
 
 export interface DXFEntityProperties {
@@ -43,6 +48,9 @@ export interface DXFEntityProperties {
   valign?: number;
   lineColor?: string;
   fillColor?: string;
+  aciColor?: number;
+  isPaperSpace?: boolean;
+  layoutName?: string;
   editorEntityId?: string;
   editorGroupId?: string;
   vertexCount?: number;
@@ -63,6 +71,9 @@ export interface DXFLayer {
   name: string;
   color?: number;
   lineType?: string;
+  isFrozen?: boolean;
+  isLocked?: boolean;
+  hiddenByDefault?: boolean;
   editorCreated?: boolean;
 }
 
@@ -71,6 +82,7 @@ export interface DXFData {
   layers: DXFLayer[];
   entityCounts: Record<string, number>;
   layerCounts: Record<string, number>;
+  originalLayerColors?: Record<string, number>;
 }
 
 interface DXFBlockDefinition {
@@ -78,6 +90,8 @@ interface DXFBlockDefinition {
   layer: string;
   baseX: number;
   baseY: number;
+  isPaperSpace?: boolean;
+  layoutName?: string;
   entities: DXFEntity[];
 }
 
@@ -97,10 +111,15 @@ const SUPPORTED_DXF_ENTITY_TYPES = new Set([
   'TEXT',
   'MTEXT',
   'ATTRIB',
+  'ATTDEF',
   'POINT',
   'LWPOLYLINE',
   'POLYLINE',
-  'INSERT'
+  'INSERT',
+  'DIMENSION',
+  'ARC_DIMENSION',
+  'HATCH',
+  'LEADER'
 ]);
 
 /**
@@ -116,7 +135,7 @@ export class DXFParser {
   }
 
   private isTextEntity(entityType: string): boolean {
-    return entityType === 'TEXT' || entityType === 'MTEXT' || entityType === 'ATTRIB';
+    return entityType === 'TEXT' || entityType === 'MTEXT' || entityType === 'ATTRIB' || entityType === 'ATTDEF';
   }
 
   private parseNumber(value: DXFPropertyValue | undefined): number | null {
@@ -153,6 +172,21 @@ export class DXFParser {
     return (flag & 8) === 0 && (flag & 16) === 0 && (flag & 64) === 0;
   }
 
+  private shouldRenderBySpace(_metadata: { isPaperSpace?: boolean; layoutName?: string }): boolean {
+    // A pedido do usuário: não filtramos mais o Paper Space ou Layouts de forma
+    // programática. A filosofia agora é abrir tudo integralmente para garantir
+    // que nada se perca, e o usuário fará a limpeza (deleção) manualmente no editor.
+    return true;
+  }
+
+  private shouldRenderEntity(entity: DXFEntity): boolean {
+    return this.shouldRenderBySpace(entity.properties);
+  }
+
+  private shouldRenderBlock(block: DXFBlockDefinition): boolean {
+    return this.shouldRenderBySpace(block);
+  }
+
   /**
    * Faz o parsing completo do arquivo DXF
    */
@@ -161,12 +195,13 @@ export class DXFParser {
     const entities: DXFEntity[] = [];
     const layers: DXFLayer[] = [];
     const blockDefinitions = new Map<string, DXFBlockDefinition>();
+    const referencedBlockNames = this.collectReferencedBlockNames();
 
     // Procura pela secao BLOCKS antes da ENTITIES para permitir expandir INSERTs.
     const blocksStart = this.findSection('BLOCKS');
     if (blocksStart !== -1) {
       this.currentIndex = blocksStart;
-      this.parseBlocks(blockDefinitions);
+      this.parseBlocks(blockDefinitions, referencedBlockNames);
     }
 
     // Procura pela seção ENTITIES
@@ -187,11 +222,19 @@ export class DXFParser {
     const entityCounts = this.countEntities(entities);
     const layerCounts = this.countLayers(entities);
 
+    const originalLayerColors: Record<string, number> = {};
+    for (const layer of layers) {
+      if (layer.color !== undefined) {
+        originalLayerColors[layer.name] = layer.color;
+      }
+    }
+
     return {
       entities,
       layers,
       entityCounts,
-      layerCounts
+      layerCounts,
+      originalLayerColors
     };
   }
 
@@ -213,6 +256,38 @@ export class DXFParser {
     return -1;
   }
 
+  private collectReferencedBlockNames(): Set<string> {
+    const blockNames = new Set<string>();
+
+    for (let i = 0; i < this.lines.length - 1; i++) {
+      if (this.lines[i] !== '0') {
+        continue;
+      }
+
+      const entityType = this.lines[i + 1];
+      if (entityType !== 'INSERT' && entityType !== 'DIMENSION' && entityType !== 'ARC_DIMENSION') {
+        continue;
+      }
+
+      for (let j = i + 2; j < this.lines.length - 1; j += 2) {
+        const code = this.lines[j];
+        if (code === '0') {
+          break;
+        }
+
+        if (code === '2') {
+          const blockName = this.lines[j + 1]?.trim();
+          if (blockName) {
+            blockNames.add(blockName);
+          }
+          break;
+        }
+      }
+    }
+
+    return blockNames;
+  }
+
   /**
    * Faz o parsing das entidades
    */
@@ -230,14 +305,36 @@ export class DXFParser {
         break;
       }
 
+      if (nextLine === 'HATCH') {
+        const hatchEntities = this.parseHatchEntitiesAtCurrentIndex();
+        this.currentIndex++;
+        if (hatchEntities.length > 0) {
+          entities.push(...hatchEntities);
+        }
+        continue;
+      }
+
       if (nextLine === 'POLYLINE' || SUPPORTED_DXF_ENTITY_TYPES.has(nextLine)) {
         const entity = this.parseSupportedEntityAtCurrentIndex(nextLine);
+        if (entity && !this.shouldRenderEntity(entity)) {
+          continue;
+        }
         if (entity?.type === 'INSERT') {
           const expandedEntities = this.expandInsertEntity(entity, blockDefinitions);
           if (expandedEntities.length > 0) {
             entities.push(...expandedEntities);
           } else {
             entities.push(entity);
+          }
+        } else if (entity?.type === 'HATCH') {
+          const expandedEntities = this.expandHatchEntity(entity);
+          if (expandedEntities.length > 0) {
+            entities.push(...expandedEntities);
+          }
+        } else if (entity?.type === 'DIMENSION' || entity?.type === 'ARC_DIMENSION') {
+          const expandedEntities = this.expandDimensionEntity(entity, blockDefinitions);
+          if (expandedEntities.length > 0) {
+            entities.push(...expandedEntities);
           }
         } else if (entity) {
           entities.push(entity);
@@ -299,7 +396,348 @@ export class DXFParser {
     return polyline;
   }
 
-  private parseBlocks(blockDefinitions: Map<string, DXFBlockDefinition>): void {
+  private appendHatchLoopVertex(vertices: DXFVertex[], vertex: DXFVertex): void {
+    const lastVertex = vertices[vertices.length - 1];
+    if (lastVertex && Math.abs(lastVertex.x - vertex.x) <= 0.0000001 && Math.abs(lastVertex.y - vertex.y) <= 0.0000001) {
+      if (typeof vertex.bulge === 'number') {
+        lastVertex.bulge = vertex.bulge;
+      }
+      return;
+    }
+
+    vertices.push(vertex);
+  }
+
+  private buildHatchArcSampleVertices(
+    centerX: number,
+    centerY: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    counterClockwise: boolean
+  ): DXFVertex[] {
+    if (!Number.isFinite(radius) || radius <= 0) {
+      return [];
+    }
+
+    const normalizeAngle = (angle: number) => {
+      const normalized = angle % 360;
+      return normalized < 0 ? normalized + 360 : normalized;
+    };
+
+    const normalizedStart = normalizeAngle(startAngle);
+    const normalizedEnd = normalizeAngle(endAngle);
+    const counterClockwiseSweep = ((normalizedEnd - normalizedStart + 360) % 360 || 360);
+    const clockwiseSweep = ((normalizedStart - normalizedEnd + 360) % 360 || 360);
+    const useCounterClockwise = counterClockwiseSweep < clockwiseSweep
+      ? true
+      : clockwiseSweep < counterClockwiseSweep
+        ? false
+        : counterClockwise;
+    const sweep = useCounterClockwise ? counterClockwiseSweep : clockwiseSweep;
+    const segmentCount = Math.max(2, Math.ceil(Math.max(sweep, 1) / 15));
+    const vertices: DXFVertex[] = [];
+
+    for (let index = 0; index <= segmentCount; index += 1) {
+      const step = (sweep * index) / segmentCount;
+      const angle = useCounterClockwise ? (normalizedStart + step) : (normalizedStart - step);
+      const radians = (normalizeAngle(angle) * Math.PI) / 180;
+      vertices.push({
+        x: centerX + (Math.cos(radians) * radius),
+        y: centerY + (Math.sin(radians) * radius)
+      });
+    }
+
+    return vertices;
+  }
+
+  private buildHatchLoopEntities(layer: string, loops: DXFHatchLoop[]): DXFEntity[] {
+    return loops
+      .filter((loop) => loop.vertices.length > 1)
+      .map((loop) => {
+        const vertices = [...loop.vertices];
+        if (loop.closed && vertices.length > 1) {
+          const firstVertex = vertices[0];
+          const lastVertex = vertices[vertices.length - 1];
+          if (
+            Math.abs(firstVertex.x - lastVertex.x) <= 0.0000001
+            && Math.abs(firstVertex.y - lastVertex.y) <= 0.0000001
+          ) {
+            vertices.pop();
+          }
+        }
+
+        return {
+          type: 'LWPOLYLINE',
+          layer,
+          properties: {
+            vertices,
+            closed: loop.closed,
+            polylineFlag: loop.closed ? 1 : 0,
+            x: vertices[0]?.x,
+            y: vertices[0]?.y
+          }
+        };
+      });
+  }
+
+  private parseHatchEntitiesAtCurrentIndex(): DXFEntity[] {
+    let layer = '0';
+    let isPaperSpace = false;
+    let layoutName = '';
+    const loops: DXFHatchLoop[] = [];
+    let activeLoop: DXFHatchLoop | null = null;
+    let hatchPolylinePath = false;
+    let activePolylineVertexIndex = -1;
+    let hatchCurrentEdgeType: number | null = null;
+    let hatchLineStartX: number | null = null;
+    let hatchLineStartY: number | null = null;
+    let hatchLineEndX: number | null = null;
+    let hatchLineEndY: number | null = null;
+    let hatchArcCenterX: number | null = null;
+    let hatchArcCenterY: number | null = null;
+    let hatchArcRadius: number | null = null;
+    let hatchArcStartAngle: number | null = null;
+    let hatchArcEndAngle: number | null = null;
+    let hatchArcCounterClockwise = false;
+
+    const finalizeLoop = () => {
+      if (!activeLoop || activeLoop.vertices.length <= 1) {
+        activeLoop = null;
+        return;
+      }
+
+      loops.push({
+        vertices: [...activeLoop.vertices],
+        closed: activeLoop.closed
+      });
+      activeLoop = null;
+    };
+
+    const resetEdgeState = () => {
+      hatchLineStartX = null;
+      hatchLineStartY = null;
+      hatchLineEndX = null;
+      hatchLineEndY = null;
+      hatchArcCenterX = null;
+      hatchArcCenterY = null;
+      hatchArcRadius = null;
+      hatchArcStartAngle = null;
+      hatchArcEndAngle = null;
+      hatchArcCounterClockwise = false;
+    };
+
+    this.currentIndex += 2;
+
+    while (this.currentIndex < this.lines.length - 1) {
+      const code = this.lines[this.currentIndex];
+      const value = this.lines[this.currentIndex + 1];
+
+      if (code === '0') {
+        this.currentIndex--;
+        break;
+      }
+
+      switch (code) {
+        case '8':
+          layer = value;
+          break;
+        case '67': {
+          const spaceFlag = parseInt(value);
+          if (!Number.isNaN(spaceFlag)) {
+            isPaperSpace = spaceFlag === 1;
+          }
+          break;
+        }
+        case '410':
+          layoutName = value;
+          break;
+        case '92': {
+          finalizeLoop();
+          const flags = parseInt(value);
+          activeLoop = { vertices: [], closed: true };
+          hatchPolylinePath = !Number.isNaN(flags) && (flags & 2) === 2;
+          activePolylineVertexIndex = -1;
+          hatchCurrentEdgeType = null;
+          resetEdgeState();
+          break;
+        }
+        case '72': {
+          if (!activeLoop) {
+            break;
+          }
+          if (!hatchPolylinePath) {
+            const edgeType = parseInt(value);
+            if (!Number.isNaN(edgeType)) {
+              hatchCurrentEdgeType = edgeType;
+              resetEdgeState();
+            }
+          }
+          break;
+        }
+        case '73': {
+          const flag = parseInt(value);
+          if (activeLoop && !Number.isNaN(flag)) {
+            if (hatchPolylinePath) {
+              activeLoop.closed = flag !== 0;
+            } else {
+              hatchArcCounterClockwise = flag !== 0;
+            }
+          }
+          break;
+        }
+        case '10': {
+          const parsed = parseFloat(value);
+          if (Number.isNaN(parsed) || !activeLoop) {
+            break;
+          }
+          if (hatchPolylinePath) {
+            activeLoop.vertices.push({ x: parsed, y: 0 });
+            activePolylineVertexIndex = activeLoop.vertices.length - 1;
+          } else if (hatchCurrentEdgeType === 1) {
+            hatchLineStartX = parsed;
+          } else if (hatchCurrentEdgeType === 2) {
+            hatchArcCenterX = parsed;
+          }
+          break;
+        }
+        case '20': {
+          const parsed = parseFloat(value);
+          if (Number.isNaN(parsed) || !activeLoop) {
+            break;
+          }
+          if (hatchPolylinePath) {
+            const activeVertex = activeLoop.vertices[activePolylineVertexIndex];
+            if (activeVertex) {
+              activeVertex.y = parsed;
+            }
+          } else if (hatchCurrentEdgeType === 1) {
+            hatchLineStartY = parsed;
+          } else if (hatchCurrentEdgeType === 2) {
+            hatchArcCenterY = parsed;
+          }
+          break;
+        }
+        case '42': {
+          if (!activeLoop || !hatchPolylinePath) {
+            break;
+          }
+          const parsed = parseFloat(value);
+          const activeVertex = activeLoop.vertices[activePolylineVertexIndex];
+          if (activeVertex && !Number.isNaN(parsed) && Math.abs(parsed) > 0.0000001) {
+            activeVertex.bulge = parsed;
+          }
+          break;
+        }
+        case '11': {
+          const parsed = parseFloat(value);
+          if (!Number.isNaN(parsed) && hatchCurrentEdgeType === 1) {
+            hatchLineEndX = parsed;
+          }
+          break;
+        }
+        case '21': {
+          const parsed = parseFloat(value);
+          if (Number.isNaN(parsed) || !activeLoop) {
+            break;
+          }
+          if (hatchCurrentEdgeType === 1) {
+            hatchLineEndY = parsed;
+            if (
+              hatchLineStartX !== null
+              && hatchLineStartY !== null
+              && hatchLineEndX !== null
+              && hatchLineEndY !== null
+            ) {
+              this.appendHatchLoopVertex(activeLoop.vertices, { x: hatchLineStartX, y: hatchLineStartY });
+              this.appendHatchLoopVertex(activeLoop.vertices, { x: hatchLineEndX, y: hatchLineEndY });
+            }
+          }
+          break;
+        }
+        case '40': {
+          const parsed = parseFloat(value);
+          if (!Number.isNaN(parsed) && hatchCurrentEdgeType === 2) {
+            hatchArcRadius = parsed;
+          }
+          break;
+        }
+        case '50': {
+          const parsed = parseFloat(value);
+          if (!Number.isNaN(parsed) && hatchCurrentEdgeType === 2) {
+            hatchArcStartAngle = parsed;
+          }
+          break;
+        }
+        case '51': {
+          const parsed = parseFloat(value);
+          if (!Number.isNaN(parsed) && activeLoop && hatchCurrentEdgeType === 2) {
+            hatchArcEndAngle = parsed;
+            if (
+              hatchArcCenterX !== null
+              && hatchArcCenterY !== null
+              && hatchArcRadius !== null
+              && hatchArcStartAngle !== null
+            ) {
+              const arcVertices = this.buildHatchArcSampleVertices(
+                hatchArcCenterX,
+                hatchArcCenterY,
+                hatchArcRadius,
+                hatchArcStartAngle,
+                hatchArcEndAngle,
+                hatchArcCounterClockwise
+              );
+              arcVertices.forEach((vertex) => this.appendHatchLoopVertex(activeLoop!.vertices, vertex));
+            }
+          }
+          break;
+        }
+      }
+
+      this.currentIndex += 2;
+    }
+
+    finalizeLoop();
+    const hatchEntity: DXFEntity = {
+      type: 'HATCH',
+      layer,
+      properties: {
+        isPaperSpace,
+        layoutName
+      }
+    };
+
+    if (!this.shouldRenderEntity(hatchEntity)) {
+      return [];
+    }
+
+    return this.buildHatchLoopEntities(layer, loops);
+  }
+
+  private expandHatchEntity(entity: DXFEntity): DXFEntity[] {
+    if (entity.type !== 'HATCH') {
+      return [entity];
+    }
+
+    if (entity.properties.vertices && entity.properties.vertices.length > 1) {
+      return [{
+        ...entity,
+        type: 'LWPOLYLINE',
+        properties: {
+          ...entity.properties,
+          closed: entity.properties.closed ?? true,
+          polylineFlag: entity.properties.closed === false ? 0 : 1
+        }
+      }];
+    }
+
+    return [];
+  }
+
+  private parseBlocks(
+    blockDefinitions: Map<string, DXFBlockDefinition>,
+    referencedBlockNames: Set<string>
+  ): void {
     while (this.currentIndex < this.lines.length - 1) {
       const line = this.lines[this.currentIndex];
 
@@ -314,7 +752,7 @@ export class DXFParser {
       }
 
       if (nextLine === 'BLOCK') {
-        const block = this.parseBlockDefinition();
+        const block = this.parseBlockDefinition(referencedBlockNames);
         if (block?.name) {
           blockDefinitions.set(block.name, block);
         }
@@ -324,12 +762,25 @@ export class DXFParser {
     }
   }
 
-  private parseBlockDefinition(): DXFBlockDefinition | null {
+  private skipCurrentBlockDefinition(): void {
+    while (this.currentIndex < this.lines.length - 1) {
+      if (this.lines[this.currentIndex] === '0' && this.lines[this.currentIndex + 1] === 'ENDBLK') {
+        this.currentIndex += 1; // deixa o cursor na linha ENDBLK para o incremento externo concluir o salto
+        return;
+      }
+
+      this.currentIndex++;
+    }
+  }
+
+  private parseBlockDefinition(referencedBlockNames: Set<string>): DXFBlockDefinition | null {
     const block: DXFBlockDefinition = {
       name: '',
       layer: '0',
       baseX: 0,
       baseY: 0,
+      isPaperSpace: false,
+      layoutName: '',
       entities: []
     };
 
@@ -345,9 +796,17 @@ export class DXFParser {
           break;
         }
 
+        if (value === 'HATCH') {
+          const hatchEntities = this.parseHatchEntitiesAtCurrentIndex();
+          if (hatchEntities.length > 0) {
+            block.entities.push(...hatchEntities);
+          }
+          continue;
+        }
+
         if (value === 'POLYLINE' || SUPPORTED_DXF_ENTITY_TYPES.has(value)) {
           const entity = this.parseSupportedEntityAtCurrentIndex(value);
-          if (entity) {
+          if (entity && this.shouldRenderEntity(entity)) {
             block.entities.push(entity);
           }
           continue;
@@ -361,6 +820,10 @@ export class DXFParser {
         case '2':
           if (!block.name) {
             block.name = value;
+            if (!referencedBlockNames.has(block.name)) {
+              this.skipCurrentBlockDefinition();
+              return null;
+            }
           }
           break;
         case '8':
@@ -380,6 +843,16 @@ export class DXFParser {
           }
           break;
         }
+        case '67': {
+          const spaceFlag = parseInt(value);
+          if (!isNaN(spaceFlag)) {
+            block.isPaperSpace = spaceFlag === 1;
+          }
+          break;
+        }
+        case '410':
+          block.layoutName = value;
+          break;
       }
 
       this.currentIndex += 2;
@@ -393,12 +866,20 @@ export class DXFParser {
    */
   private parseEntity(entityType: string): DXFEntity | null {
     const entity: DXFEntity = {
-      type: entityType,
+      type: entityType === 'ATTDEF' ? 'ATTRIB' : entityType,
       layer: '0', // layer padrão
       properties: {}
     };
     const lwPolylineVertices: Array<Partial<DXFVertex>> = [];
     let activeLwPolylineVertexIndex = -1;
+    const leaderVertices: Array<Partial<DXFVertex>> = [];
+    let activeLeaderVertexIndex = -1;
+    const hatchBoundaryVertices: DXFVertex[] = [];
+    let hatchCurrentEdgeType: number | null = null;
+    let hatchLineStartX: number | null = null;
+    let hatchLineStartY: number | null = null;
+    let hatchLineEndX: number | null = null;
+    let hatchLineEndY: number | null = null;
 
     this.currentIndex += 2; // pula o '0' e o tipo da entidade
 
@@ -418,8 +899,25 @@ export class DXFParser {
         case '8': // Layer
           entity.layer = value;
           break;
-        case '2': // Nome do bloco para INSERT
-          if (entityType === 'INSERT') {
+        case '67': {
+          const spaceFlag = parseInt(value);
+          if (!isNaN(spaceFlag)) {
+            entity.properties.isPaperSpace = spaceFlag === 1;
+          }
+          break;
+        }
+        case '62': {
+          const colorNumber = parseInt(value, 10);
+          if (!isNaN(colorNumber)) {
+            entity.properties.aciColor = Math.abs(colorNumber);
+          }
+          break;
+        }
+        case '410':
+          entity.properties.layoutName = value;
+          break;
+        case '2': // Nome do bloco para INSERT/DIMENSION
+          if (entityType === 'INSERT' || entityType === 'DIMENSION' || entityType === 'ARC_DIMENSION') {
             entity.properties.blockName = value;
             entity.properties.code_2 = value;
           } else {
@@ -443,6 +941,12 @@ export class DXFParser {
               if (entity.properties.x === undefined) {
                 entity.properties.x = xValue;
               }
+            } else if (entityType === 'LEADER') {
+              leaderVertices.push({ x: xValue });
+              activeLeaderVertexIndex = leaderVertices.length - 1;
+              if (entity.properties.x === undefined) {
+                entity.properties.x = xValue;
+              }
             } else if (entityType === 'POLYLINE') {
               // Para polylines, captura múltiplas coordenadas X
               if (entity.properties.code_10 !== undefined) {
@@ -457,6 +961,8 @@ export class DXFParser {
               if (entity.properties.x === undefined) {
                 entity.properties.x = xValue;
               }
+            } else if (entityType === 'HATCH' && hatchCurrentEdgeType === 1) {
+              hatchLineStartX = xValue;
             } else {
               entity.properties.x = xValue;
             }
@@ -480,6 +986,15 @@ export class DXFParser {
               if (entity.properties.y === undefined) {
                 entity.properties.y = yValue;
               }
+            } else if (entityType === 'LEADER') {
+              if (activeLeaderVertexIndex >= 0) {
+                const activeVertex = leaderVertices[activeLeaderVertexIndex] || {};
+                activeVertex.y = yValue;
+                leaderVertices[activeLeaderVertexIndex] = activeVertex;
+              }
+              if (entity.properties.y === undefined) {
+                entity.properties.y = yValue;
+              }
             } else if (entityType === 'POLYLINE') {
               // Para polylines, captura múltiplas coordenadas Y
               if (entity.properties.code_20 !== undefined) {
@@ -494,6 +1009,8 @@ export class DXFParser {
               if (entity.properties.y === undefined) {
                 entity.properties.y = yValue;
               }
+            } else if (entityType === 'HATCH' && hatchCurrentEdgeType === 1) {
+              hatchLineStartY = yValue;
             } else {
               entity.properties.y = yValue;
             }
@@ -507,7 +1024,11 @@ export class DXFParser {
         case '11': // X2 coordinate (end point for lines) or alignment point X (for text)
           const x2Value = parseFloat(value);
           if (!isNaN(x2Value)) {
-            if (this.isTextEntity(entityType)) {
+            if (entityType === 'HATCH' && hatchCurrentEdgeType === 1) {
+              hatchLineEndX = x2Value;
+            } else if (entityType === 'MTEXT') {
+              entity.properties.directionX = x2Value;
+            } else if (this.isTextEntity(entityType)) {
               entity.properties.alignmentX = x2Value;
             } else {
               entity.properties.x2 = x2Value;
@@ -517,7 +1038,23 @@ export class DXFParser {
         case '21': // Y2 coordinate (end point for lines) or alignment point Y (for text)
           const y2Value = parseFloat(value);
           if (!isNaN(y2Value)) {
-            if (this.isTextEntity(entityType)) {
+            if (entityType === 'HATCH' && hatchCurrentEdgeType === 1) {
+              hatchLineEndY = y2Value;
+              if (
+                hatchLineStartX !== null
+                && hatchLineStartY !== null
+                && hatchLineEndX !== null
+                && hatchLineEndY !== null
+              ) {
+                const lastVertex = hatchBoundaryVertices[hatchBoundaryVertices.length - 1];
+                if (!lastVertex || lastVertex.x !== hatchLineStartX || lastVertex.y !== hatchLineStartY) {
+                  hatchBoundaryVertices.push({ x: hatchLineStartX, y: hatchLineStartY });
+                }
+                hatchBoundaryVertices.push({ x: hatchLineEndX, y: hatchLineEndY });
+              }
+            } else if (entityType === 'MTEXT') {
+              entity.properties.directionY = y2Value;
+            } else if (this.isTextEntity(entityType)) {
               entity.properties.alignmentY = y2Value;
             } else {
               entity.properties.y2 = y2Value;
@@ -531,8 +1068,6 @@ export class DXFParser {
           if (!isNaN(val40)) {
             if (entityType === 'CIRCLE' || entityType === 'ARC') {
               entity.properties.radius = val40;
-            } else if (entityType === 'INSERT') {
-              entity.properties.scaleX = val40;
             } else if (this.isTextEntity(entityType)) {
               entity.properties.height = val40;
               entity.properties.textHeight = val40; // Alias para compatibilidade
@@ -598,6 +1133,9 @@ export class DXFParser {
           if (!isNaN(val41)) {
             if (entityType === 'INSERT') {
               entity.properties.scaleX = val41;
+            } else if (entityType === 'MTEXT') {
+              entity.properties.width = val41;
+              entity.properties.mtextWidth = val41;
             } else if (this.isTextEntity(entityType)) {
               entity.properties.widthFactor = val41;
             }
@@ -635,8 +1173,50 @@ export class DXFParser {
             }
           }
           break;
-        case '71': // Text generation flags
-          if (this.isTextEntity(entityType)) {
+        case '72': // Horizontal text justification, MTEXT drawing direction or hatch edge type
+          if (entityType === 'HATCH') {
+            const edgeType = parseInt(value);
+            if (!isNaN(edgeType)) {
+              hatchCurrentEdgeType = edgeType;
+              hatchLineStartX = null;
+              hatchLineStartY = null;
+              hatchLineEndX = null;
+              hatchLineEndY = null;
+            }
+          }
+          if (entityType === 'MTEXT') {
+            const drawingDirection = parseInt(value);
+            if (!isNaN(drawingDirection)) {
+              entity.properties.drawingDirection = drawingDirection;
+            }
+          } else if (this.isTextEntity(entityType)) {
+            const hAlign = parseInt(value);
+            if (!isNaN(hAlign)) {
+              entity.properties.horizontalAlign = hAlign;
+              entity.properties.halign = hAlign; // Alias
+            }
+          }
+          break;
+        case '71': // Text generation flags or MTEXT attachment point      
+          if (entityType === 'MTEXT') {
+            const attachmentPoint = parseInt(value);
+            if (!isNaN(attachmentPoint)) {
+              entity.properties.attachmentPoint = attachmentPoint;
+              const hAlign = (attachmentPoint - 1) % 3;
+              const mtextVAlign = Math.floor((attachmentPoint - 1) / 3);
+              
+              // Mapeia o alinhamento vertical do MTEXT para o padrão TEXT usado no CanvasRenderer
+              // MTEXT: 0=Top, 1=Middle, 2=Bottom
+              // TEXT (CanvasRenderer): 3=Top, 2=Middle, 1=Bottom, 0=Baseline
+              let vAlign = 0; // fallback
+              if (mtextVAlign === 0) vAlign = 3; // Top
+              else if (mtextVAlign === 1) vAlign = 2; // Middle
+              else if (mtextVAlign === 2) vAlign = 1; // Bottom
+
+              entity.properties.horizontalAlign = hAlign;
+              entity.properties.verticalAlign = vAlign;
+            }
+          } else if (this.isTextEntity(entityType)) {
             const textFlags = parseInt(value);
             if (!isNaN(textFlags)) {
               entity.properties.textFlags = textFlags;
@@ -647,20 +1227,12 @@ export class DXFParser {
           break;
         
         // Para polylines e MTEXT
-        case '70': // Polyline flag (closed/open) or MTEXT attachment point
+        case '70': // Polyline flag (closed/open)
           const val70 = parseInt(value);
           if (!isNaN(val70)) {
             if (entityType === 'POLYLINE' || entityType === 'LWPOLYLINE') {
               entity.properties.closed = (val70 & 1) === 1;
               entity.properties.polylineFlag = val70;
-            } else if (entityType === 'MTEXT') {
-              entity.properties.attachmentPoint = val70;
-              // Converter attachment point para alinhamentos
-              // 1=TopLeft, 2=TopCenter, 3=TopRight, 4=MiddleLeft, 5=MiddleCenter, 6=MiddleRight, 7=BottomLeft, 8=BottomCenter, 9=BottomRight
-              const hAlign = ((val70 - 1) % 3); // 0=left, 1=center, 2=right
-              const vAlign = Math.floor((val70 - 1) / 3); // 0=top, 1=middle, 2=bottom
-              entity.properties.horizontalAlign = hAlign;
-              entity.properties.verticalAlign = vAlign;
             }
           }
           break;
@@ -672,17 +1244,8 @@ export class DXFParser {
           break;
         
         // Propriedades adicionais importantes
-        case '72': // Horizontal text justification
-          if (this.isTextEntity(entityType)) {
-            const hAlign = parseInt(value);
-            if (!isNaN(hAlign)) {
-              entity.properties.horizontalAlign = hAlign;
-              entity.properties.halign = hAlign; // Alias
-            }
-          }
-          break;
         case '73': // Vertical text justification
-          if (this.isTextEntity(entityType)) {
+          if (entityType !== 'MTEXT' && this.isTextEntity(entityType)) {
             const vAlign = parseInt(value);
             if (!isNaN(vAlign)) {
               entity.properties.verticalAlign = vAlign;
@@ -709,6 +1272,22 @@ export class DXFParser {
             ? { x: vertex.x, y: vertex.y, bulge: vertex.bulge }
             : { x: vertex.x, y: vertex.y }
         ));
+    } else if (entityType === 'LEADER' && leaderVertices.length > 1) {
+      entity.type = 'LWPOLYLINE';
+      entity.properties.vertices = leaderVertices
+        .filter((vertex): vertex is DXFVertex => typeof vertex.x === 'number' && typeof vertex.y === 'number')
+        .map((vertex) => ({ x: vertex.x, y: vertex.y }));
+      entity.properties.closed = false;
+      entity.properties.polylineFlag = 0;
+      entity.properties.x = entity.properties.vertices[0]?.x;
+      entity.properties.y = entity.properties.vertices[0]?.y;
+    } else if (entityType === 'HATCH' && hatchBoundaryVertices.length > 1) {
+      entity.type = 'LWPOLYLINE';
+      entity.properties.vertices = hatchBoundaryVertices;
+      entity.properties.closed = true;
+      entity.properties.polylineFlag = 1;
+      entity.properties.x = hatchBoundaryVertices[0]?.x;
+      entity.properties.y = hatchBoundaryVertices[0]?.y;
     } else if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
       entity.properties.vertices = this.extractPolylineVertices(entity.properties);
     }
@@ -727,6 +1306,26 @@ export class DXFParser {
       if (hasAlignment || isOrigin) {
         entity.properties.x = entity.properties.alignmentX;
         entity.properties.y = entity.properties.alignmentY;
+      }
+    }
+
+    if (
+      entityType === 'MTEXT'
+      && entity.properties.rotation === undefined
+      && typeof entity.properties.directionX === 'number'
+      && typeof entity.properties.directionY === 'number'
+    ) {
+      entity.properties.rotation = (
+        Math.atan2(entity.properties.directionY, entity.properties.directionX) * 180
+      ) / Math.PI;
+    }
+
+    if (entityType === 'ATTDEF' && (!entity.properties.text || entity.properties.text.trim().length === 0)) {
+      const fallbackText = typeof entity.properties.code_3 === 'string'
+        ? entity.properties.code_3
+        : (typeof entity.properties.code_2 === 'string' ? entity.properties.code_2 : '');
+      if (fallbackText) {
+        entity.properties.text = fallbackText;
       }
     }
 
@@ -792,6 +1391,25 @@ export class DXFParser {
     };
   }
 
+  private annotateExpandedEntities(
+    entities: DXFEntity[],
+    metadata: {
+      sourceEntityType: string;
+      sourceBlockName: string;
+      sourceLayer: string;
+    }
+  ): DXFEntity[] {
+    return entities.map((entity) => ({
+      ...entity,
+      properties: {
+        ...entity.properties,
+        sourceEntityType: metadata.sourceEntityType,
+        sourceBlockName: metadata.sourceBlockName,
+        sourceLayer: metadata.sourceLayer
+      }
+    }));
+  }
+
   private expandInsertEntity(
     entity: DXFEntity,
     blockDefinitions: Map<string, DXFBlockDefinition>,
@@ -809,12 +1427,72 @@ export class DXFParser {
     }
 
     const block = blockDefinitions.get(blockName);
-    if (!block) {
+    if (!block || !this.shouldRenderBlock(block)) {
       return [];
     }
 
     const transform = this.buildInsertTransform(entity);
-    return block.entities.flatMap((childEntity) => this.materializeBlockEntity(childEntity, block, transform, blockDefinitions, depth + 1));
+    const expandedEntities = block.entities.flatMap((childEntity) => this.materializeBlockEntity(
+      childEntity,
+      block,
+      transform,
+      blockDefinitions,
+      depth + 1
+    ));
+
+    return this.annotateExpandedEntities(expandedEntities, {
+      sourceEntityType: entity.type,
+      sourceBlockName: block.name,
+      sourceLayer: entity.layer || '0'
+    });
+  }
+
+  private expandDimensionEntity(
+    entity: DXFEntity,
+    blockDefinitions: Map<string, DXFBlockDefinition>,
+    depth: number = 0
+  ): DXFEntity[] {
+    if (depth > 8) {
+      return [];
+    }
+
+    const blockName = typeof entity.properties.blockName === 'string'
+      ? entity.properties.blockName.trim()
+      : (typeof entity.properties.code_2 === 'string' ? entity.properties.code_2.trim() : '');
+    if (!blockName) {
+      return [];
+    }
+
+    const block = blockDefinitions.get(blockName);
+    if (!block || !this.shouldRenderBlock(block)) {
+      return [];
+    }
+
+    // As cotas do AutoCAD neste DXF referenciam blocos anonimos com geometria
+    // ja posicionada em coordenadas absolutas, entao nao usamos a origem da DIMENSION
+    // como se fosse um INSERT comum.
+    const identityTransform: DXFInsertTransform = {
+      x: 0,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
+      rotation: 0,
+      layer: entity.layer || '0'
+    };
+
+    const expandedEntities = block.entities.flatMap((childEntity) => this.materializeBlockEntity(
+      childEntity,
+      block,
+      identityTransform,
+      blockDefinitions,
+      depth + 1
+    ));
+
+    return this.annotateExpandedEntities(expandedEntities, {
+      sourceEntityType: entity.type,
+      sourceBlockName: block.name,
+      sourceLayer: entity.layer || '0'
+    });
   }
 
   private materializeBlockEntity(
@@ -825,6 +1503,9 @@ export class DXFParser {
     depth: number
   ): DXFEntity[] {
     const entity = this.cloneEntity(sourceEntity);
+    if (!this.shouldRenderEntity(entity)) {
+      return [];
+    }
     const props = entity.properties;
     const resolvedLayer = entity.layer === '0' ? transform.layer : entity.layer;
     const averageScale = (Math.abs(transform.scaleX) + Math.abs(transform.scaleY)) / 2;
@@ -1017,10 +1698,26 @@ export class DXFParser {
           layer.name = value;
           break;
         case '62': // Color
-          layer.color = parseInt(value);
+          const parsedColor = parseInt(value);
+          if (!isNaN(parsedColor)) {
+            layer.color = Math.abs(parsedColor);
+            if (parsedColor < 0) {
+              layer.hiddenByDefault = true;
+            }
+          }
           break;
         case '6': // Line type
           layer.lineType = value;
+          break;
+        case '70': // Layer flags
+          const flags = parseInt(value);
+          if (!isNaN(flags)) {
+            layer.isFrozen = (flags & 1) === 1;
+            layer.isLocked = (flags & 4) === 4;
+            if (layer.isFrozen) {
+              layer.hiddenByDefault = true;
+            }
+          }
           break;
         case '999':
           if (value === 'GEO_LIMITES_EDITOR_LAYER') {
