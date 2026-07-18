@@ -544,6 +544,7 @@ public class DeterministicMemorialService {
                 templateName,
                 templateJson
         );
+        boolean hasAppliedTemplate = templateJson != null && !templateJson.isBlank();
         if (templateBasedContent != null && !templateBasedContent.isBlank()) {
             if (containsAllExpectedLotHeaders(templateBasedContent, expectedSummaries)) {
                 log.info(
@@ -560,6 +561,16 @@ public class DeterministicMemorialService {
                     "Montagem soberana do memorial [{}]: ramo TEMPLATE ignorado por nao cobrir todos os lotes esperados ({})",
                     scope,
                     expectedSummaries.size()
+            );
+
+            if (hasAppliedTemplate) {
+                throw new IllegalStateException(
+                        "Template aplicado nao cobriu todos os lotes esperados; montagem simplificada foi bloqueada."
+                );
+            }
+        } else if (hasAppliedTemplate) {
+            throw new IllegalStateException(
+                    "Template aplicado nao pode ser renderizado; montagem simplificada foi bloqueada."
             );
         }
 
@@ -808,8 +819,7 @@ public class DeterministicMemorialService {
             String content = builder.toString().trim();
             return content.isBlank() ? null : content;
         } catch (Exception e) {
-            log.warn("Nao foi possivel aplicar o template no fallback deterministico: {}", e.getMessage());
-            return null;
+            throw new IllegalStateException("Nao foi possivel aplicar o template no fallback deterministico", e);
         }
     }
 
@@ -1018,10 +1028,11 @@ public class DeterministicMemorialService {
             List<LotTechnicalSummary> expectedSummaries,
             GlobalPlaceholderContext context) {
         putValue(values, DEFAULT_PURPOSE, "objetivo_levantamento");
+        putValue(values, buildOriginalTerrainIdentification(property, context), "identificacao_terreno_original", "terreno_original_identificacao");
         putValue(values, normalizeNarrativePropertyType(context.propertyType()), "natureza_imovel");
+        putValue(values, normalizeNarrativePropertyType(context.propertyType()), "natureza_imovel_original");
         putValue(values, resolveReferenceSystem(property), "datum_referencia");
         putValue(values, DEFAULT_MEMORIAL_PURPOSE_LABEL, "finalidade_memorial");
-        putValue(values, buildOriginalTerrainIdentification(property, context), "identificacao_terreno_original");
         putValue(values, resolveOriginalTerrainLabel(context), "rotulo_terreno_original");
         putValue(values, resolveOriginalTerrainSource(context), "fonte_contexto_terreno_original");
         putValue(values, resolveOriginalTerrainNarrativeRole(context), "papel_contexto_terreno_original");
@@ -1039,16 +1050,24 @@ public class DeterministicMemorialService {
         putValue(values, buildRemainingAreaNarrative(context), "narrativa_area_remanescente", "contexto_area_remanescente");
         putValue(values, context.street(), "logradouro_original");
         putValue(values, buildOriginalTerrainShapeDescription(context, expectedSummaries), "formato_terreno_original");
-        putValue(values, context.originalVertexCoordinateSequence(), "pontos_terreno_original");
+        putValue(values, context.originalVertexCoordinateSequence(), "pontos_terreno_original", "pontos_coordenadas_terreno_original");
         putValue(values, context.perimeterValue(), "perimetro_terreno_original");
         putValue(values, context.perimeterExtensoValue(), "perimetro_terreno_original_extenso");
         putValue(values, context.areaValue(), "area_terreno_original");
         putValue(values, context.areaExtensoValue(), "area_terreno_original_extenso");
-        putValue(values, buildOriginalConfrontationSection(context), "confrontacoes_terreno_original");
+        putValue(
+                values,
+                buildOriginalConfrontationSection(context),
+                "confrontacoes_terreno_original",
+                "confrontacoes_terreno_original_formatadas"
+        );
         putValue(values, DEFAULT_LEGAL_BASIS, "fundamento_legal");
-        putValue(values, context.municipioUf(), "local_assinatura");
-        putValue(values, context.currentDate(), "data_assinatura");
-        putValue(values, DEFAULT_PROFESSIONAL_REGISTRY, "registro_profissional");
+        putValue(values, context.municipioUf(), "local_assinatura", "local_declaracao");
+        putValue(values, context.currentDate(), "data_assinatura", "data_declaracao");
+        putValue(values, DEFAULT_PROFESSIONAL_REGISTRY, "registro_profissional", "responsavel_tecnico_registro");
+        putValue(values, DEFAULT_TECHNICAL_RESPONSIBLE, "responsavel_tecnico_nome");
+        putValue(values, DEFAULT_PROFESSIONAL_COUNCIL, "responsavel_tecnico_conselho");
+        putValue(values, DEFAULT_PROFESSIONAL_RNP, "responsavel_tecnico_rnp");
     }
 
     private void populateLotIdentificationPlaceholders(
@@ -1095,16 +1114,29 @@ public class DeterministicMemorialService {
             GlobalPlaceholderContext globalContext,
             LotPlaceholderContext lotContext) {
         putValue(values, normalizeNarrativePropertyType(globalContext.propertyType()), "natureza_imovel");
+        putValue(values, lotContext.lotNumber(), "lote_identificacao");
+        putValue(values, normalizeNarrativePropertyType(globalContext.propertyType()), "lote_natureza_imovel");
         putValue(values, globalContext.street(), "logradouro_lote");
+        putValue(values, globalContext.street(), "lote_logradouro");
         putValue(values, globalContext.neighborhood(), "bairro_lote");
+        putValue(values, globalContext.neighborhood(), "lote_bairro");
+        putValue(values, globalContext.city(), "lote_municipio");
+        putValue(values, globalContext.state(), "lote_uf");
         putValue(values, globalContext.municipioUf(), "municipio_uf_lote");
         putValue(values, buildPolygonShapeDescription(List.of(summary)), "formato_lote");
+        putValue(values, buildPolygonShapeDescription(List.of(summary)), "lote_formato");
         putValue(values, buildVertexCoordinateSequence(summary), "pontos_lote");
+        putValue(values, buildVertexCoordinateSequence(summary), "lote_pontos_coordenadas");
         putValue(values, lotContext.perimeter(), "perimetro_lote");
+        putValue(values, lotContext.perimeter(), "lote_perimetro");
         putValue(values, lotContext.perimeterExtensoValue(), "perimetro_lote_extenso");
+        putValue(values, lotContext.perimeterExtensoValue(), "lote_perimetro_extenso");
         putValue(values, lotContext.area(), "area_lote");
+        putValue(values, lotContext.area(), "lote_area");
         putValue(values, lotContext.areaExtensoValue(), "area_lote_extenso");
+        putValue(values, lotContext.areaExtensoValue(), "lote_area_extenso");
         putValue(values, buildDeterministicConfrontationSection(summary), "confrontacoes_lote");
+        putValue(values, buildDeterministicConfrontationSection(summary), "confrontacoesFormatadas");
         putValue(values, resolveReferenceSystem(property), "datum_referencia");
     }
 
@@ -1713,7 +1745,18 @@ public class DeterministicMemorialService {
         }
 
         rendered = rendered.replace("{{" + REPEATED_LOTS_PLACEHOLDER + "}}", joinedLotDescriptions);
-        rendered = TEMPLATE_PLACEHOLDER_PATTERN.matcher(rendered).replaceAll("");
+        Matcher unresolvedMatcher = TEMPLATE_PLACEHOLDER_PATTERN.matcher(rendered);
+        if (unresolvedMatcher.find()) {
+            Set<String> unresolvedPlaceholders = new LinkedHashSet<>();
+            do {
+                unresolvedPlaceholders.add(unresolvedMatcher.group(1));
+            } while (unresolvedMatcher.find());
+
+            throw new IllegalStateException(
+                    "Template contem placeholders sem valor resolvido: " + String.join(", ", unresolvedPlaceholders)
+            );
+        }
+
         return rendered
                 .replaceAll("[ \\t]{2,}", " ")
                 .replaceAll("\\n{3,}", "\n\n")
