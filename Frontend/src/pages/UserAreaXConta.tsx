@@ -4,10 +4,8 @@ import { useTenantOperationalAccess } from '@/hooks/useTenantOperationalAccess';
 import creditService from '../services/creditService';
 import type {
   CreditBalance,
-  CreditPricingSettings,
   CreditTransaction,
   CreditPurchaseResponse,
-  CreditStatistics,
 } from '../types/credit';
 
 import '../styles/MyAccount.css';

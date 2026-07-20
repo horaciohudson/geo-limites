@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../auth/AuthContext';
 import creditService from '../services/creditService';
 import type { 
   CreditBalance, 
@@ -29,7 +28,6 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 };
 
 const UserAreaXOperacoes: React.FC = () => {
-  const { user } = useAuth();
   const [currentTab, setCurrentTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
