@@ -23,7 +23,7 @@ const MemorialPage = React.lazy(() => import('@/pages/Memorial'));
 const ConfigureTemplatesPage = React.lazy(() => import('@/pages/ConfigureTemplates'));
 const PropertyRegisterPage = React.lazy(() => import('@/pages/PropertyRegister'));
 const PropertiesPresentationPage = React.lazy(() => import('@/pages/PropertiesPresentation'));
-const MyAccountPage = React.lazy(() => import('@/pages/MyAccount'));
+const MyAccountPage = React.lazy(() => import('@/pages/UserAreaX'));
 const AdminSettingsPage = React.lazy(() => import('@/pages/AdminSettings'));
 const AuthenticatedAppShell = React.lazy(() => import('@/layouts/AuthenticatedAppShell'));
 

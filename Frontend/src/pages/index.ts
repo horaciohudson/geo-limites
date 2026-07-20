@@ -15,5 +15,5 @@ export { default as ViewerDocument } from './ViewerDocument';
 export { default as CadEditor } from '@/graphics-engine/adapters/geolimites/GeoLimitesCadEditor';
 export { default as ConfigureTemplates } from './ConfigureTemplates';
 
-export { default as MyAccount } from './MyAccount';
+export { default as UserAreaX } from './UserAreaX';
 export { default as AdminSettings } from './AdminSettings';
