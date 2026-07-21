@@ -1,22 +1,20 @@
-# Normas, Visualizador e Geracao
+# Memorial, Revisao e Geracao
 
 ## Visao geral do fluxo atual
 
 No produto atual, o fluxo principal do memorial passa por tres pontos:
 
 1. **Imoveis e arquivos tecnicos preparados**
-2. **Norma e modelo selecionados em Normas e Templates**
-3. **Geracao, revisao e exportacao dentro do Visualizador**
+2. **Norma e modelo selecionados em Configurar Memorial**
+3. **Geracao, revisao e exportacao dentro de Memorial**
 
-A antiga ideia de usar uma pagina separada chamada **Memorial** como etapa final nao representa mais o uso principal mostrado na navegacao atual.
-
-Na pratica, o memorial ficou mais consolidado no **Visualizador**, com montagem final mais previsivel e concentracao do fechamento em um unico bloco.
+Na navegacao atual, a referencia operacional para o usuario deve ser lida como **Memorial**, mesmo que parte da base tecnica interna ainda venha de fluxos mais antigos.
 
 ## Diferenca entre as telas de normas
 
 No manual, os dois nomes abaixo precisam ser lidos de forma diferente:
 
-- **Normas e Templates**: tela operacional onde o usuario escolhe a norma e o modelo da sessao atual
+- **Configurar Memorial**: tela operacional onde o usuario escolhe a norma e o modelo da sessao atual
 - **Normas e Exemplos**: tela administrativa onde a equipe mantem a base de normas e modelos disponiveis para uso
 
 ## Dependencias do fluxo
@@ -30,11 +28,11 @@ Antes de gerar o memorial, o usuario deve garantir que estes dados estejam pront
 
 Quando houver pontos ou estacas de referencia cadastrados no imovel, eles tambem podem contribuir para aproximar o desenho de coordenadas reais no backend.
 
-Na pratica, a selecao operacional de norma e modelo acontece na area **Normas e Templates**, enquanto a geracao e a revisao acontecem no **Visualizador**.
+Na pratica, a selecao operacional de norma e modelo acontece em **Configurar Memorial**, enquanto a geracao e a revisao acontecem em **Memorial**.
 
-## Normas e Templates
+## Configurar Memorial
 
-A tela **Normas e Templates** e o ponto de preparacao do memorial. Nela o usuario define a base documental que sera usada no processamento:
+A tela **Configurar Memorial** e o ponto de preparacao do memorial. Nela o usuario define a base documental que sera usada no processamento:
 
 - escolhe a norma tecnica aplicavel ao trabalho atual
 - escolhe o modelo base que orienta a estrutura do texto
@@ -42,9 +40,9 @@ A tela **Normas e Templates** e o ponto de preparacao do memorial. Nela o usuari
 
 Essa tela nao substitui a manutencao administrativa feita em **Normas e Exemplos**. Ela usa os itens que ja foram preparados e disponibilizados anteriormente.
 
-## Visualizador
+## Memorial
 
-O **Visualizador** e hoje a tela operacional mais importante para a etapa final do documento. Ele e usado para:
+A tela **Memorial** e hoje a etapa operacional mais importante para a fase final do documento. Ela e usada para:
 
 - abrir o arquivo tecnico selecionado
 - carregar a geometria do DXF
@@ -54,7 +52,7 @@ O **Visualizador** e hoje a tela operacional mais importante para a etapa final 
 - copiar o memorial em texto
 - exportar o memorial em PDF
 
-O componente de visualizacao do DXF tambem foi ajustado para uma area mais controlada e previsivel, evitando um canvas excessivamente alto.
+O componente de visualizacao do DXF continua sendo parte importante dessa etapa, mas o foco do usuario deve ser entendido como geracao e revisao do memorial.
 
 Quando a geracao termina, o proprio Visualizador exibe a area **Memorial Descritivo Gerado**, com botoes de **Exportar PDF** e **Copiar Texto**.
 
@@ -93,11 +91,10 @@ O memorial consolidado tambem foi ajustado para:
 
 1. **Selecionar o imovel** na area de trabalho.
 2. **Selecionar um ou mais arquivos DXF**.
-3. **Definir norma e modelo** em **Normas e Templates**.
-4. **Abrir o Visualizador** para carregar o desenho.
+3. **Definir norma e modelo** em **Configurar Memorial**.
+4. **Abrir Memorial** para carregar, gerar e revisar.
 5. **Gerar o memorial**, revisar o texto e exportar o resultado.
 
 ## Observacao sobre a rota Memorial
 
-O sistema ainda pode manter a rota `/memorial` por compatibilidade interna, mas ela nao e a referencia principal de operacao no menu atual. Para treinamento e uso diario, considere o **Visualizador** como a tela correta para gerar, revisar e exportar o memorial.
-
+O sistema pode manter nomenclaturas internas herdadas em parte do fluxo tecnico, mas para treinamento e uso diario a referencia correta deve ser **Memorial**.

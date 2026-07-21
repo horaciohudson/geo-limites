@@ -51,11 +51,11 @@ nav:
       - Primeiro Acesso e Login: 02-primeiros-passos/primeiro-acesso-e-login.md
   - Operacao:
       - Imoveis: 03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md
-      - Normas e Templates: 04-memorial/visualizador-normas-e-geracao.md
-      - Arquivos DXF: 03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md
-      - Visualizador: 04-memorial/visualizador-normas-e-geracao.md
+      - Editor CAD: 03-fluxo-operacional/editor-cad.md
+      - Configurar Memorial: 04-memorial/configurar-memorial.md
+      - Memorial: 04-memorial/visualizador-normas-e-geracao.md
   - Preparacao:
-      - Cadastrar Imovel: 03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md
+      - Cadastrar Imovel: 03-fluxo-operacional/cadastrar-imovel.md
   - Configuracao:
       - Normas e Exemplos: 05-modelos-e-normas/modelos-documentais-e-normas.md
   - Conta e Acesso:

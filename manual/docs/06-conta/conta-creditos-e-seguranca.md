@@ -1,4 +1,4 @@
-# Conta, Creditos e Seguranca
+# Conta, Perfil e Operacoes
 
 ## Conta
 
@@ -6,29 +6,22 @@ A area `Conta` centraliza informacoes do usuario e recursos operacionais relacio
 
 ## Abas da tela
 
-A pagina de conta possui estas abas:
+Na estrutura atual, a pagina foi reorganizada em tres abas principais:
 
-- Visao Geral
 - Perfil
-- Saldo
-- Recargas
-- Extrato
-- Pedidos
-- Indicadores
+- Conta
+- Operacoes
 
 ## O que o usuario faz aqui
 
+### Conta
+Apresenta a visao geral da conta, incluindo dados principais, liberacao operacional e informacoes consolidadas do usuario.
+
 ### Perfil
-Atualiza ou revisa seus dados cadastrais.
+Centraliza dados cadastrais e informacoes relacionadas ao perfil do usuario.
 
-### Saldo e Recargas
-Consulta creditos disponiveis e acompanha recargas relacionadas ao uso do sistema.
-
-### Extrato e Pedidos
-Monitora movimentacoes, pedidos e historico operacional da conta.
-
-### Indicadores
-Acompanha informacoes consolidadas da operacao individual.
+### Operacoes
+Reune a parte operacional e financeira da conta, incluindo acompanhamento de creditos, movimentacoes e historico relacionado ao uso.
 
 ## Seguranca e boas praticas
 

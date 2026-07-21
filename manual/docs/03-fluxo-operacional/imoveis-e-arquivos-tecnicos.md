@@ -1,12 +1,13 @@
-# Imoveis, Cadastro e Arquivos DXF
+# Imoveis
 
 ## Onde esse fluxo aparece no menu
 
-No menu lateral atual, esse fluxo esta distribuido entre **Operacao** e **Preparacao**:
+No menu lateral atual, **Imoveis** aparece em **Operacao**.
 
-- **Imoveis**: entrada principal para consultar e selecionar os imoveis do trabalho atual.
-- **Arquivos DXF**: area para envio e selecao dos arquivos tecnicos do projeto.
-- **Cadastrar Imovel**: entrada complementar para criar ou concluir o cadastro de um novo imovel.
+As etapas relacionadas se conectam com:
+
+- **Cadastrar Imovel**, em **Preparacao**
+- **Editor CAD**, em **Operacao**
 
 ## Etapa 1: Imoveis
 
@@ -43,30 +44,34 @@ Quando existir amarracao suficiente:
 - a antiga secao visual de `Coordenadas Este/Norte` foi removida
 - a area `Origem das Coordenadas` ficou mais simples e compacta
 
-## Etapa 2: Arquivos DXF
+## Arquivos tecnicos vinculados
 
-Em **Arquivos DXF**, o usuario seleciona e organiza os arquivos DXF ou DWG que serao processados pela ferramenta.
+Os arquivos tecnicos do imovel continuam sendo parte importante do fluxo, mas a operacao atual do sistema passou a se concentrar mais em:
+
+- selecao correta do imovel
+- revisao do desenho no **Editor CAD**
+- geracao documental em **Configurar Memorial** e **Memorial**
 
 ## Relacao entre as etapas
 
-Essas duas telas andam juntas:
+Essas etapas andam juntas:
 - O imovel preparado fornece o contexto juridico (proprietarios, matricula, etc.).
 - Os arquivos tecnicos fornecem os dados geometricos e graficos.
 - Os pontos ou estacas cadastrados ajudam o backend a aproximar o desenho de coordenadas reais quando houver correspondencia suficiente.
 
-Depois disso, o usuario segue para **Normas e Templates** e entao para o **Visualizador**, onde a geracao do memorial acontece de fato.
+Depois disso, o usuario segue normalmente para **Editor CAD**, depois para **Configurar Memorial** e entao para **Memorial**, onde a geracao acontece de fato.
 
 ## Boa pratica operacional
 
 Antes de seguir para a operacao, confirme em **Resumo**:
 1. Se todos os dados basicos e proprietarios estao preenchidos corretamente.
 2. Se o imovel foi salvo no banco via botao **Salvar Imovel**.
-3. Se os arquivos tecnicos necessarios foram selecionados em **Arquivos DXF**.
+3. Se os arquivos tecnicos necessarios estao vinculados ao imovel correto.
 4. Se os pontos ou estacas de referencia relevantes foram cadastrados, quando existirem.
 5. Se o imovel correto esta selecionado para a sessao atual.
 
 ## Sinal importante do sistema
 
-O menu mostra contagem de arquivos selecionados em **Arquivos DXF**, o que ajuda a validar rapidamente se ha material suficiente para continuar.
+O sistema depende de coerencia entre cadastro, imovel selecionado e arquivos vinculados para que o fluxo tecnico funcione bem nas etapas seguintes.
 
 Na listagem de **Imoveis**, o sistema tambem passou a destacar melhor os pontos ou estacas cadastrados, em vez de depender apenas de informacoes isoladas de SIRGAS.

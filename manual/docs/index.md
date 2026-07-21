@@ -19,12 +19,15 @@ Configura empresa, SMTP e a gestao global de usuarios do sistema, incluindo oper
 
 1. [Visao Geral](01-introducao/visao-geral.md)
 2. [Primeiro Acesso e Login](02-primeiros-passos/primeiro-acesso-e-login.md)
-3. [Imoveis, Cadastro e Arquivos DXF](03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md)
-4. [Visualizador, Normas e Geracao](04-memorial/visualizador-normas-e-geracao.md)
-5. [Normas e Modelos Base](05-modelos-e-normas/modelos-documentais-e-normas.md)
-6. [Conta, Creditos e Seguranca](06-conta/conta-creditos-e-seguranca.md)
-7. [Empresa, SMTP e Usuarios](07-administracao/empresa-smtp-e-usuarios.md)
-8. [FAQ e Proximos Passos](08-suporte/faq-e-proximos-passos.md)
+3. [Imoveis](03-fluxo-operacional/imoveis-e-arquivos-tecnicos.md)
+4. [Cadastrar Imovel](03-fluxo-operacional/cadastrar-imovel.md)
+5. [Editor CAD](03-fluxo-operacional/editor-cad.md)
+6. [Configurar Memorial](04-memorial/configurar-memorial.md)
+7. [Memorial](04-memorial/visualizador-normas-e-geracao.md)
+8. [Normas e Exemplos](05-modelos-e-normas/modelos-documentais-e-normas.md)
+9. [Conta, Perfil e Operacoes](06-conta/conta-creditos-e-seguranca.md)
+10. [Empresa, SMTP e Usuarios](07-administracao/empresa-smtp-e-usuarios.md)
+11. [FAQ e Proximos Passos](08-suporte/faq-e-proximos-passos.md)
 
 ## Mapa rapido do sistema
 
@@ -38,10 +41,10 @@ O menu lateral do GeoLimites esta organizado em quatro grupos principais:
 Dentro deles, as entradas visiveis sao:
 
 ### Operacao
+- **Editor CAD**: revisao tecnica e visual do desenho.
 - **Imoveis**: lista e selecao dos imoveis de trabalho.
-- **Normas e Templates**: selecao operacional da norma e do modelo usado na geracao.
-- **Arquivos DXF**: envio e selecao dos arquivos tecnicos.
-- **Visualizador**: analise do desenho, geracao do memorial, copia do texto e exportacao em PDF.
+- **Configurar Memorial**: definicao da norma e do modelo usados na geracao.
+- **Memorial**: geracao, revisao e exportacao do documento final.
 
 ### Preparacao
 - **Cadastrar Imovel**: cadastro complementar de novos imoveis.
@@ -50,7 +53,7 @@ Dentro deles, as entradas visiveis sao:
 - **Normas e Exemplos**: area administrativa para carregar normas em PDF e gerar ou importar modelos base em JSON, PDF ou TXT.
 
 ### Conta e Acesso
-- **Conta**: dados do usuario, creditos e operacoes relacionadas ao perfil.
+- **Conta**: informacoes do usuario organizadas em `Conta`, `Perfil` e `Operacoes`.
 - **Administracao**: configuracao de SMTP, dados do tenant e gestao global de usuarios, quando o perfil tem permissao.
 - **Sair**: encerra a sessao atual com seguranca.
 
@@ -60,5 +63,5 @@ No comportamento atual do produto, a **Pasta de Templates** ainda participa do f
 
 Para leitura consistente do manual:
 
-- `Normas e Templates` sempre se refere a selecao operacional da sessao atual
+- `Configurar Memorial` sempre se refere a selecao operacional da sessao atual
 - `Normas e Exemplos` sempre se refere a manutencao administrativa da base documental
