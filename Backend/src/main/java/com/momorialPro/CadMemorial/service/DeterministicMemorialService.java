@@ -55,12 +55,12 @@ public class DeterministicMemorialService {
     private static final String DEFAULT_PROPERTY_TYPE = "Imovel urbano";
     private static final String LOT_PREFIX = "LOTE ";
     private static final String DIRECTION_PREFIX = "AO ";
-    private static final String LOT_DESCRIPTION_INTRO = "Um imovel urbano integrante da area/loteamento em ";
-    private static final String PERIMETER_SEQUENCE_PREFIX = ", seguindo a sequencia perimetral ";
-    private static final String LOT_START_POINT_PREFIX = ", com inicio no ponto ";
-    private static final String LOT_METRICS_PREFIX = ", possuindo formato poligonal conforme o levantamento tecnico validado, perfazendo assim, um perimetro de ";
+    private static final String LOT_DESCRIPTION_INTRO = "Um imovel urbano situado em ";
+    private static final String PERIMETER_SEQUENCE_PREFIX = ", deste segue pelos vertices ";
+    private static final String LOT_START_POINT_PREFIX = ", com inicio no vertice ";
+    private static final String LOT_METRICS_PREFIX = ", formando poligono definido no levantamento tecnico validado, com perimetro de ";
     private static final String LOT_AREA_PREFIX = " e uma area territorial de ";
-    private static final String LOT_DESCRIPTION_OUTRO = ", com a seguinte descricao perimetral e respectivas confrontacoes:\n";
+    private static final String LOT_DESCRIPTION_OUTRO = ", com as seguintes medidas, limites e confrontacoes:\n";
     private static final String MULTI_SEGMENT_PREFIX = "por segmentos sucessivos, ";
     private static final String FIRST_SEGMENT_CONNECTOR = "iniciando-se";
     private static final String NEXT_SEGMENT_CONNECTOR = "seguindo";

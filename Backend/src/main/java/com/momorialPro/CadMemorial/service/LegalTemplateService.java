@@ -152,7 +152,7 @@ public class LegalTemplateService {
 
         return String.format(
                 Locale.US,
-                "%s (coordenadas locais X %.2fm e Y %.2fm), e demais vertices conforme contorno primario salvo em Operacoes",
+                "%s, definido pelas coordenadas planas locais X %.2fm e Y %.2fm, seguindo pelos demais vertices do perimetro original constantes do levantamento tecnico que instrui a presente peca",
                 label,
                 firstPoint.x(),
                 firstPoint.y()
@@ -493,12 +493,12 @@ public class LegalTemplateService {
 
     private String buildProfessionalSignatureLine(ProfessionalData profData) {
         if (profData == null) {
-            return "Responsável técnico não informado no cadastro";
+            return "Responsável técnico a confirmar";
         }
 
         String nome = profData.nome != null && !profData.nome.isBlank()
                 ? profData.nome.trim()
-                : "Responsável técnico não informado no cadastro";
+                : "Responsável técnico a confirmar";
 
         boolean hasRealCrea = profData.crea != null
                 && !profData.crea.isBlank()
@@ -517,7 +517,7 @@ public class LegalTemplateService {
         }
         if (!hasRealCrea && !hasRealRnp) {
             return "Eng. Responsável Técnico".equalsIgnoreCase(nome)
-                    ? "Responsável técnico não informado no cadastro"
+                    ? "Responsável técnico a confirmar"
                     : nome;
         }
         return signature.toString();
