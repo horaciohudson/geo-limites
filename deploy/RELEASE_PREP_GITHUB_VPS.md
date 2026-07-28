@@ -70,9 +70,9 @@ O desktop ja esta validado para distribuicao Windows.
 
 Artefatos validados:
 
-- `GeoLimites-Desktop-Setup-0.1.0-x64.exe`
-- `GeoLimites-Desktop-Portable-0.1.0-x64.exe`
-- `GeoLimites-Desktop-0.1.0-win-x64-portable.zip`
+- `GeoLimites-Desktop-Setup-0.1.1-x64.exe`
+- `GeoLimites-Desktop-Portable-0.1.1-x64.exe`
+- `GeoLimites-Desktop-0.1.1-win-x64-portable.zip`
 
 Comandos principais desta trilha:
 
@@ -82,4 +82,4 @@ Comandos principais desta trilha:
 
 Referencia operacional:
 
-- `Frontend/docs/sigeve-electron-desktop/ENTREGA_WINDOWS_0.1.0.md`
+- `Frontend/docs/sigeve-electron-desktop/ENTREGA_WINDOWS_0.1.1.md`

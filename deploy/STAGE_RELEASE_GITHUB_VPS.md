@@ -78,4 +78,4 @@ O shell Electron ja possui trilha validada de distribuicao Windows, incluindo:
 
 Referencia operacional:
 
-- `Frontend/docs/sigeve-electron-desktop/ENTREGA_WINDOWS_0.1.0.md`
+- `Frontend/docs/sigeve-electron-desktop/ENTREGA_WINDOWS_0.1.1.md`

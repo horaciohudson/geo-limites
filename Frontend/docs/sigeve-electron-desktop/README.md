@@ -260,7 +260,7 @@ Nesta etapa, a distribuicao Windows do `GeoLimites Desktop` foi validada manualm
 
 Documento operacional desta entrega:
 
-- `Frontend/docs/sigeve-electron-desktop/ENTREGA_WINDOWS_0.1.0.md`
-- `Frontend/docs/sigeve-electron-desktop/PUBLICACAO_WINDOWS_0.1.0.md`
-- `Frontend/docs/sigeve-electron-desktop/STAGE_DESKTOP_0.1.0.md`
-- `Frontend/docs/sigeve-electron-desktop/RELEASE_GITHUB_WINDOWS_0.1.0.md`
+- `Frontend/docs/sigeve-electron-desktop/ENTREGA_WINDOWS_0.1.1.md`
+- `Frontend/docs/sigeve-electron-desktop/PUBLICACAO_WINDOWS_0.1.1.md`
+- `Frontend/docs/sigeve-electron-desktop/STAGE_DESKTOP_0.1.1.md`
+- `Frontend/docs/sigeve-electron-desktop/RELEASE_GITHUB_WINDOWS_0.1.1.md`
