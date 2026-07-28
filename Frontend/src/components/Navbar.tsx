@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { getHelpUrlForPath } from '@/utils/helpLinks';
 import { desktopApi } from '@/services/desktopApi';
+import { DESKTOP_SETUP_DOWNLOAD_URL } from '@/utils/desktopRelease';
 
 const Navbar: React.FC = () => {
   const { user } = useAuth();
@@ -20,6 +21,17 @@ const Navbar: React.FC = () => {
           <div className={`navbar-runtime-badge ${desktopApi.hasBridge() ? 'is-desktop' : 'is-web'}`}>
             {runtimeModeLabel}
           </div>
+          {!desktopApi.hasBridge() && (
+            <a
+              className="desktop-download-btn"
+              href={DESKTOP_SETUP_DOWNLOAD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Baixar o instalador do GeoLimites Desktop"
+            >
+              Baixar Instalador
+            </a>
+          )}
           {user && (
             <div className="navbar-user">
               <span className="user-name">
