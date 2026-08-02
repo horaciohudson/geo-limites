@@ -154,10 +154,6 @@ public class TemplateService {
         Template template = templateRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Template não encontrado"));
 
-        if (!template.getOwnerId().equals(ownerId)) {
-            throw new IllegalArgumentException("Você não tem permissão para editar este template");
-        }
-
         TemplateStorageData storageData = updateDTO.getTemplateContent() != null && !updateDTO.getTemplateContent().isBlank()
                 ? resolveTemplateStorageData(template.getId(), updateDTO)
                 : new TemplateStorageData(
@@ -185,10 +181,6 @@ public class TemplateService {
         Template template = templateRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Template não encontrado"));
 
-        if (!template.getOwnerId().equals(ownerId)) {
-            throw new IllegalArgumentException("Você não tem permissão para deletar este template");
-        }
-
         templateRepository.delete(template);
     }
 
@@ -196,10 +188,6 @@ public class TemplateService {
         UUID tenantId = requireTenantId(ownerId);
         Template template = templateRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Template não encontrado"));
-
-        if (!template.getOwnerId().equals(ownerId)) {
-            throw new IllegalArgumentException("Você não tem permissão para alterar o status deste template");
-        }
 
         template.setStatus(status);
         Template saved = templateRepository.save(template);

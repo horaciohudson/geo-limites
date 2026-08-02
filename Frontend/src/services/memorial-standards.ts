@@ -1,6 +1,17 @@
 import api from './api';
 import type { MemorialStandard, MemorialStandardCreate } from '../types/index';
 
+interface ApiErrorLike {
+  message?: string;
+  response?: {
+    status?: number;
+    data?: {
+      message?: string;
+      error?: string;
+    };
+  };
+}
+
 // Dados mock para desenvolvimento quando backend indisponível
 const mockStandards: MemorialStandard[] = [
   {
@@ -73,6 +84,28 @@ _________________________________________________
   }
 ];
 
+const shouldUseMockFallback = (error: unknown): boolean => {
+  if (!import.meta.env.DEV) {
+    return false;
+  }
+
+  if (typeof error !== 'object' || error === null) {
+    return true;
+  }
+
+  const apiError = error as ApiErrorLike;
+  return !apiError.response;
+};
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (typeof error === 'object' && error !== null) {
+    const apiError = error as ApiErrorLike;
+    return apiError.response?.data?.message || apiError.response?.data?.error || apiError.message || fallback;
+  }
+
+  return fallback;
+};
+
 export const memorialStandardsService = {
   // Listar normas disponíveis para o usuário
   getAll: async (): Promise<MemorialStandard[]> => {
@@ -80,7 +113,10 @@ export const memorialStandardsService = {
       const response = await api.get<MemorialStandard[]>('/memorial-standards');
       return response.data;
     } catch (error: unknown) {
-      return mockStandards;
+      if (shouldUseMockFallback(error)) {
+        return mockStandards;
+      }
+      throw new Error(getErrorMessage(error, 'Erro ao carregar normas.'));
     }
   },
 
@@ -90,7 +126,10 @@ export const memorialStandardsService = {
       const response = await api.get<MemorialStandard[]>('/memorial-standards');
       return response.data;
     } catch (error: unknown) {
-      return mockStandards;
+      if (shouldUseMockFallback(error)) {
+        return mockStandards;
+      }
+      throw new Error(getErrorMessage(error, 'Erro ao carregar normas.'));
     }
   },
 
@@ -99,8 +138,11 @@ export const memorialStandardsService = {
     try {
       const response = await api.get<MemorialStandard>('/memorial-standards/default');
       return response.data;
-    } catch {
-      return mockStandards.find(std => std.isDefault) || mockStandards[0] || null;
+    } catch (error: unknown) {
+      if (shouldUseMockFallback(error)) {
+        return mockStandards.find(std => std.isDefault) || mockStandards[0] || null;
+      }
+      throw new Error(getErrorMessage(error, 'Erro ao carregar norma padrão.'));
     }
   },
 
@@ -109,8 +151,11 @@ export const memorialStandardsService = {
     try {
       const response = await api.get<MemorialStandard>(`/memorial-standards/${id}`);
       return response.data;
-    } catch {
-      return mockStandards.find(std => std.id === id) || null;
+    } catch (error: unknown) {
+      if (shouldUseMockFallback(error)) {
+        return mockStandards.find(std => std.id === id) || null;
+      }
+      throw new Error(getErrorMessage(error, 'Erro ao carregar norma.'));
     }
   },
 
@@ -119,7 +164,11 @@ export const memorialStandardsService = {
     try {
       const response = await api.post<MemorialStandard>('/memorial-standards', data);
       return response.data;
-    } catch {
+    } catch (error: unknown) {
+      if (!shouldUseMockFallback(error)) {
+        throw new Error(getErrorMessage(error, 'Erro ao criar norma.'));
+      }
+
       const newStandard: MemorialStandard = {
         id: `mock-${Date.now()}`,
         name: data.name,
@@ -149,7 +198,11 @@ export const memorialStandardsService = {
     try {
       const response = await api.put<MemorialStandard>(`/memorial-standards/${id}`, data);
       return response.data;
-    } catch {
+    } catch (error: unknown) {
+      if (!shouldUseMockFallback(error)) {
+        throw new Error(getErrorMessage(error, 'Erro ao atualizar norma.'));
+      }
+
       const existingIndex = mockStandards.findIndex(std => std.id === id);
       
       if (existingIndex === -1) {
@@ -180,7 +233,11 @@ export const memorialStandardsService = {
   delete: async (id: string): Promise<void> => {
     try {
       await api.delete(`/memorial-standards/${id}`);
-    } catch {
+    } catch (error: unknown) {
+      if (!shouldUseMockFallback(error)) {
+        throw new Error(getErrorMessage(error, 'Erro ao excluir norma.'));
+      }
+
       const existingIndex = mockStandards.findIndex(std => std.id === id);
       
       if (existingIndex === -1) {

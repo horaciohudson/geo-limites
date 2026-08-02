@@ -101,11 +101,6 @@ public class MemorialStandardService {
         MemorialStandard standard = memorialStandardRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new BusinessException("Norma não encontrada"));
 
-        // Verificar se o usuário pode editar esta norma
-        if (standard.getOwner() == null || !standard.getOwner().getId().equals(ownerId)) {
-            throw new BusinessException("Você não tem permissão para editar esta norma");
-        }
-
         // Se está marcando como padrão, desmarcar outras
         if (Boolean.TRUE.equals(updateDTO.getIsDefault()) && !standard.getIsDefault()) {
             memorialStandardRepository.findDefaultForTenant(tenantId)
@@ -133,11 +128,6 @@ public class MemorialStandardService {
 
         MemorialStandard standard = memorialStandardRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new BusinessException("Norma não encontrada"));
-
-        // Verificar se o usuário pode deletar esta norma
-        if (standard.getOwner() == null || !standard.getOwner().getId().equals(ownerId)) {
-            throw new BusinessException("Você não tem permissão para deletar esta norma");
-        }
 
         standard.setActive(false);
         memorialStandardRepository.save(standard);

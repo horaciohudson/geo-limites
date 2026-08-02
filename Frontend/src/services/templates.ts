@@ -65,7 +65,11 @@ export const templatesService = {
 
   // Deletar template
   delete: async (id: string): Promise<void> => {
-    await api.delete(`/templates/${id}`);
+    try {
+      await api.delete(`/templates/${id}`);
+    } catch (error: unknown) {
+      throw new Error(getErrorMessage(error, 'Erro ao excluir modelo.'));
+    }
   },
 
   // Ativar/Desativar template
