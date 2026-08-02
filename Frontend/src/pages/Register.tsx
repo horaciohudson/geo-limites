@@ -122,7 +122,8 @@ const Register: React.FC = () => {
   };
 
   const handleInputChange = (field: keyof RegisterFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    const normalizedValue = field === 'fullName' ? value.toUpperCase() : value;
+    setFormData(prev => ({ ...prev, [field]: normalizedValue }));
     
     // Limpar validação do campo quando usuário começar a digitar
     if (validation[field]) {
@@ -152,7 +153,7 @@ const Register: React.FC = () => {
       const response = await api.post<RegisterResponse>('/auth/register', {
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
-        fullName: formData.fullName
+        fullName: formData.fullName.trim().toUpperCase()
       });
 
       const tenantCode = String(response.data?.tenantCode || '').toUpperCase();
@@ -229,6 +230,7 @@ const Register: React.FC = () => {
                 onChange={(e) => handleInputChange('fullName', e.target.value)}
                 placeholder="Ex: TERRA NOBRE"
                 autoComplete="name"
+                style={{ textTransform: 'uppercase' }}
                 required
                 className={validation.fullName ? 'error' : ''}
               />

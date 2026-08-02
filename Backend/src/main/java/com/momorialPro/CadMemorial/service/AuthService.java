@@ -65,7 +65,17 @@ public class AuthService {
         String normalizedEmail = normalizeEmail(dto.email());
         String normalizedUsername = normalizedEmail;
         String normalizedFullName = normalizeFullName(dto.fullName());
-        Tenant tenant = tenantProvisioningService.createTenantForSignup(normalizedFullName, normalizedEmail);
+        Tenant tenant = tenantProvisioningService.getOrCreateDefaultTenant();
+
+        repo.findByEmailIgnoreCaseAndTenantId(normalizedEmail, tenant.getId())
+                .ifPresent(existing -> {
+                    throw new IllegalArgumentException("Ja existe uma conta cadastrada com este e-mail.");
+                });
+
+        repo.findByUsernameIgnoreCaseAndTenantId(normalizedUsername, tenant.getId())
+                .ifPresent(existing -> {
+                    throw new IllegalArgumentException("Ja existe uma conta cadastrada com este usuario.");
+                });
 
         Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
                 .orElseThrow(() -> new IllegalArgumentException("Role USER nao encontrado"));
@@ -328,7 +338,9 @@ public class AuthService {
         if (fullName == null || fullName.isBlank()) {
             throw new IllegalArgumentException("Nome completo é obrigatório");
         }
-        return fullName.trim().replaceAll("\\s+", " ");
+        return fullName.trim()
+                .replaceAll("\\s+", " ")
+                .toUpperCase(Locale.ROOT);
     }
 
     private String normalizeOptionalText(String value, int maxLength) {

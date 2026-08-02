@@ -134,21 +134,28 @@ public class SmtpMailService {
 
     private ResolvedSmtpConfiguration buildDatabaseConfiguration(SmtpSettings settings) {
         String password = smtpSettingsService.getResolvedPassword();
-        String fromAddress = StringUtils.hasText(settings.getFromAddress())
+        String configuredFromAddress = StringUtils.hasText(settings.getFromAddress())
                 ? settings.getFromAddress().trim()
                 : trim(mailSettingsProperties.getFromAddress());
+        String username = trim(settings.getUsername());
+        String fromAddress = resolveEffectiveFromAddress(
+                "DATABASE_SETTINGS",
+                Boolean.TRUE.equals(settings.getAuth()),
+                username,
+                configuredFromAddress
+        );
         String fromName = StringUtils.hasText(settings.getFromName())
                 ? settings.getFromName().trim()
                 : trim(mailSettingsProperties.getFromName());
 
-        validateConfiguration(settings.getHost(), settings.getPort(), settings.getAuth(), settings.getUsername(), password, fromAddress);
+        validateConfiguration(settings.getHost(), settings.getPort(), settings.getAuth(), username, password, fromAddress);
 
         return new ResolvedSmtpConfiguration(
                 "DATABASE_SETTINGS",
                 true,
                 settings.getHost().trim(),
                 settings.getPort(),
-                trim(settings.getUsername()),
+                username,
                 password,
                 Boolean.TRUE.equals(settings.getAuth()),
                 Boolean.TRUE.equals(settings.getStartTlsEnabled()),
@@ -159,12 +166,18 @@ public class SmtpMailService {
     }
 
     private ResolvedSmtpConfiguration buildFallbackConfiguration() {
-        String fromAddress = trim(mailSettingsProperties.getFromAddress());
+        String username = trim(defaultUsername);
+        String fromAddress = resolveEffectiveFromAddress(
+                "APPLICATION_PROPERTIES",
+                defaultAuth,
+                username,
+                trim(mailSettingsProperties.getFromAddress())
+        );
         String fromName = trim(mailSettingsProperties.getFromName());
         boolean enabled = mailSettingsProperties.isEnabled() && StringUtils.hasText(defaultHost);
 
         if (enabled) {
-            validateConfiguration(defaultHost, defaultPort, defaultAuth, defaultUsername, defaultPassword, fromAddress);
+            validateConfiguration(defaultHost, defaultPort, defaultAuth, username, defaultPassword, fromAddress);
         }
 
         return new ResolvedSmtpConfiguration(
@@ -172,7 +185,7 @@ public class SmtpMailService {
                 enabled,
                 trim(defaultHost),
                 defaultPort,
-                trim(defaultUsername),
+                username,
                 defaultPassword,
                 defaultAuth,
                 defaultStartTls,
@@ -198,6 +211,34 @@ public class SmtpMailService {
         if (!StringUtils.hasText(fromAddress)) {
             throw new IllegalStateException("Informe o e-mail remetente para o envio SMTP.");
         }
+    }
+
+    private String resolveEffectiveFromAddress(String source, boolean auth, String username, String configuredFromAddress) {
+        String normalizedUsername = trim(username);
+        String normalizedFromAddress = trim(configuredFromAddress);
+
+        if (auth && isLikelyEmail(normalizedUsername)) {
+            if (!StringUtils.hasText(normalizedFromAddress)) {
+                return normalizedUsername;
+            }
+
+            if (!normalizedUsername.equalsIgnoreCase(normalizedFromAddress)) {
+                log.warn(
+                        "SMTP [{}] com autenticacao usa remetente diferente do usuario autenticado. " +
+                                "Remetente configurado [{}] sera substituido por [{}].",
+                        source,
+                        normalizedFromAddress,
+                        normalizedUsername
+                );
+                return normalizedUsername;
+            }
+        }
+
+        return normalizedFromAddress;
+    }
+
+    private boolean isLikelyEmail(String value) {
+        return StringUtils.hasText(value) && value.contains("@");
     }
 
     private JavaMailSenderImpl buildMailSender(ResolvedSmtpConfiguration config) {
