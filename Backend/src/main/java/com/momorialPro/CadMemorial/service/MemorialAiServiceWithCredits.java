@@ -6,6 +6,7 @@ import com.momorialPro.CadMemorial.dto.SelectedReferencePointDTO;
 import com.momorialPro.CadMemorial.exception.NotEnoughCreditsException;
 import com.momorialPro.CadMemorial.exception.OpenAiQuotaExceededException;
 import com.momorialPro.CadMemorial.exception.OpenAiRateLimitException;
+import com.momorialPro.CadMemorial.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,18 +43,19 @@ public class MemorialAiServiceWithCredits {
                                               String templateBackendId) {
         long startTime = System.currentTimeMillis();
         boolean chargedCredits = false;
+        UUID tenantId = resolveTenantId(userId);
         
         try {
             if (!Boolean.FALSE.equals(chargeCredits)) {
-                var creditInfo = creditIntegrationService.getCreditUsageInfo(userId, r, billableLotCount);
-                log.info("💳 Consumo previsto de créditos - userId: {}, saldoAtual: {}, necessario: {}, lotesEstimados: {}",
-                        userId, creditInfo.currentBalance(), creditInfo.requiredCredits(), creditInfo.estimatedLots());
+                var creditInfo = creditIntegrationService.getCreditUsageInfo(tenantId, r, billableLotCount);
+                log.info("💳 Consumo previsto de créditos - tenantId: {}, saldoAtual: {}, necessario: {}, lotesEstimados: {}",
+                        tenantId, creditInfo.currentBalance(), creditInfo.requiredCredits(), creditInfo.estimatedLots());
 
-                creditIntegrationService.validateAndConsumeCredits(userId, r, billableLotCount);
+                creditIntegrationService.validateAndConsumeCredits(tenantId, r, billableLotCount);
                 chargedCredits = true;
             } else {
-                log.info("💳 Requisicao sem nova cobranca de creditos - userId: {}, lotesCobraveis: {}",
-                        userId, billableLotCount);
+                log.info("💳 Requisicao sem nova cobranca de creditos - tenantId: {}, lotesCobraveis: {}",
+                        tenantId, billableLotCount);
             }
             
             // ===== ETAPA 2: GERAÇÃO DO MEMORIAL =====
@@ -82,7 +84,7 @@ public class MemorialAiServiceWithCredits {
 
         } catch (OpenAiRateLimitException | OpenAiQuotaExceededException e) {
             if (chargedCredits) {
-                creditIntegrationService.refundCreditsOnError(userId, r, billableLotCount, e.getMessage());
+                creditIntegrationService.refundCreditsOnError(tenantId, r, billableLotCount, e.getMessage());
                 log.warn("Falha do provedor OpenAI com estorno de creditos: {}", e.getMessage());
             }
 
@@ -90,7 +92,7 @@ public class MemorialAiServiceWithCredits {
             
         } catch (Exception e) {
             if (chargedCredits) {
-                creditIntegrationService.refundCreditsOnError(userId, r, billableLotCount, e.getMessage());
+                creditIntegrationService.refundCreditsOnError(tenantId, r, billableLotCount, e.getMessage());
             }
             log.error("Erro na geração do memorial: {}", e.getMessage(), e);
             
@@ -147,7 +149,8 @@ public class MemorialAiServiceWithCredits {
      */
     public CreditPreviewDTO previewCreditUsage(DxfCompareResultDTO r, UUID userId) {
         try {
-            var creditInfo = creditIntegrationService.getCreditUsageInfo(userId, r);
+            UUID tenantId = resolveTenantId(userId);
+            var creditInfo = creditIntegrationService.getCreditUsageInfo(tenantId, r);
             
             return new CreditPreviewDTO(
                 creditInfo.currentBalance(),
@@ -162,6 +165,10 @@ public class MemorialAiServiceWithCredits {
             log.error("❌ Erro ao calcular preview de créditos: {}", e.getMessage(), e);
             return new CreditPreviewDTO(0, 0, 0, false, "Erro ao calcular créditos");
         }
+    }
+
+    private UUID resolveTenantId(UUID userId) {
+        return AuthUtils.getRequiredCurrentTenantId();
     }
 
     /**

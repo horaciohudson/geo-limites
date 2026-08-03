@@ -202,6 +202,7 @@ const Register: React.FC = () => {
               <h2>Criar sua conta</h2>
               <p>Preencha os dados para comecar a usar a plataforma</p>
               <p>Informe uma identificacao da empresa. Ela sera usada como base para o codigo da empresa no primeiro cadastro.</p>
+              <p>Depois da confirmacao do e-mail, novos cadastros podem ficar aguardando aprovacao do administrador da empresa antes do primeiro acesso.</p>
             </div>
 
             <div className="input-field">

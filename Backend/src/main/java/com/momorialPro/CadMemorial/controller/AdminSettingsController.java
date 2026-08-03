@@ -72,10 +72,10 @@ public class AdminSettingsController {
 
     @PostMapping("/credits/test-topup")
     public ResponseEntity<TestCreditTopupResponseDTO> addTestCredits(@Valid @RequestBody TestCreditTopupRequest request) {
-        var userId = AuthUtils.getCurrentUserId();
-        creditService.addCredits(userId, request.getCredits(), "Recarga manual de teste");
+        var tenantId = AuthUtils.getRequiredCurrentTenantId();
+        creditService.addCredits(tenantId, request.getCredits(), "Recarga manual de teste para a empresa");
 
-        int currentBalance = creditService.getCurrentBalance(userId);
+        int currentBalance = creditService.getCurrentBalance(tenantId);
         return ResponseEntity.ok(TestCreditTopupResponseDTO.builder()
                 .message("Creditos de teste adicionados com sucesso.")
                 .creditsAdded(request.getCredits())

@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import UserAreaXConta from './UserAreaXConta';
 import UserAreaXPerfil from './UserAreaXPerfil';
 import UserAreaXOperacoes from './UserAreaXOperacoes';
+import UserAreaXCriarUsuario from './UserAreaXCriarUsuario';
+import { useAuth } from '@/auth/AuthContext';
+import { canManageTenantUsers } from '@/utils/roles';
 import '../styles/MyAccount.css';
 
 const UserAreaX: React.FC = () => {
-  const [activeMainTab, setActiveMainTab] = useState<'conta' | 'perfil' | 'operacoes'>('conta');
+  const { user } = useAuth();
+  const canShowCreateUserTab = canManageTenantUsers(user);
+  const [activeMainTab, setActiveMainTab] = useState<'conta' | 'perfil' | 'operacoes' | 'usuarios'>('conta');
 
   return (
     <div className="account-container" style={{ padding: '2rem' }}>
@@ -37,6 +42,14 @@ const UserAreaX: React.FC = () => {
           >
             Operações
           </button>
+          {canShowCreateUserTab && (
+            <button
+              className={`account-main-tab ${activeMainTab === 'usuarios' ? 'active' : ''}`}
+              onClick={() => setActiveMainTab('usuarios')}
+            >
+              Equipe
+            </button>
+          )}
         </div>
       </div>
 
@@ -44,10 +57,10 @@ const UserAreaX: React.FC = () => {
         {activeMainTab === 'conta' && <UserAreaXConta />}
         {activeMainTab === 'perfil' && <UserAreaXPerfil />}
         {activeMainTab === 'operacoes' && <UserAreaXOperacoes />}
+        {activeMainTab === 'usuarios' && <UserAreaXCriarUsuario />}
       </div>
     </div>
   );
 };
 
 export default UserAreaX;
-

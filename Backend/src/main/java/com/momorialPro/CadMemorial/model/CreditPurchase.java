@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Entidade que representa uma compra de créditos
+ * Entidade que representa uma compra de créditos do tenant
  * Tabela: tab_credit_purchases
  */
 @Entity
@@ -27,8 +27,8 @@ public class CreditPurchase {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Column(name = "amount_reais", nullable = false, precision = 10, scale = 2)
     private BigDecimal amountReais;
@@ -50,8 +50,8 @@ public class CreditPurchase {
     /**
      * Construtor para criar nova compra
      */
-    public CreditPurchase(UUID userId, BigDecimal amountReais, Integer creditsPurchased, String paymentProvider) {
-        this.userId = userId;
+    public CreditPurchase(UUID tenantId, BigDecimal amountReais, Integer creditsPurchased, String paymentProvider) {
+        this.tenantId = tenantId;
         this.amountReais = amountReais;
         this.creditsPurchased = creditsPurchased;
         this.paymentProvider = paymentProvider;

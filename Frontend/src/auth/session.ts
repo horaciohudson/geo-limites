@@ -66,7 +66,12 @@ export function getStoredJwtRoles(): string[] {
 }
 
 export function hasStoredAdminRole(): boolean {
-  return getStoredJwtRoles().some((role) => role === 'ROLE_ADMIN' || role === 'ADMIN');
+  return getStoredJwtRoles().some((role) =>
+    role === 'ROLE_ADMIN'
+    || role === 'ADMIN'
+    || role === 'ROLE_TENANT_ADMIN'
+    || role === 'TENANT_ADMIN'
+  );
 }
 
 export function getStoredToken(): string | null {

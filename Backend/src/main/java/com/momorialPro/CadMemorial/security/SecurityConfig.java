@@ -94,11 +94,11 @@ public class SecurityConfig {
                         // Endpoints de auth que precisam de autenticação
                         .requestMatchers("/api/auth/me").authenticated()
                         // Regras por role
-                        .requestMatchers("/api/users/**").hasRole("ADMIN")
-                        .requestMatchers("/api/files/**").hasAnyRole("ADMIN", "USER")
-                        .requestMatchers("/api/memorial-standards/**").hasAnyRole("ADMIN", "USER")
-                        .requestMatchers("/api/memorial/generate-gpt").hasAnyRole("ADMIN", "USER")
-                        .requestMatchers("/api/memorial/**").hasAnyRole("ADMIN", "USER")
+                        .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "TENANT_ADMIN")
+                        .requestMatchers("/api/files/**").hasAnyRole("ADMIN", "TENANT_ADMIN", "USER")
+                        .requestMatchers("/api/memorial-standards/**").hasAnyRole("ADMIN", "TENANT_ADMIN", "USER")
+                        .requestMatchers("/api/memorial/generate-gpt").hasAnyRole("ADMIN", "TENANT_ADMIN", "USER")
+                        .requestMatchers("/api/memorial/**").hasAnyRole("ADMIN", "TENANT_ADMIN", "USER")
                         // Todo o resto precisa estar autenticado
                         .anyRequest().authenticated()
                 )

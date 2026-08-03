@@ -24,6 +24,7 @@ export interface User {
   tenantCode?: string;
   active: boolean;
   verified?: boolean;
+  approvalPending?: boolean;
   roles?: Role[];
 }
 

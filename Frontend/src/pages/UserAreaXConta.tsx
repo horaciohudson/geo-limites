@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantOperationalAccess } from '@/hooks/useTenantOperationalAccess';
+import { getPrimaryRoleLabel } from '@/utils/roles';
 import creditService from '../services/creditService';
 import type {
   CreditBalance,
@@ -126,7 +127,7 @@ const UserAreaXConta: React.FC = () => {
           <div className="account-overview-card">
             <span className="overview-label">Cadastro</span>
             <strong>{user?.fullName || user?.username || 'Nao informado'}</strong>
-            <span>{user?.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN') ? 'Administrador' : 'Operador'}</span>
+            <span>{getPrimaryRoleLabel(user)}</span>
           </div>
           <div className="account-overview-card">
             <span className="overview-label">Saldo Atual</span>

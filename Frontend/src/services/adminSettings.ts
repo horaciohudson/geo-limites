@@ -156,7 +156,7 @@ export interface AdminUserCreateRequest {
   email: string;
   password: string;
   fullName: string;
-  roleName: 'ROLE_USER' | 'ROLE_ADMIN';
+  roleName: 'ROLE_USER' | 'ROLE_TENANT_ADMIN' | 'ROLE_ADMIN';
   verified: boolean;
   sendVerificationEmail: boolean;
 }
@@ -165,7 +165,7 @@ export interface AdminUserUpdateRequest {
   username: string;
   email: string;
   fullName: string;
-  roleName: 'ROLE_USER' | 'ROLE_ADMIN';
+  roleName: 'ROLE_USER' | 'ROLE_TENANT_ADMIN' | 'ROLE_ADMIN';
   active: boolean;
 }
 
@@ -258,6 +258,16 @@ const adminSettingsService = {
 
   async createUser(payload: AdminUserCreateRequest): Promise<User> {
     const response = await api.post('/users', payload);
+    return response.data;
+  },
+
+  async promoteUserToTenantAdmin(userId: string): Promise<User> {
+    const response = await api.post(`/users/${userId}/promote-to-tenant-admin`);
+    return response.data;
+  },
+
+  async relinquishCurrentTenantAdmin(): Promise<MessageResponse> {
+    const response = await api.post('/users/me/relinquish-tenant-admin');
     return response.data;
   },
 

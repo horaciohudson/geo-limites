@@ -33,5 +33,6 @@ public class UserDTO {
     private String tenantCode;
     private Boolean active;
     private Boolean verified;
+    private Boolean approvalPending;
     private List<UserRoleDTO> roles;
 }

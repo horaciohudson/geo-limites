@@ -11,6 +11,7 @@ CREATE TYPE credit_purchase_status AS ENUM (
 
 
 CREATE TYPE role_name AS ENUM (
- 	'ROLE_ADMIN', --Administrador
+        'ROLE_ADMIN', --Administrador da plataforma
+    'ROLE_TENANT_ADMIN', --Administrador da empresa
     'ROLE_USER'   --Usuário comum
 );

@@ -81,13 +81,14 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Role USER nao encontrado"));
 
         boolean autoVerify = authFlowProperties.isAutoVerifyUsers();
+        boolean requiresAdminApproval = tenantHasAdministrators(tenant);
 
         User user = User.builder()
                 .username(normalizedUsername)
                 .email(normalizedEmail)
                 .password(encoder.encode(dto.password()))
                 .fullName(normalizedFullName)
-                .active(true)
+                .active(!requiresAdminApproval)
                 .verified(autoVerify)
                 .tenant(tenant)
                 .build();
@@ -103,8 +104,8 @@ public class AuthService {
         }
 
         String message = autoVerify
-                ? "Conta criada e verificada com sucesso. Faça login para continuar."
-                : buildVerificationDispatchMessage(true, dispatchResult != null && dispatchResult.isEmailSent());
+                ? buildRegistrationSuccessMessage(requiresAdminApproval)
+                : buildVerificationDispatchMessage(true, dispatchResult != null && dispatchResult.isEmailSent(), requiresAdminApproval);
 
         return new RegisterResponseDTO(
                 message,
@@ -125,12 +126,15 @@ public class AuthService {
                 .or(() -> repo.findByEmailIgnoreCaseAndTenantId(normalizedCredential, tenant.getId()))
                 .orElseThrow(() -> new IllegalArgumentException("Credenciais inválidas"));
 
-        if (!Boolean.TRUE.equals(user.getActive())) {
-            throw new IllegalArgumentException("Usuário inativo");
-        }
-
         if (!Boolean.TRUE.equals(user.getVerified())) {
             throw new IllegalArgumentException("Conta ainda não verificada. Confirme seu e-mail antes de entrar.");
+        }
+
+        if (!Boolean.TRUE.equals(user.getActive())) {
+            if (isAwaitingAdminApproval(user)) {
+                throw new IllegalArgumentException("Cadastro aguardando aprovacao do administrador da empresa.");
+            }
+            throw new IllegalArgumentException("Usuário inativo");
         }
 
         if (!encoder.matches(dto.password(), user.getPassword())) {
@@ -217,7 +221,11 @@ public class AuthService {
                 accountEmailService.sendVerificationEmail(user, verificationToken.getToken());
 
         return new MessageResponseDTO(
-                buildVerificationDispatchMessage(false, dispatchResult.isEmailSent()),
+                buildVerificationDispatchMessage(
+                        false,
+                        dispatchResult.isEmailSent(),
+                        user.getTenant() != null && tenantHasAdministrators(user.getTenant())
+                ),
                 dispatchResult.isEmailSent(),
                 dispatchResult.getVerificationUrl()
         );
@@ -241,15 +249,9 @@ public class AuthService {
         User currentUser = repo.findById(AuthUtils.getRequiredCurrentUser().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado"));
 
-        String normalizedEmail = normalizeEmail(dto.getEmail());
-        repo.findByEmailIgnoreCaseAndTenantId(normalizedEmail, AuthUtils.getRequiredCurrentTenantId())
-                .filter(existing -> !existing.getId().equals(currentUser.getId()))
-                .ifPresent(existing -> {
-                    throw new IllegalArgumentException("Este e-mail já está sendo usado por outro usuário.");
-                });
+        rejectEmailChange(dto.getEmail(), currentUser);
 
         currentUser.setFullName(normalizeFullName(dto.getFullName()));
-        currentUser.setEmail(normalizedEmail);
         currentUser.setCorporateName(normalizeOptionalText(dto.getCorporateName(), 100));
         currentUser.setTradeName(normalizeOptionalText(dto.getTradeName(), 100));
         currentUser.setCnpj(normalizeOptionalText(dto.getCnpj(), 18));
@@ -327,6 +329,19 @@ public class AuthService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
+    private void rejectEmailChange(String requestedEmail, User currentUser) {
+        if (requestedEmail == null || requestedEmail.isBlank()) {
+            return;
+        }
+
+        String normalizedRequestedEmail = normalizeEmail(requestedEmail);
+        String normalizedCurrentEmail = normalizeEmail(currentUser.getEmail());
+        if (!normalizedCurrentEmail.equals(normalizedRequestedEmail)) {
+            throw new IllegalArgumentException(
+                    "O e-mail da conta nao pode ser alterado. Inative esta conta e crie outra com o novo e-mail.");
+        }
+    }
+
     private String normalizeCredential(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("Credenciais inválidas");
@@ -365,15 +380,15 @@ public class AuthService {
         return normalized != null ? normalized.toUpperCase(Locale.ROOT) : null;
     }
 
-    private String buildVerificationDispatchMessage(boolean newlyCreated, boolean emailSent) {
+    private String buildVerificationDispatchMessage(boolean newlyCreated, boolean emailSent, boolean requiresAdminApproval) {
         if (!emailSent) {
             return newlyCreated
-                    ? "Conta criada com sucesso. O envio de e-mail esta desabilitado neste ambiente; use o link de confirmacao exibido abaixo."
+                    ? buildVerificationMessageWithoutEmail(requiresAdminApproval)
                     : "Novo link de confirmacao gerado. O envio de e-mail esta desabilitado neste ambiente; use o link exibido abaixo.";
         }
 
         return newlyCreated
-                ? "Conta criada com sucesso. Verifique seu e-mail para ativar o acesso."
+                ? buildVerificationMessageWithEmail(requiresAdminApproval)
                 : "Novo e-mail de confirmacao enviado com sucesso. Verifique sua caixa de entrada.";
     }
 
@@ -385,5 +400,39 @@ public class AuthService {
         }
 
         return "Seu e-mail foi confirmado com sucesso. Seu cadastro agora esta em analise e algumas areas permanecem bloqueadas ate a liberacao da equipe.";
+    }
+
+    private String buildRegistrationSuccessMessage(boolean requiresAdminApproval) {
+        if (requiresAdminApproval) {
+            return "Conta criada com sucesso. Seu cadastro ficara aguardando aprovacao do administrador da empresa antes do primeiro acesso.";
+        }
+        return "Conta criada e verificada com sucesso. Faça login para continuar.";
+    }
+
+    private String buildVerificationMessageWithEmail(boolean requiresAdminApproval) {
+        if (requiresAdminApproval) {
+            return "Conta criada com sucesso. Verifique seu e-mail para confirmar o cadastro. Depois disso, o acesso ficara aguardando aprovacao do administrador da empresa.";
+        }
+        return "Conta criada com sucesso. Verifique seu e-mail para ativar o acesso.";
+    }
+
+    private String buildVerificationMessageWithoutEmail(boolean requiresAdminApproval) {
+        if (requiresAdminApproval) {
+            return "Conta criada com sucesso. O envio de e-mail esta desabilitado neste ambiente; use o link de confirmacao exibido abaixo. Depois disso, o acesso ficara aguardando aprovacao do administrador da empresa.";
+        }
+        return "Conta criada com sucesso. O envio de e-mail esta desabilitado neste ambiente; use o link de confirmacao exibido abaixo.";
+    }
+
+    private boolean tenantHasAdministrators(Tenant tenant) {
+        return repo.findByTenantId(tenant.getId()).stream().anyMatch(this::hasTenantManagementRole);
+    }
+
+    private boolean isAwaitingAdminApproval(User user) {
+        return Boolean.TRUE.equals(user.getVerified()) && !Boolean.TRUE.equals(user.getActive()) && user.getOwner() == null;
+    }
+
+    private boolean hasTenantManagementRole(User user) {
+        return user.getRoles().stream().anyMatch(role ->
+                RoleName.ROLE_ADMIN.equals(role.getName()) || RoleName.ROLE_TENANT_ADMIN.equals(role.getName()));
     }
 }

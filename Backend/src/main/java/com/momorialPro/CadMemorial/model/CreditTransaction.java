@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Entidade que representa uma transação de crédito (compra ou uso)
+ * Entidade que representa uma transação de crédito do tenant (compra ou uso)
  * Tabela: tab_credit_transactions
  */
 @Entity
@@ -26,8 +26,8 @@ public class CreditTransaction {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "transaction_type", nullable = false)
@@ -46,8 +46,8 @@ public class CreditTransaction {
     /**
      * Construtor para criar nova transação
      */
-    public CreditTransaction(UUID userId, CreditTransactionType type, Integer amount, String description) {
-        this.userId = userId;
+    public CreditTransaction(UUID tenantId, CreditTransactionType type, Integer amount, String description) {
+        this.tenantId = tenantId;
         this.type = type;
         this.amount = amount;
         this.description = description;

@@ -18,7 +18,6 @@ public class UserProfileUpdateDTO {
     @NotBlank
     private String fullName;
 
-    @NotBlank
     @Email
     private String email;
 

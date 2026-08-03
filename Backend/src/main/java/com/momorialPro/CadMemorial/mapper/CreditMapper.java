@@ -26,7 +26,7 @@ public class CreditMapper {
         }
         
         return new CreditBalanceDTO(
-            userCredits.getUserId(),
+            userCredits.getTenantId(),
             userCredits.getTotalCredits(),
             userCredits.getUpdatedAt()
         );
@@ -104,7 +104,7 @@ public class CreditMapper {
     }
 
     /**
-     * Cria CreditBalanceDTO com saldo zero para usuário novo
+     * Cria CreditBalanceDTO com saldo zero
      */
     public CreditBalanceDTO createEmptyBalance() {
         return new CreditBalanceDTO(0);

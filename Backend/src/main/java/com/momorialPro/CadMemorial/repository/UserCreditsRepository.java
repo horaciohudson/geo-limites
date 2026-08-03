@@ -10,30 +10,30 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Repository para gerenciar saldos de créditos dos usuários
+ * Repository para gerenciar saldos de créditos dos tenants
  */
 @Repository
 public interface UserCreditsRepository extends JpaRepository<UserCredits, UUID> {
 
     /**
-     * Busca o saldo de créditos de um usuário específico
+     * Busca o saldo de créditos de um tenant específico
      */
-    Optional<UserCredits> findByUserId(UUID userId);
+    Optional<UserCredits> findByTenantId(UUID tenantId);
 
     /**
-     * Verifica se um usuário já possui registro de créditos
+     * Verifica se um tenant já possui registro de créditos
      */
-    boolean existsByUserId(UUID userId);
+    boolean existsByTenantId(UUID tenantId);
 
     /**
-     * Busca apenas o total de créditos de um usuário (otimizado)
+     * Busca apenas o total de créditos de um tenant (otimizado)
      */
-    @Query("SELECT uc.totalCredits FROM UserCredits uc WHERE uc.userId = :userId")
-    Optional<Integer> findTotalCreditsByUserId(@Param("userId") UUID userId);
+    @Query("SELECT uc.totalCredits FROM UserCredits uc WHERE uc.tenantId = :tenantId")
+    Optional<Integer> findTotalCreditsByTenantId(@Param("tenantId") UUID tenantId);
 
     /**
-     * Atualiza o saldo de créditos de um usuário
+     * Atualiza o saldo de créditos de um tenant
      */
-    @Query("UPDATE UserCredits uc SET uc.totalCredits = :totalCredits WHERE uc.userId = :userId")
-    int updateTotalCreditsByUserId(@Param("userId") UUID userId, @Param("totalCredits") Integer totalCredits);
+    @Query("UPDATE UserCredits uc SET uc.totalCredits = :totalCredits WHERE uc.tenantId = :tenantId")
+    int updateTotalCreditsByTenantId(@Param("tenantId") UUID tenantId, @Param("totalCredits") Integer totalCredits);
 }

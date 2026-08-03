@@ -4,6 +4,7 @@ import { useFileContext } from '@/contexts/FileContext';
 import { useOperationContext } from '@/contexts/OperationContext';
 import { useAuth } from '@/auth/AuthContext';
 import { useTenantOperationalAccess } from '@/hooks/useTenantOperationalAccess';
+import { isPlatformAdmin } from '@/utils/roles';
 import styles from '../styles/Sidebar.module.css';
 
 interface StoredPropertySelection {
@@ -37,7 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewerActions: _viewerActions }) => {
   const { selectedProperty } = useOperationContext();
   const { user, logout } = useAuth();
   const { isRestricted, restrictionMessage } = useTenantOperationalAccess();
-  const canAccessAdmin = user?.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN') ?? false;
+  const canAccessAdmin = isPlatformAdmin(user);
 
   const getStoredLinkedDxfCount = (): number => {
     try {
@@ -201,7 +202,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewerActions: _viewerActions }) => {
                   type="button"
                   className={styles.sidebarActionBtn}
                   disabled
-                  title="Disponivel apenas para operador administrador"
+                  title="Disponivel apenas para administrador da plataforma"
                 >
                   <span className={styles.sidebarIcon}>🛠️</span>
                   <span className={styles.sidebarLabel}>Administracao</span>

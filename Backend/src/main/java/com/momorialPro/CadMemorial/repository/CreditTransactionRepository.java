@@ -20,71 +20,71 @@ import java.util.UUID;
 public interface CreditTransactionRepository extends JpaRepository<CreditTransaction, UUID> {
 
     /**
-     * Busca todas as transações de um usuário ordenadas por data (mais recentes primeiro)
+     * Busca todas as transações de um tenant ordenadas por data (mais recentes primeiro)
      */
-    List<CreditTransaction> findByUserIdOrderByCreatedAtDesc(UUID userId);
+    List<CreditTransaction> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
     /**
-     * Busca transações de um usuário com paginação
+     * Busca transações de um tenant com paginação
      */
-    Page<CreditTransaction> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+    Page<CreditTransaction> findByTenantIdOrderByCreatedAtDesc(UUID tenantId, Pageable pageable);
 
     /**
-     * Busca transações de um usuário por tipo
+     * Busca transações de um tenant por tipo
      */
-    List<CreditTransaction> findByUserIdAndTypeOrderByCreatedAtDesc(UUID userId, CreditTransactionType type);
+    List<CreditTransaction> findByTenantIdAndTypeOrderByCreatedAtDesc(UUID tenantId, CreditTransactionType type);
 
     /**
-     * Busca transações de um usuário em um período específico
+     * Busca transações de um tenant em um período específico
      */
-    List<CreditTransaction> findByUserIdAndCreatedAtBetweenOrderByCreatedAtDesc(
-            UUID userId, LocalDateTime startDate, LocalDateTime endDate);
+    List<CreditTransaction> findByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+            UUID tenantId, LocalDateTime startDate, LocalDateTime endDate);
 
     /**
-     * Conta o total de transações de um usuário
+     * Conta o total de transações de um tenant
      */
-    long countByUserId(UUID userId);
+    long countByTenantId(UUID tenantId);
 
     /**
-     * Soma o total de créditos comprados por um usuário
-     */
-    @Query("SELECT COALESCE(SUM(ct.amount), 0) FROM CreditTransaction ct " +
-           "WHERE ct.userId = :userId AND ct.type = 'PURCHASE'")
-    Integer sumPurchasedCreditsByUserId(@Param("userId") UUID userId);
-
-    /**
-     * Soma o total de créditos usados por um usuário
+     * Soma o total de créditos comprados por um tenant
      */
     @Query("SELECT COALESCE(SUM(ct.amount), 0) FROM CreditTransaction ct " +
-           "WHERE ct.userId = :userId AND ct.type = 'USE'")
-    Integer sumUsedCreditsByUserId(@Param("userId") UUID userId);
+           "WHERE ct.tenantId = :tenantId AND ct.type = 'PURCHASE'")
+    Integer sumPurchasedCreditsByTenantId(@Param("tenantId") UUID tenantId);
 
     /**
-     * Conta quantas geracoes de memorial ja foram cobradas para o usuario.
+     * Soma o total de créditos usados por um tenant
+     */
+    @Query("SELECT COALESCE(SUM(ct.amount), 0) FROM CreditTransaction ct " +
+           "WHERE ct.tenantId = :tenantId AND ct.type = 'USE'")
+    Integer sumUsedCreditsByTenantId(@Param("tenantId") UUID tenantId);
+
+    /**
+     * Conta quantas geracoes de memorial ja foram cobradas para o tenant.
      */
     @Query("SELECT COUNT(ct) FROM CreditTransaction ct " +
-           "WHERE ct.userId = :userId AND ct.type = 'USE' " +
+           "WHERE ct.tenantId = :tenantId AND ct.type = 'USE' " +
            "AND (ct.description LIKE 'Geração de memorial%' OR ct.description LIKE 'Geracao de memorial%')")
-    long countMemorialGenerationsByUserId(@Param("userId") UUID userId);
+    long countMemorialGenerationsByTenantId(@Param("tenantId") UUID tenantId);
 
     /**
-     * Soma os creditos consumidos em geracoes de memorial para o usuario.
+     * Soma os creditos consumidos em geracoes de memorial para o tenant.
      */
     @Query("SELECT COALESCE(SUM(ct.amount), 0) FROM CreditTransaction ct " +
-           "WHERE ct.userId = :userId AND ct.type = 'USE' " +
+           "WHERE ct.tenantId = :tenantId AND ct.type = 'USE' " +
            "AND (ct.description LIKE 'Geração de memorial%' OR ct.description LIKE 'Geracao de memorial%')")
-    Integer sumMemorialCreditsUsedByUserId(@Param("userId") UUID userId);
+    Integer sumMemorialCreditsUsedByTenantId(@Param("tenantId") UUID tenantId);
 
     /**
-     * Data da ultima geracao de memorial cobrada para o usuario.
+     * Data da ultima geracao de memorial cobrada para o tenant.
      */
     @Query("SELECT MAX(ct.createdAt) FROM CreditTransaction ct " +
-           "WHERE ct.userId = :userId AND ct.type = 'USE' " +
+           "WHERE ct.tenantId = :tenantId AND ct.type = 'USE' " +
            "AND (ct.description LIKE 'Geração de memorial%' OR ct.description LIKE 'Geracao de memorial%')")
-    LocalDateTime findLastMemorialGenerationAtByUserId(@Param("userId") UUID userId);
+    LocalDateTime findLastMemorialGenerationAtByTenantId(@Param("tenantId") UUID tenantId);
 
     /**
-     * Busca as últimas N transações de um usuário
+     * Busca as últimas N transações de um tenant
      */
-    List<CreditTransaction> findTop10ByUserIdOrderByCreatedAtDesc(UUID userId);
+    List<CreditTransaction> findTop10ByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 }

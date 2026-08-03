@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Service para gerenciar créditos dos usuários
+ * Service para gerenciar créditos dos tenants
  * Implementa todas as operações de crédito: consulta, consumo, adição e compras
  */
 @Service
@@ -38,27 +38,27 @@ public class CreditService {
     private final CreditPricingSettingsService creditPricingSettingsService;
 
     /**
-     * 1. Verifica se o usuário possui créditos suficientes
+     * 1. Verifica se o tenant possui créditos suficientes
      */
-    public boolean hasEnoughCredits(UUID userId, int requiredCredits) {
-        UserCredits userCredits = findOrCreateUserCredits(userId);
+    public boolean hasEnoughCredits(UUID tenantId, int requiredCredits) {
+        UserCredits userCredits = findOrCreateTenantCredits(tenantId);
         return userCredits.hasEnoughCredits(requiredCredits);
     }
 
     /**
-     * 2. Consome créditos do usuário
+     * 2. Consome créditos do tenant
      */
     @Transactional
-    public void consumeCredits(UUID userId, int amount) {
-        consumeCredits(userId, amount, "Créditos consumidos pelo sistema");
+    public void consumeCredits(UUID tenantId, int amount) {
+        consumeCredits(tenantId, amount, "Créditos consumidos pela empresa");
     }
 
     /**
-     * 2b. Consome créditos do usuário com descrição customizada
+     * 2b. Consome créditos do tenant com descrição customizada
      */
     @Transactional
-    public void consumeCredits(UUID userId, int amount, String description) {
-        UserCredits userCredits = findOrCreateUserCredits(userId);
+    public void consumeCredits(UUID tenantId, int amount, String description) {
+        UserCredits userCredits = findOrCreateTenantCredits(tenantId);
         
         // Valida saldo antes de consumir
         if (!userCredits.hasEnoughCredits(amount)) {
@@ -71,7 +71,7 @@ public class CreditService {
         
         // Registra transação
         CreditTransaction transaction = new CreditTransaction(
-            userId, 
+            tenantId,
             CreditTransactionType.USE, 
             amount, 
             description
@@ -80,11 +80,11 @@ public class CreditService {
     }
 
     /**
-     * 3. Adiciona créditos ao usuário
+     * 3. Adiciona créditos ao tenant
      */
     @Transactional
-    public void addCredits(UUID userId, int amount, String description) {
-        UserCredits userCredits = findOrCreateUserCredits(userId);
+    public void addCredits(UUID tenantId, int amount, String description) {
+        UserCredits userCredits = findOrCreateTenantCredits(tenantId);
         
         // Adiciona créditos
         userCredits.addCredits(amount);
@@ -92,7 +92,7 @@ public class CreditService {
         
         // Registra transação
         CreditTransaction transaction = new CreditTransaction(
-            userId, 
+            tenantId,
             CreditTransactionType.PURCHASE, 
             amount, 
             description
@@ -101,28 +101,28 @@ public class CreditService {
     }
 
     /**
-     * 4. Obtém o saldo atual do usuário
+     * 4. Obtém o saldo atual do tenant
      */
-    public UserCredits getBalance(UUID userId) {
-        return findOrCreateUserCredits(userId);
+    public UserCredits getBalance(UUID tenantId) {
+        return findOrCreateTenantCredits(tenantId);
     }
 
     /**
-     * 5. Lista todas as transações do usuário
+     * 5. Lista todas as transações do tenant
      */
-    public List<CreditTransaction> listTransactions(UUID userId) {
-        return transactionRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    public List<CreditTransaction> listTransactions(UUID tenantId) {
+        return transactionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
     }
 
     /**
-     * 6. Inicia uma compra de créditos
+     * 6. Inicia uma compra de créditos para o tenant
      */
     @Transactional
-    public CreditPurchase startPurchase(UUID userId, String packageId, Integer credits, BigDecimal amountReais, String paymentProvider) {
+    public CreditPurchase startPurchase(UUID tenantId, String packageId, Integer credits, BigDecimal amountReais, String paymentProvider) {
         CreditPurchaseDraft purchaseDraft = resolvePurchaseDraft(packageId, credits, amountReais);
 
         CreditPurchase purchase = new CreditPurchase(
-            userId, 
+            tenantId,
             purchaseDraft.amountReais(),
             purchaseDraft.credits(),
             paymentProvider != null && !paymentProvider.isBlank() ? paymentProvider : "default"
@@ -154,9 +154,9 @@ public class CreditService {
         purchase.markAsPaid();
         purchaseRepository.save(purchase);
         
-        // Adiciona créditos ao usuário
+        // Adiciona créditos ao tenant
         addCredits(
-            purchase.getUserId(), 
+            purchase.getTenantId(),
             purchase.getCreditsPurchased(), 
             String.format("Compra confirmada - ID: %s", purchaseId)
         );
@@ -187,23 +187,22 @@ public class CreditService {
     }
 
     /**
-     * Método auxiliar: Busca ou cria registro de créditos do usuário
-     * NOVO: Cria com saldo inicial de 50 créditos para novos usuários
+     * Método auxiliar: Busca ou cria registro de créditos do tenant
      */
-    private UserCredits findOrCreateUserCredits(UUID userId) {
+    private UserCredits findOrCreateTenantCredits(UUID tenantId) {
         CreditPricingSettings pricingSettings = creditPricingSettingsService.getOrCreateEntity();
         int welcomeCredits = pricingSettings.getWelcomeCredits();
 
-        return userCreditsRepository.findByUserId(userId)
+        return userCreditsRepository.findByTenantId(tenantId)
             .orElseGet(() -> {
-                UserCredits newUserCredits = new UserCredits(userId, welcomeCredits);
-                UserCredits savedCredits = userCreditsRepository.save(newUserCredits);
+                UserCredits newTenantCredits = new UserCredits(tenantId, welcomeCredits);
+                UserCredits savedCredits = userCreditsRepository.save(newTenantCredits);
                 
                 CreditTransaction welcomeTransaction = new CreditTransaction(
-                    userId, 
+                    tenantId,
                     CreditTransactionType.PURCHASE, 
                     welcomeCredits,
-                    "Créditos de boas-vindas - Novo usuário"
+                    "Créditos iniciais da empresa"
                 );
                 transactionRepository.save(welcomeTransaction);
                 return savedCredits;
@@ -211,21 +210,19 @@ public class CreditService {
     }
 
     /**
-     * NOVO: Inicializa créditos para usuário (chamado no login/primeiro acesso)
-     * Garante que todo usuário tenha registro de créditos
+     * Inicializa créditos para o tenant (chamado no login/primeiro acesso)
      */
     @Transactional
-    public UserCredits initializeUserCredits(UUID userId) {
+    public UserCredits initializeTenantCredits(UUID tenantId) {
         try {
-            return findOrCreateUserCredits(userId);
+            return findOrCreateTenantCredits(tenantId);
         } catch (Exception e) {
-            log.error("❌ Erro ao inicializar créditos para usuário {}: {}", userId, e.getMessage());
+            log.error("❌ Erro ao inicializar créditos para tenant {}: {}", tenantId, e.getMessage());
             
-            // Fallback: tentar criar manualmente
             try {
                 int welcomeCredits = creditPricingSettingsService.getOrCreateEntity().getWelcomeCredits();
                 UserCredits fallbackCredits = new UserCredits();
-                fallbackCredits.setUserId(userId);
+                fallbackCredits.setTenantId(tenantId);
                 fallbackCredits.setTotalCredits(welcomeCredits);
                 
                 UserCredits saved = userCreditsRepository.save(fallbackCredits);
@@ -233,7 +230,7 @@ public class CreditService {
                 
             } catch (Exception fallbackError) {
                 log.error("❌ Falha total na criação de créditos: {}", fallbackError.getMessage());
-                throw new RuntimeException("Não foi possível inicializar créditos para o usuário", fallbackError);
+                throw new RuntimeException("Não foi possível inicializar créditos para a empresa", fallbackError);
             }
         }
     }
@@ -282,24 +279,24 @@ public class CreditService {
     /**
      * Método auxiliar: Obtém apenas o saldo (otimizado)
      */
-    public int getCurrentBalance(UUID userId) {
-        return userCreditsRepository.findTotalCreditsByUserId(userId).orElse(0);
+    public int getCurrentBalance(UUID tenantId) {
+        return userCreditsRepository.findTotalCreditsByTenantId(tenantId).orElse(0);
     }
 
     /**
      * Método auxiliar: Lista últimas transações (otimizado)
      */
-    public List<CreditTransaction> getRecentTransactions(UUID userId) {
-        return transactionRepository.findTop10ByUserIdOrderByCreatedAtDesc(userId);
+    public List<CreditTransaction> getRecentTransactions(UUID tenantId) {
+        return transactionRepository.findTop10ByTenantIdOrderByCreatedAtDesc(tenantId);
     }
 
     /**
-     * Resumo de memoriais cobrados para a conta do usuario.
+     * Resumo de memoriais cobrados para a conta da empresa.
      */
-    public MemorialUsageSummary getMemorialUsageSummary(UUID userId) {
-        long memorialsCreated = transactionRepository.countMemorialGenerationsByUserId(userId);
-        int creditsUsedForMemorials = transactionRepository.sumMemorialCreditsUsedByUserId(userId);
-        LocalDateTime lastMemorialGenerationAt = transactionRepository.findLastMemorialGenerationAtByUserId(userId);
+    public MemorialUsageSummary getMemorialUsageSummary(UUID tenantId) {
+        long memorialsCreated = transactionRepository.countMemorialGenerationsByTenantId(tenantId);
+        int creditsUsedForMemorials = transactionRepository.sumMemorialCreditsUsedByTenantId(tenantId);
+        LocalDateTime lastMemorialGenerationAt = transactionRepository.findLastMemorialGenerationAtByTenantId(tenantId);
 
         double averageCreditsPerMemorial = memorialsCreated > 0
                 ? (double) creditsUsedForMemorials / memorialsCreated
@@ -314,17 +311,17 @@ public class CreditService {
     }
 
     /**
-     * Método auxiliar: Busca compras do usuário
+     * Método auxiliar: Busca compras do tenant
      */
-    public List<CreditPurchase> getUserPurchases(UUID userId) {
-        return purchaseRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    public List<CreditPurchase> getUserPurchases(UUID tenantId) {
+        return purchaseRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
     }
 
     /**
-     * Método auxiliar: Busca compra específica do usuário (com segurança)
+     * Método auxiliar: Busca compra específica do tenant (com segurança)
      */
-    public CreditPurchase getUserPurchase(UUID purchaseId, UUID userId) {
-        return purchaseRepository.findByIdAndUserId(purchaseId, userId)
+    public CreditPurchase getUserPurchase(UUID purchaseId, UUID tenantId) {
+        return purchaseRepository.findByIdAndTenantId(purchaseId, tenantId)
             .orElseThrow(() -> new PurchaseNotFoundException(purchaseId));
     }
 

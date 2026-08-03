@@ -1060,6 +1060,187 @@
   padding: 2rem;
 }
 
+.account-user-management-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.account-user-side-column {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.account-user-form-card,
+.account-user-list-card {
+  padding: 1.5rem;
+}
+
+.account-user-field-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.account-user-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.account-user-field span {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.account-user-field input,
+.account-user-field select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.98rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.account-user-field input:focus,
+.account-user-field select:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
+}
+
+.account-user-toggle-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.account-user-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.account-user-toggle-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+
+.account-user-status {
+  margin-top: 1rem;
+}
+
+.account-user-submit-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+.profile-submit-btn {
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.82rem 1.15rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.profile-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);
+}
+
+.profile-submit-btn.secondary {
+  background: #ffffff;
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  box-shadow: none;
+}
+
+.profile-submit-btn.secondary:hover:not(:disabled) {
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+}
+
+.profile-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.account-user-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.account-user-card {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem 1.05rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: #ffffff;
+}
+
+.account-user-card strong {
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.account-user-card span {
+  color: #475569;
+  font-size: 0.94rem;
+}
+
+.account-user-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.account-user-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8 !important;
+  font-size: 0.78rem !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.account-user-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+}
+
+.account-user-card-actions .profile-submit-btn {
+  padding: 0.72rem 0.95rem;
+}
+
+.account-user-action-note {
+  display: block;
+  width: 100%;
+  color: #64748b !important;
+  font-size: 0.85rem !important;
+  line-height: 1.4;
+}
+
 .section-header {
   margin-bottom: 2rem;
   padding-bottom: 1rem;
@@ -1160,6 +1341,19 @@
 .input-field input.error {
   border-color: #ef4444;
   background: #fef2f2;
+}
+
+.input-field input.profile-readonly-input {
+  background: #f1f5f9;
+  color: #475569;
+  cursor: not-allowed;
+  border-color: #cbd5e1;
+}
+
+.field-helper {
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .field-error {
@@ -1354,6 +1548,10 @@
 @media (max-width: 768px) {
   .account-content {
     padding: 1rem;
+  }
+
+  .account-user-management-grid {
+    grid-template-columns: 1fr;
   }
   
   .profile-section {

@@ -13,6 +13,9 @@ import java.util.UUID;
 @Component
 public class AuthUtils {
 
+    private static final String ROLE_ADMIN = "ROLE_ADMIN";
+    private static final String ROLE_TENANT_ADMIN = "ROLE_TENANT_ADMIN";
+
     private static UserRepository userRepository;
 
     @Autowired
@@ -55,8 +58,18 @@ public class AuthUtils {
     }
 
     public static boolean isCurrentUserAdmin() {
+        return isCurrentUserPlatformAdmin() || isCurrentUserTenantAdmin();
+    }
+
+    public static boolean isCurrentUserPlatformAdmin() {
         return getCurrentUser()
-                .map(user -> user.getRoles().stream().anyMatch(role -> "ROLE_ADMIN".equals(role.getName().name())))
+                .map(user -> user.getRoles().stream().anyMatch(role -> ROLE_ADMIN.equals(role.getName().name())))
+                .orElse(false);
+    }
+
+    public static boolean isCurrentUserTenantAdmin() {
+        return getCurrentUser()
+                .map(user -> user.getRoles().stream().anyMatch(role -> ROLE_TENANT_ADMIN.equals(role.getName().name())))
                 .orElse(false);
     }
 

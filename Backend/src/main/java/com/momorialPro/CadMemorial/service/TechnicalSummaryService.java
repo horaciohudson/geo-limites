@@ -679,29 +679,6 @@ public class TechnicalSummaryService {
                         : "Nao informado")
                 .append("\n");
 
-        if (property != null) {
-            builder.append("IMOVEL: ")
-                    .append(firstNonBlank(
-                            property.getName(),
-                            property.getRegistrationNumber(),
-                            "Nao informado"))
-                    .append("\n");
-            if (property.getOwnerName() != null && !property.getOwnerName().isBlank()) {
-                builder.append("PROPRIETARIO: ").append(property.getOwnerName().trim()).append("\n");
-            }
-            String city = property.getCity() != null ? property.getCity().trim() : "";
-            String state = property.getState() != null ? property.getState().trim() : "";
-            if (!city.isBlank() || !state.isBlank()) {
-                builder.append("LOCALIZACAO: ");
-                if (!city.isBlank() && !state.isBlank()) {
-                    builder.append(city).append("/").append(state);
-                } else {
-                    builder.append(city.isBlank() ? state : city);
-                }
-                builder.append("\n");
-            }
-        }
-
         if (selectedLayers != null && !selectedLayers.isEmpty()) {
             builder.append("ESCOPO SELECIONADO: ")
                     .append(String.join(", ", selectedLayers))
@@ -860,13 +837,7 @@ public class TechnicalSummaryService {
         document.put("measurementUnit", measurementFormatting.lengthUnit());
         document.put("areaUnit", measurementFormatting.areaUnit());
 
-        Map<String, Object> propertyNode = new LinkedHashMap<>();
-        propertyNode.put("name", property != null ? firstNonBlank(property.getName(), property.getRegistrationNumber()) : null);
-        propertyNode.put("registrationNumber", property != null ? property.getRegistrationNumber() : null);
-        propertyNode.put("ownerName", property != null ? property.getOwnerName() : null);
-        propertyNode.put("city", property != null ? property.getCity() : null);
-        propertyNode.put("state", property != null ? property.getState() : null);
-        document.put("property", propertyNode);
+        document.put("property", buildSuppressedTechnicalSummaryPropertyNode());
         appendProcessingContext(document, processingContext);
         appendPartialReplacementContext(document, summaries, partialReplacementLotNumbers);
         appendManualReviewContext(document, summaries, normalizedManualReviewLotNumbers);
@@ -940,13 +911,7 @@ public class TechnicalSummaryService {
         document.put("measurementUnit", measurementFormatting.lengthUnit());
         document.put("areaUnit", measurementFormatting.areaUnit());
 
-        Map<String, Object> propertyNode = new LinkedHashMap<>();
-        propertyNode.put("name", property != null ? firstNonBlank(property.getName(), property.getRegistrationNumber()) : null);
-        propertyNode.put("registrationNumber", property != null ? property.getRegistrationNumber() : null);
-        propertyNode.put("ownerName", property != null ? property.getOwnerName() : null);
-        propertyNode.put("city", property != null ? property.getCity() : null);
-        propertyNode.put("state", property != null ? property.getState() : null);
-        document.put("property", propertyNode);
+        document.put("property", buildSuppressedTechnicalSummaryPropertyNode());
         appendProcessingContext(document, processingContext);
         appendPartialReplacementContext(document, safeSummaries, partialReplacementLotNumbers);
         appendManualReviewContext(document, safeSummaries, normalizedManualReviewLotNumbers);
@@ -974,6 +939,10 @@ public class TechnicalSummaryService {
         }
         document.put("lots", lots);
         return document;
+    }
+
+    private Map<String, Object> buildSuppressedTechnicalSummaryPropertyNode() {
+        return new LinkedHashMap<>();
     }
 
     private void appendProcessingContext(

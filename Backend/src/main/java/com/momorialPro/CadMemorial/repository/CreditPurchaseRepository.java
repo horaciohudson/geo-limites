@@ -21,29 +21,29 @@ import java.util.UUID;
 public interface CreditPurchaseRepository extends JpaRepository<CreditPurchase, UUID> {
 
     /**
-     * Busca todas as compras de um usuário ordenadas por data (mais recentes primeiro)
+     * Busca todas as compras de um tenant ordenadas por data (mais recentes primeiro)
      */
-    List<CreditPurchase> findByUserIdOrderByCreatedAtDesc(UUID userId);
+    List<CreditPurchase> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
     /**
-     * Busca compras de um usuário com paginação
+     * Busca compras de um tenant com paginação
      */
-    Page<CreditPurchase> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+    Page<CreditPurchase> findByTenantIdOrderByCreatedAtDesc(UUID tenantId, Pageable pageable);
 
     /**
-     * Busca compras de um usuário por status
+     * Busca compras de um tenant por status
      */
-    List<CreditPurchase> findByUserIdAndStatusOrderByCreatedAtDesc(UUID userId, CreditPurchaseStatus status);
+    List<CreditPurchase> findByTenantIdAndStatusOrderByCreatedAtDesc(UUID tenantId, CreditPurchaseStatus status);
 
     /**
-     * Busca compras pendentes de um usuário
+     * Busca compras pendentes de um tenant
      */
-    List<CreditPurchase> findByUserIdAndStatus(UUID userId, CreditPurchaseStatus status);
+    List<CreditPurchase> findByTenantIdAndStatus(UUID tenantId, CreditPurchaseStatus status);
 
     /**
-     * Busca uma compra específica de um usuário (para segurança)
+     * Busca uma compra específica de um tenant (para segurança)
      */
-    Optional<CreditPurchase> findByIdAndUserId(UUID id, UUID userId);
+    Optional<CreditPurchase> findByIdAndTenantId(UUID id, UUID tenantId);
 
     /**
      * Busca compras em um período específico
@@ -56,23 +56,23 @@ public interface CreditPurchaseRepository extends JpaRepository<CreditPurchase, 
     long countByStatus(CreditPurchaseStatus status);
 
     /**
-     * Conta compras de um usuário por status
+     * Conta compras de um tenant por status
      */
-    long countByUserIdAndStatus(UUID userId, CreditPurchaseStatus status);
+    long countByTenantIdAndStatus(UUID tenantId, CreditPurchaseStatus status);
 
     /**
-     * Soma o total gasto por um usuário em compras pagas
+     * Soma o total gasto por um tenant em compras pagas
      */
     @Query("SELECT COALESCE(SUM(cp.amountReais), 0) FROM CreditPurchase cp " +
-           "WHERE cp.userId = :userId AND cp.status = 'PAID'")
-    Double sumAmountReaisByUserIdAndPaidStatus(@Param("userId") UUID userId);
+           "WHERE cp.tenantId = :tenantId AND cp.status = 'PAID'")
+    Double sumAmountReaisByTenantIdAndPaidStatus(@Param("tenantId") UUID tenantId);
 
     /**
-     * Soma o total de créditos comprados por um usuário (apenas compras pagas)
+     * Soma o total de créditos comprados por um tenant (apenas compras pagas)
      */
     @Query("SELECT COALESCE(SUM(cp.creditsPurchased), 0) FROM CreditPurchase cp " +
-           "WHERE cp.userId = :userId AND cp.status = 'PAID'")
-    Integer sumCreditsPurchasedByUserIdAndPaidStatus(@Param("userId") UUID userId);
+           "WHERE cp.tenantId = :tenantId AND cp.status = 'PAID'")
+    Integer sumCreditsPurchasedByTenantIdAndPaidStatus(@Param("tenantId") UUID tenantId);
 
     /**
      * Busca compras pendentes há mais de X horas (para limpeza automática)

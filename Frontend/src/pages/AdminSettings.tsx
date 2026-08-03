@@ -18,6 +18,7 @@ import tenantAdminService, {
 } from '@/services/tenantAdminService';
 import { useAuth } from '@/auth/AuthContext';
 import type { User } from '@/types';
+import { getPrimaryRoleLabel, isPlatformAdmin, isTenantAdmin } from '@/utils/roles';
 import '@/styles/AdminSettings.css';
 
 const defaultForm: UpdateSmtpSettingsRequest = {
@@ -92,9 +93,11 @@ const toUserUpdateForm = (targetUser: User): AdminUserUpdateRequest => ({
   username: targetUser.username || '',
   email: targetUser.email || '',
   fullName: targetUser.fullName || '',
-  roleName: targetUser.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN')
+  roleName: isPlatformAdmin(targetUser)
     ? 'ROLE_ADMIN'
-    : 'ROLE_USER',
+    : isTenantAdmin(targetUser)
+      ? 'ROLE_TENANT_ADMIN'
+      : 'ROLE_USER',
   active: targetUser.active !== false,
 });
 
@@ -146,7 +149,7 @@ const AdminSettings: React.FC = () => {
   const [onboardingQueueFilter, setOnboardingQueueFilter] = useState<OnboardingQueueFilter>('all');
 
   const isAdmin = useMemo(
-    () => user?.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN') ?? false,
+    () => isPlatformAdmin(user),
     [user]
   );
 
@@ -193,7 +196,7 @@ const AdminSettings: React.FC = () => {
     const normalizedSearch = userSearch.trim().toLowerCase();
 
     return users.filter((item) => {
-      const isAdminUser = item.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN');
+      const isAdminUser = isPlatformAdmin(item) || isTenantAdmin(item);
       const matchesSearch = !normalizedSearch || [
         item.fullName,
         item.email,
@@ -206,8 +209,8 @@ const AdminSettings: React.FC = () => {
 
       const matchesStatus = userStatusFilter === 'all'
         || (userStatusFilter === 'active' && item.active !== false)
-        || (userStatusFilter === 'inactive' && item.active === false)
-        || (userStatusFilter === 'pending' && item.verified === false);
+        || (userStatusFilter === 'inactive' && item.active === false && item.approvalPending !== true)
+        || (userStatusFilter === 'pending' && (item.verified === false || item.approvalPending === true));
 
       return matchesSearch && matchesRole && matchesStatus;
     });
@@ -1975,12 +1978,14 @@ const AdminSettings: React.FC = () => {
               </div>
               {filteredUsers.map((item) => {
                 const isVerified = item.verified !== false;
+                const isApprovalPending = item.approvalPending === true;
                 const isCurrentUser = item.id === user?.id;
                 const isResending = resendingUserId === item.id;
                 const isEditing = editingUserId === item.id;
                 const isUpdating = updatingUserId === item.id;
                 const isResettingPassword = resettingPasswordUserId === item.id;
-                const isAdminUser = item.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN');
+                const isAdminUser = isPlatformAdmin(item) || isTenantAdmin(item);
+                const profileLabel = getPrimaryRoleLabel(item);
                 return (
                   <div key={item.id} className="admin-user-item">
                     <div className="admin-user-row">
@@ -1990,7 +1995,7 @@ const AdminSettings: React.FC = () => {
                           <strong>{item.fullName || item.username}</strong>
                           {isCurrentUser && <span className="admin-user-chip">Voce</span>}
                           {isAdminUser && (
-                            <span className="admin-user-chip">Admin</span>
+                            <span className="admin-user-chip">Gestor</span>
                           )}
                         </div>
                         <div className="admin-user-identity">
@@ -2005,7 +2010,7 @@ const AdminSettings: React.FC = () => {
                       <div className="admin-user-cell">
                         <div className="admin-user-cell-label">Perfil</div>
                         <span className="admin-user-state-chip neutral">
-                          {isAdminUser ? 'Administrador' : 'Usuario'}
+                          {profileLabel}
                         </span>
                       </div>
 
@@ -2018,8 +2023,8 @@ const AdminSettings: React.FC = () => {
 
                       <div className="admin-user-cell">
                         <div className="admin-user-cell-label">Status</div>
-                        <span className={`admin-user-state-chip ${item.active ? 'active' : 'inactive'}`}>
-                          {item.active ? 'Ativo' : 'Inativo'}
+                        <span className={`admin-user-state-chip ${item.active ? 'active' : isApprovalPending ? 'pending' : 'inactive'}`}>
+                          {item.active ? 'Ativo' : isApprovalPending ? 'Aguardando aprovacao' : 'Inativo'}
                         </span>
                       </div>
 
@@ -2106,7 +2111,7 @@ const AdminSettings: React.FC = () => {
                           onClick={() => handleToggleUserStatus(item)}
                           disabled={isUpdating || isEditing || isResettingPassword}
                         >
-                          {isUpdating ? 'Atualizando...' : item.active ? 'Inativar' : 'Reativar'}
+                          {isUpdating ? 'Atualizando...' : item.active ? 'Inativar' : isApprovalPending ? 'Aprovar e Liberar' : 'Reativar'}
                         </button>
                       </div>
                     </div>
@@ -2151,7 +2156,10 @@ const AdminSettings: React.FC = () => {
                                 onChange={(e) => setEditUserField('roleName', e.target.value as AdminUserUpdateRequest['roleName'])}
                               >
                                 <option value="ROLE_USER">Usuario</option>
-                                <option value="ROLE_ADMIN">Administrador</option>
+                                <option value="ROLE_TENANT_ADMIN">Administrador da Empresa</option>
+                                {isPlatformAdmin(user) && (
+                                  <option value="ROLE_ADMIN">Administrador da Plataforma</option>
+                                )}
                               </select>
                             </div>
                           </div>

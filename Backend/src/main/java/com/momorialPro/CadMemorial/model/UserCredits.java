@@ -11,11 +11,11 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Entidade que representa o saldo de créditos de um usuário
- * Tabela: tab_user_credits
+ * Entidade que representa o saldo de créditos do tenant
+ * Tabela: tab_tenant_credits
  */
 @Entity
-@Table(name = "tab_user_credits")
+@Table(name = "tab_tenant_credits")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,8 +26,8 @@ public class UserCredits {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Column(name = "total_credits", nullable = false)
     private Integer totalCredits = 0;
@@ -41,10 +41,10 @@ public class UserCredits {
     private LocalDateTime updatedAt;
 
     /**
-     * Construtor para criar novo saldo de usuário
+     * Construtor para criar novo saldo do tenant
      */
-    public UserCredits(UUID userId, Integer totalCredits) {
-        this.userId = userId;
+    public UserCredits(UUID tenantId, Integer totalCredits) {
+        this.tenantId = tenantId;
         this.totalCredits = totalCredits;
     }
 

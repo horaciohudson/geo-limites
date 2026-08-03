@@ -26,35 +26,47 @@ public class UserController {
     private final UserService service;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN')")
     public ResponseEntity<List<UserDTO>> findAll() {
         return ResponseEntity.ok(service.findAll());
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<UserDTO> findById(@PathVariable UUID id) {
         UserDTO user = service.findById(id);
         return user != null ? ResponseEntity.ok(user) : ResponseEntity.notFound().build();
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN')")
     public ResponseEntity<UserDTO> create(@Valid @RequestBody UserCreateDTO dto) {
         return ResponseEntity.ok(service.create(dto));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN')")
     public ResponseEntity<UserDTO> update(@PathVariable UUID id, @Valid @RequestBody UserUpdateDTO dto) {
         return ResponseEntity.ok(service.update(id, dto));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/promote-to-tenant-admin")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN')")
+    public ResponseEntity<UserDTO> promoteToTenantAdmin(@PathVariable UUID id) {
+        return ResponseEntity.ok(service.promoteToTenantAdmin(id));
+    }
+
+    @PostMapping("/me/relinquish-tenant-admin")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    public ResponseEntity<MessageResponseDTO> relinquishCurrentTenantAdmin() {
+        return ResponseEntity.ok(service.relinquishCurrentTenantAdmin());
     }
 
     @PostMapping("/{id}/reset-password")
@@ -64,7 +76,7 @@ public class UserController {
     }
 
     @PostMapping("/{id}/resend-verification")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN')")
     public ResponseEntity<MessageResponseDTO> resendVerification(@PathVariable UUID id) {
         return ResponseEntity.ok(service.resendVerification(id));
     }

@@ -64,6 +64,7 @@ interface RawUserPayload {
   tenantCode?: string;
   active?: boolean;
   verified?: boolean;
+  approvalPending?: boolean;
   roles?: RawRole[];
 }
 
@@ -293,6 +294,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       tenantCode: normalizedPayload.tenantCode || undefined,
       active: normalizedPayload.active !== false,
       verified: normalizedPayload.verified !== false,
+      approvalPending: normalizedPayload.approvalPending === true,
       roles: Array.isArray(normalizedPayload.roles)
         ? normalizedPayload.roles.map((role: RawRole, index: number) => ({
             id: role.id ? String(role.id) : `role-${index}`,

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import api from '../../services/api';
 import type { User } from '../../types/index';
+import { getPrimaryRoleLabel, isPlatformAdmin, isTenantAdmin } from '@/utils/roles';
 
 interface UserProfileProps {
   user: User | null;
@@ -35,7 +36,6 @@ interface PasswordFormData {
 
 interface ProfileValidation {
   fullName?: string;
-  email?: string;
   general?: string;
 }
 
@@ -91,9 +91,7 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdate }) => {
   const { logout } = useAuth();
-  const profileType = user?.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN')
-    ? 'Administrador'
-    : 'Operador';
+  const profileType = getPrimaryRoleLabel(user);
   
   // Estados do formulário de perfil
   const [profileData, setProfileData] = useState<ProfileFormData>({
@@ -160,12 +158,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdate }) => {
       validation.fullName = 'Nome deve ter pelo menos 2 caracteres';
     }
 
-    if (!profileData.email.trim()) {
-      validation.email = 'E-mail é obrigatório';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileData.email)) {
-      validation.email = 'E-mail deve ter um formato válido';
-    }
-
     setProfileValidation(validation);
     return Object.keys(validation).length === 0;
   };
@@ -207,7 +199,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdate }) => {
     try {
       const response = await api.put<User>('/auth/profile', {
         fullName: profileData.fullName.trim(),
-        email: profileData.email.trim(),
         corporateName: profileData.corporateName.trim(),
         tradeName: profileData.tradeName.trim(),
         cnpj: profileData.cnpj.trim(),
@@ -372,18 +363,13 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdate }) => {
                     id="email"
                     type="email"
                     value={profileData.email}
-                    onChange={(e) => {
-                      setProfileData(prev => ({ ...prev, email: e.target.value }));
-                      if (profileValidation.email) {
-                        setProfileValidation(prev => ({ ...prev, email: undefined }));
-                      }
-                    }}
-                    placeholder="Digite seu e-mail"
-                    className={profileValidation.email ? 'error' : ''}
+                    readOnly
+                    disabled
+                    className="profile-readonly-input"
                   />
-                  {profileValidation.email && (
-                    <span className="field-error">{profileValidation.email}</span>
-                  )}
+                  <span className="field-helper">
+                    O e-mail da conta nao pode ser alterado. Se precisar trocar, inative esta conta e crie outra.
+                  </span>
                 </div>
               </div>
 
@@ -774,9 +760,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdate }) => {
               <div className="info-item">
                 <span className="info-label">Tipo de Conta:</span>
                 <span className="info-value">
-                  {user?.roles?.some((role) => role.name === 'ROLE_ADMIN' || role.name === 'ADMIN')
-                    ? '👑 Administrador'
-                    : '👤 Usuário'}
+                  {isPlatformAdmin(user)
+                    ? '👑 Administrador da Plataforma'
+                    : isTenantAdmin(user)
+                      ? '🛠️ Administrador da Empresa'
+                      : '👤 Usuario'}
                 </span>
               </div>
               

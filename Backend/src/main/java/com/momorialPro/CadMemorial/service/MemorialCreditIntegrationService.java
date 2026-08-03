@@ -32,26 +32,26 @@ public class MemorialCreditIntegrationService {
     }
 
     /**
-     * Valida e consome créditos antes da geração do memorial
+     * Valida e consome créditos da empresa antes da geração do memorial
      */
-    public void validateAndConsumeCredits(UUID userId, DxfCompareResultDTO dxfData) {
-        validateAndConsumeCredits(userId, dxfData, null);
+    public void validateAndConsumeCredits(UUID tenantId, DxfCompareResultDTO dxfData) {
+        validateAndConsumeCredits(tenantId, dxfData, null);
     }
 
-    public void validateAndConsumeCredits(UUID userId, DxfCompareResultDTO dxfData, Integer explicitLotCount) {
+    public void validateAndConsumeCredits(UUID tenantId, DxfCompareResultDTO dxfData, Integer explicitLotCount) {
         int requiredCredits = calculateRequiredCredits(dxfData, explicitLotCount);
         int estimatedLots = resolveLotCount(dxfData, explicitLotCount);
 
         // Verifica se tem créditos suficientes
-        if (!creditService.hasEnoughCredits(userId, requiredCredits)) {
-            int currentBalance = creditService.getCurrentBalance(userId);
+        if (!creditService.hasEnoughCredits(tenantId, requiredCredits)) {
+            int currentBalance = creditService.getCurrentBalance(tenantId);
             log.warn("❌ Créditos insuficientes - Saldo: {}, Necessário: {}", currentBalance, requiredCredits);
             throw new NotEnoughCreditsException(currentBalance, requiredCredits);
         }
         
         // Consome os créditos
         String description = String.format("Geração de memorial - %d lotes estimados", estimatedLots);
-        creditService.consumeCredits(userId, requiredCredits, description);
+        creditService.consumeCredits(tenantId, requiredCredits, description);
     }
 
     /**
@@ -78,30 +78,30 @@ public class MemorialCreditIntegrationService {
     /**
      * Reembolsa créditos em caso de erro na geração
      */
-    public void refundCreditsOnError(UUID userId, DxfCompareResultDTO dxfData, String errorReason) {
-        refundCreditsOnError(userId, dxfData, null, errorReason);
+    public void refundCreditsOnError(UUID tenantId, DxfCompareResultDTO dxfData, String errorReason) {
+        refundCreditsOnError(tenantId, dxfData, null, errorReason);
     }
 
-    public void refundCreditsOnError(UUID userId, DxfCompareResultDTO dxfData, Integer explicitLotCount, String errorReason) {
+    public void refundCreditsOnError(UUID tenantId, DxfCompareResultDTO dxfData, Integer explicitLotCount, String errorReason) {
         try {
             int refundAmount = calculateRequiredCredits(dxfData, explicitLotCount);
             String description = String.format("Reembolso por erro na geração: %s", errorReason);
             
-            creditService.addCredits(userId, refundAmount, description);
+            creditService.addCredits(tenantId, refundAmount, description);
         } catch (Exception e) {
-            log.error("❌ Erro ao reembolsar créditos - UserId: {}, Erro: {}", userId, e.getMessage(), e);
+            log.error("❌ Erro ao reembolsar créditos - TenantId: {}, Erro: {}", tenantId, e.getMessage(), e);
         }
     }
 
     /**
      * Obtém informações de créditos para logs/métricas
      */
-    public CreditUsageInfo getCreditUsageInfo(UUID userId, DxfCompareResultDTO dxfData) {
-        return getCreditUsageInfo(userId, dxfData, null);
+    public CreditUsageInfo getCreditUsageInfo(UUID tenantId, DxfCompareResultDTO dxfData) {
+        return getCreditUsageInfo(tenantId, dxfData, null);
     }
 
-    public CreditUsageInfo getCreditUsageInfo(UUID userId, DxfCompareResultDTO dxfData, Integer explicitLotCount) {
-        int currentBalance = creditService.getCurrentBalance(userId);
+    public CreditUsageInfo getCreditUsageInfo(UUID tenantId, DxfCompareResultDTO dxfData, Integer explicitLotCount) {
+        int currentBalance = creditService.getCurrentBalance(tenantId);
         int requiredCredits = calculateRequiredCredits(dxfData, explicitLotCount);
         int estimatedLots = resolveLotCount(dxfData, explicitLotCount);
         

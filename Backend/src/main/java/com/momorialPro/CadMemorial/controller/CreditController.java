@@ -24,8 +24,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Controller REST para gerenciar créditos dos usuários
- * Endpoints para consulta de saldo, transações e compras
+ * Controller REST para gerenciar créditos da empresa (tenant)
+ * Endpoints para consulta de saldo, transações e compras da conta empresarial
  */
 @RestController
 @RequestMapping("/api/credits")
@@ -40,16 +40,14 @@ public class CreditController {
 
     /**
      * 1. GET /api/credits/balance
-     * Retorna o saldo atual do usuário logado
-     * NOVO: Inicializa automaticamente créditos se não existir
+     * Retorna o saldo atual da empresa do usuário logado
      */
     @GetMapping("/balance")
     public ResponseEntity<CreditBalanceDTO> getBalance() {
         try {
-            UUID userId = AuthUtils.getCurrentUserId();
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
 
-            // NOVO: Usar initializeUserCredits para garantir que o usuário tenha créditos
-            UserCredits userCredits = creditService.initializeUserCredits(userId);
+            UserCredits userCredits = creditService.initializeTenantCredits(tenantId);
             CreditBalanceDTO balanceDTO = creditMapper.toBalanceDTO(userCredits);
 
             return ResponseEntity.ok(balanceDTO);
@@ -63,14 +61,14 @@ public class CreditController {
 
     /**
      * 2. GET /api/credits/transactions
-     * Lista todas as transações do usuário logado
+     * Lista todas as transações da empresa do usuário logado
      */
     @GetMapping("/transactions")
     public ResponseEntity<List<CreditTransactionDTO>> getTransactions() {
         try {
-            UUID userId = AuthUtils.getCurrentUserId();
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
 
-            List<CreditTransaction> transactions = creditService.listTransactions(userId);
+            List<CreditTransaction> transactions = creditService.listTransactions(tenantId);
             List<CreditTransactionDTO> transactionDTOs = creditMapper.toTransactionDTOList(transactions);
 
             return ResponseEntity.ok(transactionDTOs);
@@ -100,10 +98,10 @@ public class CreditController {
     public ResponseEntity<CreditPurchaseResponseDTO> startPurchase(
             @Valid @RequestBody CreditPurchaseRequestDTO request) {
         try {
-            UUID userId = AuthUtils.getCurrentUserId();
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
 
             CreditPurchase purchase = creditService.startPurchase(
-                userId, 
+                tenantId,
                 request.getPackageId(),
                 request.getCredits(),
                 request.getAmountReais(),
@@ -137,8 +135,8 @@ public class CreditController {
             creditService.confirmPurchase(id);
             
             // Busca a compra atualizada para retornar
-            UUID userId = AuthUtils.getCurrentUserId();
-            CreditPurchase purchase = creditService.getUserPurchase(id, userId);
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
+            CreditPurchase purchase = creditService.getUserPurchase(id, tenantId);
             CreditPurchaseResponseDTO responseDTO = creditMapper.toPurchaseResponseDTO(
                 purchase, 
                 "Pagamento confirmado! Créditos adicionados ao seu saldo."
@@ -164,8 +162,8 @@ public class CreditController {
             creditService.failPurchase(id);
             
             // Busca a compra atualizada para retornar
-            UUID userId = AuthUtils.getCurrentUserId();
-            CreditPurchase purchase = creditService.getUserPurchase(id, userId);
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
+            CreditPurchase purchase = creditService.getUserPurchase(id, tenantId);
             CreditPurchaseResponseDTO responseDTO = creditMapper.toPurchaseResponseDTO(
                 purchase, 
                 "Pagamento falhou ou foi cancelado."
@@ -181,14 +179,14 @@ public class CreditController {
 
     /**
      * Endpoint adicional: GET /api/credits/purchases
-     * Lista todas as compras do usuário
+     * Lista todas as compras da empresa do usuário logado
      */
     @GetMapping("/purchases")
     public ResponseEntity<List<CreditPurchaseResponseDTO>> getUserPurchases() {
         try {
-            UUID userId = AuthUtils.getCurrentUserId();
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
 
-            List<CreditPurchase> purchases = creditService.getUserPurchases(userId);
+            List<CreditPurchase> purchases = creditService.getUserPurchases(tenantId);
             List<CreditPurchaseResponseDTO> purchaseDTOs = purchases.stream()
                 .map(creditMapper::toPurchaseResponseDTO)
                 .toList();
@@ -209,11 +207,11 @@ public class CreditController {
     @GetMapping("/summary")
     public ResponseEntity<CreditSummaryDTO> getSummary() {
         try {
-            UUID userId = AuthUtils.getCurrentUserId();
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
 
-            UserCredits userCredits = creditService.getBalance(userId);
-            List<CreditTransaction> recentTransactions = creditService.getRecentTransactions(userId);
-            CreditService.MemorialUsageSummary memorialUsage = creditService.getMemorialUsageSummary(userId);
+            UserCredits userCredits = creditService.getBalance(tenantId);
+            List<CreditTransaction> recentTransactions = creditService.getRecentTransactions(tenantId);
+            CreditService.MemorialUsageSummary memorialUsage = creditService.getMemorialUsageSummary(tenantId);
             
             CreditSummaryDTO summary = new CreditSummaryDTO(
                 creditMapper.toBalanceDTO(userCredits),
@@ -236,13 +234,13 @@ public class CreditController {
 
     /**
      * GET /api/credits/memorial-usage
-     * Retorna a quantidade de memoriais cobrados para a conta do usuario logado.
+     * Retorna a quantidade de memoriais cobrados para a conta da empresa do usuário logado.
      */
     @GetMapping("/memorial-usage")
     public ResponseEntity<MemorialUsageSummaryDTO> getMemorialUsage() {
         try {
-            UUID userId = AuthUtils.getCurrentUserId();
-            CreditService.MemorialUsageSummary summary = creditService.getMemorialUsageSummary(userId);
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
+            CreditService.MemorialUsageSummary summary = creditService.getMemorialUsageSummary(tenantId);
 
             return ResponseEntity.ok(new MemorialUsageSummaryDTO(
                 summary.memorialsCreated(),
@@ -257,15 +255,14 @@ public class CreditController {
     }
 
     /**
-     * NOVO: POST /api/credits/initialize
-     * Inicializa créditos para o usuário (chamado no login/primeiro acesso)
+     * Inicializa créditos para o tenant do usuário autenticado
      */
     @PostMapping("/initialize")
     public ResponseEntity<CreditBalanceDTO> initializeCredits() {
         try {
-            UUID userId = AuthUtils.getCurrentUserId();
+            UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
 
-            UserCredits userCredits = creditService.initializeUserCredits(userId);
+            UserCredits userCredits = creditService.initializeTenantCredits(tenantId);
             CreditBalanceDTO balanceDTO = creditMapper.toBalanceDTO(userCredits);
 
             return ResponseEntity.ok(balanceDTO);
