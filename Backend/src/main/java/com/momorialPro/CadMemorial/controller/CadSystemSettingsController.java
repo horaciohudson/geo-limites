@@ -23,7 +23,7 @@ public class CadSystemSettingsController {
     private final CadSystemSettingsService cadSystemSettingsService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<CadSystemSettingsDTO> getCadSystemSettings() {
         return ResponseEntity.ok(cadSystemSettingsService.getSettings());
     }

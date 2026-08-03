@@ -29,7 +29,7 @@ public class MemorialMonitorController {
      * Dashboard completo do sistema
      */
     @GetMapping("/dashboard")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Map<String, Object>> getDashboard() {
         try {
             Map<String, Object> dashboard = new HashMap<>();
@@ -127,7 +127,7 @@ public class MemorialMonitorController {
      * Status de conectividade com serviços externos
      */
     @GetMapping("/connectivity")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Map<String, Object>> getConnectivityStatus() {
         try {
             Map<String, Object> connectivity = new HashMap<>();
@@ -175,7 +175,7 @@ public class MemorialMonitorController {
      * Métricas em tempo real (lightweight)
      */
     @GetMapping("/realtime")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Map<String, Object>> getRealtimeMetrics() {
         try {
             MemorialMetricsService.MemorialStats stats = metricsService.getStatsLast24Hours();

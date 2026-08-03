@@ -33,18 +33,32 @@ public class AccountEmailService {
         }
 
         String subject = "Confirme seu e-mail no Geo Limites";
-        String html = """
-                <p>Olá, %s.</p>
-                <p>Sua conta foi criada no Geo Limites. Para liberar o acesso, confirme seu e-mail clicando no link abaixo:</p>
-                <p><a href="%s">%s</a></p>
-                <p>Se você não solicitou esse cadastro, ignore esta mensagem.</p>
-                """.formatted(safeName(user), verificationUrl, verificationUrl);
+        String html = buildVerificationEmailHtml(user, verificationUrl);
 
         smtpMailService.sendHtml(user.getEmail(), subject, html);
         return DispatchResult.builder()
                 .emailSent(true)
                 .verificationUrl(null)
                 .build();
+    }
+
+    private String buildVerificationEmailHtml(User user, String verificationUrl) {
+        String userName = escapeHtml(safeName(user));
+        String tenantName = user.getTenant() != null ? escapeHtml(user.getTenant().getName()) : "Sua empresa";
+        String tenantCode = user.getTenant() != null ? escapeHtml(user.getTenant().getCode()) : "-";
+        String safeUrl = escapeHtml(verificationUrl);
+
+        return """
+                <p>Olá, %s.</p>
+                <p>Recebemos a criação da sua conta no Geo Limites para a empresa <strong>%s</strong>.</p>
+                <p>Para concluir a ativação inicial, confirme seu e-mail pelo link abaixo:</p>
+                <p><a href="%s">%s</a></p>
+                <p><strong>Código da empresa (tenant):</strong> %s</p>
+                <p>Depois da confirmação, volte para a tela de login e entre usando este código da empresa junto com seu e-mail e sua senha.</p>
+                <p>Se o ambiente exigir liberação operacional adicional, o acesso continuará em análise até a conclusão dessa etapa.</p>
+                <p>Se você não solicitou esse cadastro, ignore esta mensagem.</p>
+                <p>Equipe Geo Limites</p>
+                """.formatted(userName, tenantName, safeUrl, safeUrl, tenantCode);
     }
 
     private String buildVerificationUrl(String token) {
@@ -124,6 +138,18 @@ public class AccountEmailService {
         }
 
         return origin.strip().replaceAll("/+$", "");
+    }
+
+    private String escapeHtml(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     @lombok.Value

@@ -17,7 +17,7 @@ public class TenantOperationalAccessController {
     private final TenantAdministrationService tenantAdministrationService;
 
     @GetMapping("/current")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<TenantOperationalAdminDTO> getCurrentTenantOperational() {
         return ResponseEntity.ok(tenantAdministrationService.getCurrentTenantOperational());
     }

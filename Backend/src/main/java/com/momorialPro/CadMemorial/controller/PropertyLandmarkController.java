@@ -21,7 +21,7 @@ public class PropertyLandmarkController {
     private final PropertyLandmarkService landmarkService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<PropertyLandmarkDTO>> listLandmarks(@PathVariable UUID propertyId) {
         UUID userId = AuthUtils.getCurrentUserId();
         List<PropertyLandmarkDTO> landmarks = landmarkService.findByPropertyId(propertyId, userId);
@@ -30,7 +30,7 @@ public class PropertyLandmarkController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyLandmarkDTO> createLandmark(
             @PathVariable UUID propertyId,
             @RequestBody PropertyLandmarkDTO landmarkDTO) {
@@ -41,7 +41,7 @@ public class PropertyLandmarkController {
     }
 
     @PutMapping("/{landmarkId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyLandmarkDTO> updateLandmark(
             @PathVariable UUID propertyId,
             @PathVariable UUID landmarkId,
@@ -53,7 +53,7 @@ public class PropertyLandmarkController {
     }
 
     @DeleteMapping("/{landmarkId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Void> deleteLandmark(
             @PathVariable UUID propertyId,
             @PathVariable UUID landmarkId) {
@@ -64,7 +64,7 @@ public class PropertyLandmarkController {
     }
 
     @DeleteMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Void> deleteAllLandmarks(@PathVariable UUID propertyId) {
         UUID userId = AuthUtils.getCurrentUserId();
         landmarkService.deleteByPropertyId(propertyId, userId);
@@ -73,7 +73,7 @@ public class PropertyLandmarkController {
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Long> countLandmarks(@PathVariable UUID propertyId) {
         long count = landmarkService.countByPropertyId(propertyId);
         return ResponseEntity.ok(count);

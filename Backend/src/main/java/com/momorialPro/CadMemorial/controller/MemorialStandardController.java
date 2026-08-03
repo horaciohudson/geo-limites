@@ -27,7 +27,7 @@ public class MemorialStandardController {
 
     @GetMapping
     @Operation(summary = "Listar normas disponíveis para o usuário")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<List<MemorialStandardDTO>> getAvailableStandards() {
         UUID userId = AuthUtils.getCurrentUserId();
         List<MemorialStandardDTO> standards = memorialStandardService.findAvailableForUser(userId);
@@ -36,7 +36,7 @@ public class MemorialStandardController {
 
     @GetMapping("/default")
     @Operation(summary = "Obter norma padrão")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<MemorialStandardDTO> getDefaultStandard() {
         return memorialStandardService.findDefault()
                 .map(ResponseEntity::ok)
@@ -45,7 +45,7 @@ public class MemorialStandardController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Obter norma por ID")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<MemorialStandardDTO> getStandardById(@PathVariable UUID id) {
         return memorialStandardService.findById(id)
                 .map(ResponseEntity::ok)
@@ -54,7 +54,7 @@ public class MemorialStandardController {
 
     @PostMapping
     @Operation(summary = "Criar nova norma")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<MemorialStandardDTO> createStandard(@RequestBody MemorialStandardCreateDTO createDTO) {
         UUID userId = AuthUtils.getCurrentUserId();
         MemorialStandardDTO created = memorialStandardService.create(createDTO, userId);
@@ -63,7 +63,7 @@ public class MemorialStandardController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualizar norma existente")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<MemorialStandardDTO> updateStandard(
             @PathVariable UUID id,
             @RequestBody MemorialStandardCreateDTO updateDTO) {
@@ -74,7 +74,7 @@ public class MemorialStandardController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Deletar norma")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<Void> deleteStandard(@PathVariable UUID id) {
         UUID userId = AuthUtils.getCurrentUserId();
         memorialStandardService.delete(id, userId);

@@ -65,7 +65,7 @@ public class AuthService {
         String normalizedEmail = normalizeEmail(dto.email());
         String normalizedUsername = normalizedEmail;
         String normalizedFullName = normalizeFullName(dto.fullName());
-        Tenant tenant = tenantProvisioningService.getOrCreateDefaultTenant();
+        Tenant tenant = tenantProvisioningService.createTenantForSignup(normalizedFullName, normalizedEmail);
 
         repo.findByEmailIgnoreCaseAndTenantId(normalizedEmail, tenant.getId())
                 .ifPresent(existing -> {
@@ -77,8 +77,8 @@ public class AuthService {
                     throw new IllegalArgumentException("Ja existe uma conta cadastrada com este usuario.");
                 });
 
-        Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
-                .orElseThrow(() -> new IllegalArgumentException("Role USER nao encontrado"));
+        Role tenantAdminRole = roleRepository.findByName(RoleName.ROLE_TENANT_ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("Role TENANT_ADMIN nao encontrado"));
 
         boolean autoVerify = authFlowProperties.isAutoVerifyUsers();
         boolean requiresAdminApproval = tenantHasAdministrators(tenant);
@@ -94,7 +94,7 @@ public class AuthService {
                 .build();
 
         user = repo.save(user);
-        user.getRoles().add(userRole);
+        user.getRoles().add(tenantAdminRole);
         user = repo.save(user);
 
         AccountEmailService.DispatchResult dispatchResult = null;

@@ -143,7 +143,7 @@ public class MemorialApiController {
     // 🤖 GERA MEMORIAL ASSISTIDO A PARTIR DE DADOS DXF EM MEMÓRIA
     // ==============================================================
     @PostMapping("/generate-gpt")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<?> generateGptMemorial(@RequestBody MemorialRequestDTO request) {
         String debugTraceId = UUID.randomUUID().toString();
         boolean hasEntities = hasEntities(request);
@@ -280,7 +280,7 @@ public class MemorialApiController {
     }
 
     @PostMapping("/generate-summary")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<?> generateTechnicalSummary(@RequestBody MemorialRequestDTO request) {
         if (request.entities() == null || request.entities().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -324,7 +324,7 @@ public class MemorialApiController {
     }
 
     @PostMapping("/corrective-snapshots")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<?> saveCorrectiveSnapshot(@RequestBody CorrectiveSnapshotSaveRequestDTO request) {
         if (request == null || request.correctiveSnapshot() == null || request.correctiveSnapshot().isNull()) {
             return ResponseEntity.badRequest().body(Map.of(

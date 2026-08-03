@@ -34,7 +34,7 @@ public class PropertyController {
     private final ObjectMapper objectMapper;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<PropertyDTO>> listProperties() {
         UUID userId = AuthUtils.getCurrentUserId();
         List<PropertyDTO> properties = propertyService.findByUserId(userId);
@@ -43,7 +43,7 @@ public class PropertyController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyDTO> getProperty(@PathVariable UUID id) {
         UUID userId = AuthUtils.getCurrentUserId();
         PropertyDTO property = propertyService.findByIdAndUserId(id, userId);
@@ -52,7 +52,7 @@ public class PropertyController {
     }
 
     @GetMapping("/{id}/details")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyDTO> getPropertyWithDetails(@PathVariable UUID id) {
         UUID userId = AuthUtils.getCurrentUserId();
         PropertyDTO property = propertyService.findByIdWithRelationships(id, userId);
@@ -61,7 +61,7 @@ public class PropertyController {
     }
 
     @GetMapping("/{id}/memorial-base/latest")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<MemorialBaseSnapshotResponseDTO> getLatestMemorialBaseSnapshot(@PathVariable UUID id) {
         UUID userId = AuthUtils.getCurrentUserId();
         UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
@@ -100,7 +100,7 @@ public class PropertyController {
     }
 
     @GetMapping("/{id}/memorial-base/latest-corrective")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<MemorialBaseSnapshotResponseDTO> getLatestCorrectiveMemorialBaseSnapshot(@PathVariable UUID id) {
         UUID userId = AuthUtils.getCurrentUserId();
         UUID tenantId = AuthUtils.getRequiredCurrentTenantId();
@@ -138,7 +138,7 @@ public class PropertyController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyDTO> createProperty(@RequestBody PropertyDTO propertyDTO) {
         tenantOperationalAccessService.assertPropertyRegistrationAccessAllowed();
         UUID userId = AuthUtils.getCurrentUserId();
@@ -148,7 +148,7 @@ public class PropertyController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyDTO> updateProperty(
             @PathVariable UUID id, 
             @RequestBody PropertyDTO propertyDTO) {
@@ -160,7 +160,7 @@ public class PropertyController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Void> deleteProperty(@PathVariable UUID id) {
         tenantOperationalAccessService.assertPropertyRegistrationAccessAllowed();
         UUID userId = AuthUtils.getCurrentUserId();
@@ -170,7 +170,7 @@ public class PropertyController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<PropertyDTO>> searchProperties(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String ownerName,
@@ -194,7 +194,7 @@ public class PropertyController {
     }
 
     @GetMapping("/recent")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<PropertyDTO>> getRecentProperties() {
         UUID userId = AuthUtils.getCurrentUserId();
         List<PropertyDTO> properties = propertyService.findRecentByUser(userId);
@@ -203,7 +203,7 @@ public class PropertyController {
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Long> countProperties() {
         UUID userId = AuthUtils.getCurrentUserId();
         long count = propertyService.countByUserId(userId);
@@ -212,7 +212,7 @@ public class PropertyController {
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<PropertySummaryDTO>> getPropertiesSummary() {
         UUID userId = AuthUtils.getCurrentUserId();
         List<PropertySummaryDTO> summaries = propertyService.getPropertiesSummary(userId);

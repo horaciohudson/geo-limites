@@ -21,7 +21,7 @@ public class PropertyBoundaryController {
     private final PropertyBoundaryService boundaryService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<PropertyBoundaryDTO>> listBoundaries(@PathVariable UUID propertyId) {
         UUID userId = AuthUtils.getCurrentUserId();
         List<PropertyBoundaryDTO> boundaries = boundaryService.findByPropertyId(propertyId, userId);
@@ -30,7 +30,7 @@ public class PropertyBoundaryController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyBoundaryDTO> createBoundary(
             @PathVariable UUID propertyId,
             @RequestBody PropertyBoundaryDTO boundaryDTO) {
@@ -41,7 +41,7 @@ public class PropertyBoundaryController {
     }
 
     @PutMapping("/{boundaryId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyBoundaryDTO> updateBoundary(
             @PathVariable UUID propertyId,
             @PathVariable UUID boundaryId,
@@ -53,7 +53,7 @@ public class PropertyBoundaryController {
     }
 
     @DeleteMapping("/{boundaryId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Void> deleteBoundary(
             @PathVariable UUID propertyId,
             @PathVariable UUID boundaryId) {
@@ -64,7 +64,7 @@ public class PropertyBoundaryController {
     }
 
     @DeleteMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Void> deleteAllBoundaries(@PathVariable UUID propertyId) {
         UUID userId = AuthUtils.getCurrentUserId();
         boundaryService.deleteByPropertyId(propertyId, userId);
@@ -73,7 +73,7 @@ public class PropertyBoundaryController {
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Long> countBoundaries(@PathVariable UUID propertyId) {
         long count = boundaryService.countByPropertyId(propertyId);
         return ResponseEntity.ok(count);

@@ -21,7 +21,7 @@ public class PropertyDocumentController {
     private final PropertyDocumentService documentService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<PropertyDocumentDTO>> listDocuments(@PathVariable UUID propertyId) {
         UUID userId = AuthUtils.getCurrentUserId();
         List<PropertyDocumentDTO> documents = documentService.findByPropertyId(propertyId, userId);
@@ -30,7 +30,7 @@ public class PropertyDocumentController {
     }
 
     @GetMapping("/type/{documentType}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<PropertyDocumentDTO>> listDocumentsByType(
             @PathVariable UUID propertyId,
             @PathVariable String documentType) {
@@ -41,7 +41,7 @@ public class PropertyDocumentController {
     }
 
     @GetMapping("/{documentId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyDocumentDTO> getDocument(
             @PathVariable UUID propertyId,
             @PathVariable UUID documentId) {
@@ -52,7 +52,7 @@ public class PropertyDocumentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyDocumentDTO> createDocument(
             @PathVariable UUID propertyId,
             @RequestBody PropertyDocumentDTO documentDTO) {
@@ -63,7 +63,7 @@ public class PropertyDocumentController {
     }
 
     @PutMapping("/{documentId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<PropertyDocumentDTO> updateDocument(
             @PathVariable UUID propertyId,
             @PathVariable UUID documentId,
@@ -75,7 +75,7 @@ public class PropertyDocumentController {
     }
 
     @DeleteMapping("/{documentId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Void> deleteDocument(
             @PathVariable UUID propertyId,
             @PathVariable UUID documentId) {
@@ -86,7 +86,7 @@ public class PropertyDocumentController {
     }
 
     @DeleteMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Void> deleteAllDocuments(@PathVariable UUID propertyId) {
         UUID userId = AuthUtils.getCurrentUserId();
         documentService.deleteByPropertyId(propertyId, userId);
@@ -95,14 +95,14 @@ public class PropertyDocumentController {
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Long> countDocuments(@PathVariable UUID propertyId) {
         long count = documentService.countByPropertyId(propertyId);
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/size")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Long> getTotalFileSize(@PathVariable UUID propertyId) {
         UUID userId = AuthUtils.getCurrentUserId();
         long totalSize = documentService.getTotalFileSize(propertyId, userId);
@@ -111,7 +111,7 @@ public class PropertyDocumentController {
     }
 
     @GetMapping("/types")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<List<String>> getAvailableDocumentTypes() {
         List<String> documentTypes = List.of(
             "DEED",           // Escritura

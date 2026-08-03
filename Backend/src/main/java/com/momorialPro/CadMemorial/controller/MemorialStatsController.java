@@ -28,7 +28,7 @@ public class MemorialStatsController {
      * Obtém estatísticas gerais do sistema
      */
     @GetMapping("/general")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Map<String, Object>> getGeneralStats() {
         try {
             MemorialMetricsService.MemorialStats stats = metricsService.getStats();
@@ -83,7 +83,7 @@ public class MemorialStatsController {
      * Obtém estatísticas das últimas 24 horas
      */
     @GetMapping("/last24h")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Map<String, Object>> getStats24Hours() {
         try {
             MemorialMetricsService.MemorialStats stats = metricsService.getStatsLast24Hours();
@@ -114,7 +114,7 @@ public class MemorialStatsController {
      * Obtém gerações recentes
      */
     @GetMapping("/recent")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TENANT_ADMIN', 'USER')")
     public ResponseEntity<Map<String, Object>> getRecentGenerations(
             @RequestParam(defaultValue = "10") int limit) {
         try {

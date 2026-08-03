@@ -39,7 +39,7 @@ public class TemplateController {
 
     @GetMapping
     @Operation(summary = "Listar templates disponíveis para o usuário")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<List<TemplateDTO>> getAvailableTemplates(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String municipality,
@@ -70,7 +70,7 @@ public class TemplateController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Obter template por ID")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<TemplateDTO> getTemplateById(@PathVariable UUID id) {
         return templateService.findById(id)
                 .map(ResponseEntity::ok)
@@ -79,7 +79,7 @@ public class TemplateController {
 
     @PostMapping
     @Operation(summary = "Criar novo template")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<TemplateDTO> createTemplate(@RequestBody TemplateCreateDTO createDTO) {
         UUID userId = AuthUtils.getCurrentUserId();
         TemplateDTO created = templateService.create(createDTO, userId);
@@ -88,7 +88,7 @@ public class TemplateController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualizar template existente")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<TemplateDTO> updateTemplate(
             @PathVariable UUID id,
             @RequestBody TemplateCreateDTO updateDTO) {
@@ -99,7 +99,7 @@ public class TemplateController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Deletar template")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<Void> deleteTemplate(@PathVariable UUID id) {
         UUID userId = AuthUtils.getCurrentUserId();
         templateService.delete(id, userId);
@@ -108,7 +108,7 @@ public class TemplateController {
 
     @PatchMapping("/{id}/status")
     @Operation(summary = "Atualizar status do template")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<TemplateDTO> updateTemplateStatus(
             @PathVariable UUID id,
             @RequestBody StatusUpdateRequest request) {
@@ -119,7 +119,7 @@ public class TemplateController {
 
     @PostMapping("/generate")
     @Operation(summary = "Gerar template usando IA a partir de arquivo de exemplo")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<TemplateGenerationResponseDTO> generateTemplate(
             @RequestParam("exampleFile") MultipartFile file,
             @RequestParam("name") String name,
@@ -188,7 +188,7 @@ public class TemplateController {
 
     @GetMapping("/{id}/download")
     @Operation(summary = "Download do arquivo do template")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<Resource> downloadTemplate(@PathVariable UUID id) {
         try {
             TemplateDTO template = templateService.findById(id)
@@ -214,7 +214,7 @@ public class TemplateController {
 
     @GetMapping("/exists")
     @Operation(summary = "Verificar se template existe")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'TENANT_ADMIN', 'ADMIN')")
     public ResponseEntity<Boolean> templateExists(
             @RequestParam String name,
             @RequestParam(required = false) String municipality,
