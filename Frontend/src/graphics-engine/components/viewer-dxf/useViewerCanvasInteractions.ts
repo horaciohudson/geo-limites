@@ -200,6 +200,7 @@ interface UseViewerCanvasInteractionsParams {
   draggingSelectedEntities: { startPoint: Point2D } | null;
   drawingTextValue: string;
   dxfData: DXFData | null;
+  entityMultiSelectModeActive: boolean;
   embeddedMode: boolean;
   embeddedDrawingPoints: Point2D[];
   embeddedToolMode: EmbeddedCadToolMode;
@@ -580,6 +581,7 @@ export const useViewerCanvasInteractions = ({
   draggingSelectedEntities,
   drawingTextValue,
   dxfData,
+  entityMultiSelectModeActive,
   embeddedMode,
   embeddedDrawingPoints,
   embeddedToolMode,
@@ -663,6 +665,9 @@ export const useViewerCanvasInteractions = ({
   const [hoverSelectionHandle, setHoverSelectionHandle] = useState<SelectionHandleKind | null>(null);
   const [hoverSelectionMode, setHoverSelectionMode] = useState<'scale' | 'rotate' | null>(null);
   const [copyPlacementLocked, setCopyPlacementLocked] = useState(false);
+  const isEntityAdditiveSelectionActive = useCallback((event: Pick<React.MouseEvent<HTMLCanvasElement>, 'ctrlKey' | 'metaKey'>) => (
+    entityMultiSelectModeActive || event.ctrlKey || event.metaKey
+  ), [entityMultiSelectModeActive]);
   const isTemporaryPanModifierActive = useCallback((event: Pick<React.MouseEvent<HTMLCanvasElement>, 'ctrlKey' | 'metaKey' | 'shiftKey'>) => (
     embeddedMode
     && !interactive
@@ -1270,7 +1275,7 @@ export const useViewerCanvasInteractions = ({
 
     if (isEditNodesToolActive) {
       const nearestEntity = findNearestSelectableEntity(dxfCoords);
-      const additiveSelection = e.ctrlKey || e.metaKey || e.shiftKey;
+      const additiveSelection = isEntityAdditiveSelectionActive(e);
       handleEmbeddedEntitySelection(nearestEntity, additiveSelection);
       return;
     }
@@ -1313,7 +1318,7 @@ export const useViewerCanvasInteractions = ({
     }
 
     const nearestEntity = findNearestSelectableEntity(dxfCoords);
-    const additiveSelection = e.ctrlKey || e.metaKey || e.shiftKey;
+    const additiveSelection = isEntityAdditiveSelectionActive(e);
     handleEmbeddedEntitySelection(nearestEntity, additiveSelection);
   }, [
     beginEntityDrag,
@@ -1342,6 +1347,7 @@ export const useViewerCanvasInteractions = ({
     isJoinToolActive,
     isMirrorToolActive,
     isMoveToolActive,
+    isEntityAdditiveSelectionActive,
     isOffsetToolActive,
     isTemporaryPanModifierActive,
     isTrimToolActive,
@@ -1609,6 +1615,7 @@ export const useViewerCanvasInteractions = ({
         if (
           nearestEntity &&
           selectedEntityIds.includes(nearestEntity.id) &&
+          !entityMultiSelectModeActive &&
           !e.ctrlKey &&
           !e.metaKey &&
           !e.shiftKey &&
@@ -1628,7 +1635,7 @@ export const useViewerCanvasInteractions = ({
             startClientY: e.clientY,
             currentClientX: e.clientX,
             currentClientY: e.clientY,
-            additiveSelection: Boolean(e.shiftKey)
+            additiveSelection: isEntityAdditiveSelectionActive(e)
           };
         }
         return;
@@ -2108,6 +2115,7 @@ export const useViewerCanvasInteractions = ({
     drawingTextValue,
     dxfData,
     emitEntitiesDrawn,
+    entityMultiSelectModeActive,
     embeddedMode,
     embeddedDrawingPoints,
     embeddedToolMode,
@@ -2121,6 +2129,7 @@ export const useViewerCanvasInteractions = ({
     hoverSegmentTargetPoint,
     interactive,
     isGuidedTranslateToolActive,
+    isEntityAdditiveSelectionActive,
     isPointInsidePartialScope,
     isTemporaryPanModifierActive,
     lastShiftInteractionRef,

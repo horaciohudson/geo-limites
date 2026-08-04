@@ -4,6 +4,7 @@ interface CadEditorStatusBarProps {
   documentLabel: string;
   activeToolLabel: string;
   activeToolShortcutLabel: string | null;
+  isEntityMultiSelectModeActive?: boolean;
   activeLayerLabel: string;
   measurementUnitShortLabel: string;
   viewportLabel: string;
@@ -30,6 +31,7 @@ export const CadEditorStatusBar: React.FC<CadEditorStatusBarProps> = ({
   documentLabel,
   activeToolLabel,
   activeToolShortcutLabel,
+  isEntityMultiSelectModeActive = false,
   activeLayerLabel,
   measurementUnitShortLabel,
   viewportLabel,
@@ -46,6 +48,12 @@ export const CadEditorStatusBar: React.FC<CadEditorStatusBarProps> = ({
       <span>{resolvedTexts.toolLabel} {activeToolLabel}</span>
       <span className="cad-editor-status-separator" />
       <span>{resolvedTexts.shortcutLabel} {activeToolShortcutLabel || resolvedTexts.noShortcut}</span>
+      {isEntityMultiSelectModeActive ? (
+        <>
+          <span className="cad-editor-status-separator" />
+          <span className="cad-editor-status-pill cad-editor-status-pill--active">Selecao multipla ativa</span>
+        </>
+      ) : null}
       <span className="cad-editor-status-separator" />
       <span>{resolvedTexts.layerLabel} {activeLayerLabel}</span>
       <span className="cad-editor-status-separator" />

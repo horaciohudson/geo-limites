@@ -99,6 +99,7 @@ export interface ViewerDXFProps extends ViewerDXFCorrectiveProps {
   embeddedMode?: boolean;
   embeddedToolMode?: EmbeddedCadToolMode;
   activeToolId?: string;
+  entityMultiSelectModeActive?: boolean;
   drawingTextValue?: string;
   drawingTextHeight?: number;
   drawingTextRotation?: number;

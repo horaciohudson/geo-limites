@@ -879,6 +879,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
   }, [host]);
   const [activeDock, setActiveDock] = useState<CadDockSection>(initialCadEditorSessionPreferences.activeDock);
   const [activeToolId, setActiveToolId] = useState(initialCadEditorSessionPreferences.activeToolId);
+  const [isEntityMultiSelectModeActive, setIsEntityMultiSelectModeActive] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<CadMenuId | null>(null);
   const [isConfiguratorOpen, setIsConfiguratorOpen] = useState(false);
   const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false);
@@ -1048,6 +1049,11 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     }
     return 'select';
   }, [activeToolId]);
+  useEffect(() => {
+    if (activeToolId !== 'select' || !openedDocument) {
+      setIsEntityMultiSelectModeActive(false);
+    }
+  }, [activeToolId, openedDocument]);
   const currentEditorData = loadedDxfData || openedDocument?.dxfData || null;
   const referencePointsForSummary = useMemo<ConfirmedReferencePoint[]>(() => {
     const nonBaseAreaReferencePoints = [
@@ -2395,11 +2401,13 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     handleUngroupSelectedEntities: ungroupSelectedEntities
   });
   host.useCadEditorKeyboardShortcuts({
+    activeToolId,
     selectedGuideId,
     rulerGuides,
     rulerGuidePreview,
     selectedEntities,
     copiedEntitiesCount: copiedEntitiesClipboard.length,
+    isEntityMultiSelectModeActive,
     pendingCanvasGuideDragRef,
     rulerInteractionRef,
     setRulerGuides,
@@ -2407,6 +2415,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     setHoveredGuideId,
     setSelectedGuideId,
     setGuideContextMenu,
+    setEntityMultiSelectModeActive: setIsEntityMultiSelectModeActive,
     setEditorNotice,
     isShortcutsDialogOpen,
     setIsShortcutsDialogOpen,
@@ -3409,6 +3418,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
                   embeddedMode={true}
                   embeddedToolMode={embeddedToolMode}
                   activeToolId={activeToolId}
+                  entityMultiSelectModeActive={isEntityMultiSelectModeActive}
                   drawingTextValue={drawingTextValue}
                   drawingTextHeight={drawingTextHeight}
                   drawingTextRotation={drawingTextRotation}
@@ -3645,6 +3655,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
         documentLabel={statusDocumentLabel}
         activeToolLabel={activeToolLabel}
         activeToolShortcutLabel={activeToolShortcutLabel}
+        isEntityMultiSelectModeActive={isEntityMultiSelectModeActive}
         activeLayerLabel={statusActiveLayerLabel}
         measurementUnitShortLabel={measurementUnitDefinition.shortLabel}
         viewportLabel={statusViewportLabel}

@@ -6,11 +6,13 @@ import type { CadGuide, CadRulerInteraction } from '@/graphics-engine/pages/cad-
 import { isEditableKeyboardTarget } from '@/graphics-engine/pages/cad-editor/useCadEditorUiUtils';
 
 export interface UseCadEditorKeyboardShortcutsParams {
+  activeToolId: string;
   selectedGuideId: string | null;
   rulerGuides: CadGuide[];
   rulerGuidePreview: CadGuide | null;
   selectedEntities: ViewerSelectedEntityInfo[];
   copiedEntitiesCount: number;
+  isEntityMultiSelectModeActive: boolean;
   pendingCanvasGuideDragRef: MutableRefObject<{
     guide: CadGuide;
     startClientX: number;
@@ -22,6 +24,7 @@ export interface UseCadEditorKeyboardShortcutsParams {
   setHoveredGuideId: Dispatch<SetStateAction<string | null>>;
   setSelectedGuideId: Dispatch<SetStateAction<string | null>>;
   setGuideContextMenu: Dispatch<SetStateAction<CadGuideContextMenuState | null>>;
+  setEntityMultiSelectModeActive: Dispatch<SetStateAction<boolean>>;
   setEditorNotice: Dispatch<SetStateAction<string>>;
   isShortcutsDialogOpen: boolean;
   setIsShortcutsDialogOpen: Dispatch<SetStateAction<boolean>>;
@@ -49,6 +52,8 @@ export interface UseCadEditorKeyboardShortcutsParams {
     buildGuideLockedToRemoveNotice: (params: { orientation: CadGuide['orientation'] }) => string;
     buildGuideRemovedNotice: (params: { orientation: CadGuide['orientation'] }) => string;
     clearSelectedEntitiesNotice: string;
+    multiSelectModeEnabledNotice: string;
+    multiSelectModeDisabledNotice: string;
   };
 }
 
@@ -56,7 +61,9 @@ const DEFAULT_KEYBOARD_SHORTCUTS_MESSAGES: NonNullable<UseCadEditorKeyboardShort
   clearSelectedGuideNotice: 'Guia desmarcada.',
   buildGuideLockedToRemoveNotice: ({ orientation }) => `Guia ${orientation === 'vertical' ? 'vertical' : 'horizontal'} travada. Destrave para remover.`,
   buildGuideRemovedNotice: ({ orientation }) => `Guia ${orientation === 'vertical' ? 'vertical' : 'horizontal'} removida.`,
-  clearSelectedEntitiesNotice: 'Selecao de entidades limpa.'
+  clearSelectedEntitiesNotice: 'Selecao de entidades limpa.',
+  multiSelectModeEnabledNotice: 'Selecao multipla ativa.',
+  multiSelectModeDisabledNotice: 'Selecao multipla desativada.'
 };
 
 const getNormalizedKeyboardKey = (event: KeyboardEvent) => event.key.toLowerCase();
@@ -87,11 +94,13 @@ const shouldPreventBrowserBackNavigation = (event: KeyboardEvent, modifierPresse
   event.key === 'Backspace' && !modifierPressed && !event.altKey;
 
 export const useCadEditorKeyboardShortcuts = ({
+  activeToolId,
   selectedGuideId,
   rulerGuides,
   rulerGuidePreview,
   selectedEntities,
   copiedEntitiesCount,
+  isEntityMultiSelectModeActive,
   pendingCanvasGuideDragRef,
   rulerInteractionRef,
   setRulerGuides,
@@ -99,6 +108,7 @@ export const useCadEditorKeyboardShortcuts = ({
   setHoveredGuideId,
   setSelectedGuideId,
   setGuideContextMenu,
+  setEntityMultiSelectModeActive,
   setEditorNotice,
   isShortcutsDialogOpen,
   setIsShortcutsDialogOpen,
@@ -281,6 +291,23 @@ export const useCadEditorKeyboardShortcuts = ({
       }
 
       if (!modifierPressed && !event.altKey) {
+        if (normalizedKey === 's') {
+          event.preventDefault();
+          if (activeToolId !== 'select') {
+            handleMenuAction('tool-select');
+          }
+          setEntityMultiSelectModeActive((current) => {
+            const next = !current;
+            setEditorNotice(
+              next
+                ? resolvedMessages.multiSelectModeEnabledNotice
+                : resolvedMessages.multiSelectModeDisabledNotice
+            );
+            return next;
+          });
+          return;
+        }
+
         switch (normalizedKey) {
           case 'v':
             event.preventDefault();
@@ -381,6 +408,12 @@ export const useCadEditorKeyboardShortcuts = ({
       }
 
       if (event.key === 'Escape') {
+        if (isEntityMultiSelectModeActive) {
+          event.preventDefault();
+          setEntityMultiSelectModeActive(false);
+          setEditorNotice(resolvedMessages.multiSelectModeDisabledNotice);
+          return;
+        }
         if (selectedEntities.length === 0) {
           return;
         }
@@ -407,6 +440,7 @@ export const useCadEditorKeyboardShortcuts = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    activeToolId,
     pendingCanvasGuideDragRef,
     rulerGuidePreview,
     rulerGuides,
@@ -431,7 +465,9 @@ export const useCadEditorKeyboardShortcuts = ({
     removeSelectedEntities,
     selectedGuideId,
     selectedEntities,
+    isEntityMultiSelectModeActive,
     setEditorNotice,
+    setEntityMultiSelectModeActive,
     setGuideContextMenu,
     setHoveredGuideId,
     setIsShortcutsDialogOpen,
