@@ -164,6 +164,7 @@ export const buildSuggestedCorrectiveAction = (params: {
   nearestSegmentGapDistance: number | null;
 }) => {
   const { detected, nearestVertexGapDistance, nearestSegmentGapDistance } = params;
+  const strongJoinThreshold = 0.45;
 
   if (!detected) {
     return {
@@ -173,7 +174,7 @@ export const buildSuggestedCorrectiveAction = (params: {
     };
   }
 
-  if (nearestVertexGapDistance !== null && nearestVertexGapDistance <= 1.5) {
+  if (nearestVertexGapDistance !== null && nearestVertexGapDistance <= strongJoinThreshold) {
     return {
       tool: 'join-endpoints' as const,
       confidence: 'alta' as const,
@@ -181,9 +182,17 @@ export const buildSuggestedCorrectiveAction = (params: {
     };
   }
 
+  if (nearestVertexGapDistance !== null && nearestVertexGapDistance <= 1.5) {
+    return {
+      tool: 'join-endpoints' as const,
+      confidence: 'media' as const,
+      reason: `As pontas estao proximas (${nearestVertexGapDistance.toFixed(2)}), mas vale conferir visualmente antes de unir.`
+    };
+  }
+
   if (
     nearestSegmentGapDistance !== null &&
-    nearestSegmentGapDistance <= 3 &&
+    nearestSegmentGapDistance <= 2.2 &&
     (nearestVertexGapDistance === null || nearestSegmentGapDistance <= nearestVertexGapDistance * 1.35)
   ) {
     return {
@@ -193,7 +202,7 @@ export const buildSuggestedCorrectiveAction = (params: {
     };
   }
 
-  if (nearestVertexGapDistance !== null && nearestVertexGapDistance <= 8) {
+  if (nearestVertexGapDistance !== null && nearestVertexGapDistance <= 5) {
     return {
       tool: 'move-vertex' as const,
       confidence: 'media' as const,

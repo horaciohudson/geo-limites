@@ -28,6 +28,9 @@ export interface UseCadEditorKeyboardShortcutsParams {
   setEditorNotice: Dispatch<SetStateAction<string>>;
   isShortcutsDialogOpen: boolean;
   setIsShortcutsDialogOpen: Dispatch<SetStateAction<boolean>>;
+  canViewerDraftUndo?: boolean;
+  requestViewerDraftUndo?: () => void;
+  handleViewerDraftUndo?: () => boolean;
   handleUndoEdit: () => void;
   handleRedoEdit: () => void;
   handleCreateNewDocument: () => void;
@@ -112,6 +115,9 @@ export const useCadEditorKeyboardShortcuts = ({
   setEditorNotice,
   isShortcutsDialogOpen,
   setIsShortcutsDialogOpen,
+  canViewerDraftUndo,
+  requestViewerDraftUndo,
+  handleViewerDraftUndo,
   handleUndoEdit,
   handleRedoEdit,
   handleCreateNewDocument,
@@ -244,6 +250,13 @@ export const useCadEditorKeyboardShortcuts = ({
           handleRedoEdit();
           return;
         }
+        if (canViewerDraftUndo && requestViewerDraftUndo) {
+          requestViewerDraftUndo();
+          return;
+        }
+        if (handleViewerDraftUndo?.()) {
+          return;
+        }
         handleUndoEdit();
         return;
       }
@@ -329,6 +342,14 @@ export const useCadEditorKeyboardShortcuts = ({
             event.preventDefault();
             handleMenuAction('tool-mirror');
             return;
+          case 'n':
+            event.preventDefault();
+            handleMenuAction('tool-edit-nodes');
+            return;
+          case 'c':
+            event.preventDefault();
+            handleMenuAction('tool-edit-curve');
+            return;
           case 'r':
             event.preventDefault();
             handleMenuAction('tool-rotate');
@@ -343,7 +364,7 @@ export const useCadEditorKeyboardShortcuts = ({
             return;
           case 't':
             event.preventDefault();
-            handleMenuAction('tool-trim');
+            handleMenuAction('tool-knife');
             return;
           case 'f':
             event.preventDefault();
@@ -408,17 +429,32 @@ export const useCadEditorKeyboardShortcuts = ({
       }
 
       if (event.key === 'Escape') {
-        if (isEntityMultiSelectModeActive) {
-          event.preventDefault();
-          setEntityMultiSelectModeActive(false);
-          setEditorNotice(resolvedMessages.multiSelectModeDisabledNotice);
+        const shouldActivateSelectTool = activeToolId !== 'select';
+        const hadMultiSelectModeActive = isEntityMultiSelectModeActive;
+        const hadSelectedEntities = selectedEntities.length > 0;
+
+        if (!hadMultiSelectModeActive && !hadSelectedEntities && !shouldActivateSelectTool) {
           return;
         }
-        if (selectedEntities.length === 0) {
-          return;
-        }
+
         event.preventDefault();
-        clearSelectedEntities(resolvedMessages.clearSelectedEntitiesNotice);
+
+        if (hadMultiSelectModeActive) {
+          setEntityMultiSelectModeActive(false);
+        }
+
+        if (hadSelectedEntities) {
+          clearSelectedEntities(resolvedMessages.clearSelectedEntitiesNotice);
+        }
+
+        if (shouldActivateSelectTool) {
+          handleMenuAction('tool-select');
+          return;
+        }
+
+        if (hadMultiSelectModeActive) {
+          setEditorNotice(resolvedMessages.multiSelectModeDisabledNotice);
+        }
         return;
       }
 
@@ -456,7 +492,10 @@ export const useCadEditorKeyboardShortcuts = ({
     handleExportEditedDxf,
     handleMenuAction,
     handleOpenLocalFile,
+    canViewerDraftUndo,
     handleRedoEdit,
+    requestViewerDraftUndo,
+    handleViewerDraftUndo,
     handleUndoEdit,
     groupSelectedEntities,
     pasteCopiedEntities,

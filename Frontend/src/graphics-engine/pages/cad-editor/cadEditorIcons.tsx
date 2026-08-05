@@ -30,8 +30,6 @@ export const CAD_ICON_PATHS = {
   knife: 'M9.75 12h-2.5v2h2.5v-2z',
   mirror: 'M 12 3 v 18 M 8 8 l -4 4 l 4 4 v -8 z',
   join: 'M6.4 7C5.6 7 5 7.6 5 8.4v7.2c0 .8.6 1.4 1.4 1.4h7.2c.8 0 1.4-.6 1.4-1.4V8.4c0-.8-.6-1.4-1.4-1.4H6.4z',
-  'extract-start': 'M 4 4 L 14 4 L 14 14 L 4 14 Z',
-  'finish-extract': 'M 9 16.17 L 4.83 12 l -1.42 1.41 L 9 19 L 21 7 l -1.41 -1.41 z',
   'technical-summary': 'M5 4h14v2H5z M5 8h14v2H5z M5 12h10v2H5z M5 16h8v2H5z M17 12l4 4-4 4v-3h-3v-2h3z',
   'open-standards-templates': 'M4 5h7v14H4z M13 5h7v14h-7z M6 7h3 M6 10h3 M15 8h3 M15 11h3 M15 14h3',
   'scan-errors': 'M15.5 14h-.79l-.28-.27A6.5 6.5 0 1 0 16 9.5c0 1.25-.35 2.42-.95 3.42l.27.28h.79l4.99 5L19 20.49 14 15.5zm-6-1.1a.9.9 0 1 1 0-1.8a.9.9 0 0 1 0 1.8zm1-3.4h-2V6h2v3.5z',

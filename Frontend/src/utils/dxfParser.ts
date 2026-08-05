@@ -53,6 +53,11 @@ export interface DXFEntityProperties {
   layoutName?: string;
   editorEntityId?: string;
   editorGroupId?: string;
+  editorCurveKind?: string;
+  editorCurveControl1X?: number;
+  editorCurveControl1Y?: number;
+  editorCurveControl2X?: number;
+  editorCurveControl2Y?: number;
   vertexCount?: number;
   vertices?: DXFVertex[];
   code_10?: string | number | Array<string | number>;

@@ -17,6 +17,7 @@ import type {
 } from '@/graphics-engine/components/viewer-dxf/viewerContracts';
 import type {
   ViewerEntityCopyHandler,
+  ViewerEntityEditCurveHandler,
   ViewerEntityEditNodeHandler,
   ViewerEntityExtendHandler,
   ViewerEntityOffsetHandler,
@@ -63,9 +64,11 @@ export type {
 export type {
   ViewerEntityCopyHandler,
   ViewerEntityCopyHandler as ViewerEntityCopyCallback,
+  ViewerEntityEditCurveHandler,
   ViewerEntityEditNodeHandler,
   ViewerEntityExtendHandler,
   ViewerEntityMovePayload,
+  ViewerEntityEditCurvePayload,
   ViewerEntityOffsetHandler,
   ViewerEntityOffsetPayload,
   ViewerEntityEditNodePayload,
@@ -129,6 +132,7 @@ export interface ViewerDXFProps extends ViewerDXFCorrectiveProps {
   weldCanApply?: boolean;
   weldReason?: string;
   onEntityEditNode?: ViewerEntityEditNodeHandler;
+  onEntityEditCurve?: ViewerEntityEditCurveHandler;
   onEntityTransform?: ViewerEntityTransformHandler;
   onDXFDataLoaded?: (data: DXFData) => void;
   onInitialCanvasRendered?: () => void;
@@ -145,6 +149,9 @@ export interface ViewerDXFProps extends ViewerDXFCorrectiveProps {
   onReferencePointsChange?: ViewerReferencePointsChangeHandler;
   onPolygonConfirmed?: ViewerPolygonConfirmedHandler;
   onSelectionSummaryChange?: ViewerSelectionSummaryChangeHandler;
+  onDraftUndoAvailabilityChange?: (available: boolean) => void;
+  onDraftUndoRequestChange?: (handler: (() => boolean) | null) => void;
+  draftUndoNonce?: number;
   onGenerateTechnicalSummary?: ViewerTechnicalSummaryHandler;
   isGeneratingTechnicalSummary?: boolean;
   primaryBoundaryReady?: boolean;

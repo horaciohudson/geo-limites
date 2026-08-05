@@ -202,8 +202,6 @@ export const CAD_TOOL_SECTION_BY_ID: Record<string, CadDockSection> = {
   knife: 'ajustes',
   mirror: 'ajustes',
   join: 'ajustes',
-  'extract-start': 'ajustes',
-  'finish-extract': 'ajustes',
   'save-primary-boundary': 'costura-medidas',
   'technical-summary': 'costura-medidas',
   'open-standards-templates': 'costura-medidas',

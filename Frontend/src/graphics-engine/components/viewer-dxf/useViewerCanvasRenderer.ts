@@ -2209,8 +2209,13 @@ export const useViewerCanvasRenderer = ({
         ctx.stroke();
       });
 
-      if (hoverPoint) {
-        const guidePoint = toDisplayPoint(hoverPoint);
+      const manualGuidePoint = hoverSegmentTargetPoint ?? hoverPoint;
+      const manualGuidePointIsDetectedVertex = hoverSegmentTargetPoint
+        ? hoverSegmentTargetPointIsDetectedVertex
+        : hoverPointIsDetectedVertex;
+
+      if (manualGuidePoint) {
+        const guidePoint = toDisplayPoint(manualGuidePoint);
         const lastPoint = displayPolygon[displayPolygon.length - 1];
         const firstPoint = displayPolygon[0];
 
@@ -2233,9 +2238,9 @@ export const useViewerCanvasRenderer = ({
         ctx.setLineDash([]);
         ctx.beginPath();
         ctx.arc(guidePoint.x, guidePoint.y, 8 / nextScale, 0, 2 * Math.PI);
-        ctx.fillStyle = hoverPointIsDetectedVertex ? 'rgba(5, 150, 105, 0.82)' : 'rgba(255, 213, 79, 0.88)';
+        ctx.fillStyle = manualGuidePointIsDetectedVertex ? 'rgba(5, 150, 105, 0.82)' : 'rgba(255, 213, 79, 0.88)';
         ctx.fill();
-        ctx.strokeStyle = hoverPointIsDetectedVertex ? '#059669' : '#f59e0b';
+        ctx.strokeStyle = manualGuidePointIsDetectedVertex ? '#059669' : '#f59e0b';
         ctx.lineWidth = 2 / nextScale;
         ctx.stroke();
       }

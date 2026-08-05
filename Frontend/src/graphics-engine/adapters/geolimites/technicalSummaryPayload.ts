@@ -197,11 +197,14 @@ export const buildGeoLimitesTechnicalSummaryEntities = (
       }
 
       const entitySignature = buildPolygonSignature(entity.vertices as DXFVertex[] | undefined);
+      if (entitySignature && selectedPolygonSignatureSet.has(entitySignature)) {
+        return false;
+      }
+
       const detectedHint = entitySignature ? detectedLotHintBySignature.get(entitySignature) : null;
       if (
         detectedHint
         && selectedLotNumberSet.has(detectedHint.lotNumber)
-        && !selectedPolygonSignatureSet.has(entitySignature as string)
       ) {
         return false;
       }

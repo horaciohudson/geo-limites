@@ -8,6 +8,7 @@ import type {
 } from '@/graphics-engine/components/viewer-dxf/types';
 import type {
   ViewerEntityCopyPayload,
+  ViewerEntityEditCurvePayload,
   ViewerEntityEditNodePayload,
   ViewerEntityExtendPayload,
   ViewerEntityMovePayload,
@@ -16,6 +17,7 @@ import type {
   ViewerEntityTrimPayload
 } from '@/graphics-engine/components/viewer-dxf/viewerEntityCallbacks';
 import { applyNodeEditToEntity, type EditableNodeRole } from '@/graphics-engine/components/viewer-dxf/nodeEditUtils';
+import { applyCurveEditToEntity, type EditableCurveHandleRole } from '@/graphics-engine/components/viewer-dxf/curveEditUtils';
 import { applyTrimExtendToEntity } from '@/graphics-engine/components/viewer-dxf/trimExtendGeometryUtils';
 import { applyPreviewTransformToEntity, type EntityPreviewTransform } from '@/graphics-engine/components/viewer-dxf/selectionTransformUtils';
 import { buildSelectedEntityInfo } from '@/graphics-engine/components/viewer-dxf/entitySelectionUtils';
@@ -89,8 +91,14 @@ export interface UseCadEditorViewerControllerParams {
     editNodeSelectionErrorNotice: string;
     buildEditNodeSelectionNotice: (params: {
       role: EditableNodeRole;
+      vertexIndex?: number;
       targetPoint: { x: number; y: number };
       snappedToEntityId?: string | null;
+    }) => string;
+    editCurveSelectionErrorNotice: string;
+    buildEditCurveSelectionNotice: (params: {
+      role: EditableCurveHandleRole;
+      targetPoint: { x: number; y: number };
     }) => string;
     extendSelectionErrorNotice: string;
     buildExtendSelectionNotice: (params: {
@@ -140,10 +148,14 @@ const DEFAULT_VIEWER_CONTROLLER_MESSAGES: NonNullable<UseCadEditorViewerControll
   ),
   buildOffsetSelectionNotice: ({ entityType, distance }) => `Offset aplicado em ${Math.abs(distance).toFixed(3)} para ${entityType}.`,
   editNodeSelectionErrorNotice: 'Nao foi possivel editar o no selecionado.',
-  buildEditNodeSelectionNotice: ({ role, targetPoint, snappedToEntityId }) => (
+  buildEditNodeSelectionNotice: ({ role, vertexIndex, targetPoint, snappedToEntityId }) => (
     snappedToEntityId
-      ? `No ${role === 'start' ? 'inicial' : 'final'} ajustado e aproximado de outra extremidade.`
-      : `No ${role === 'start' ? 'inicial' : 'final'} atualizado em X ${targetPoint.x.toFixed(3)} / Y ${targetPoint.y.toFixed(3)}.`
+      ? `No ${role === 'start' ? 'inicial' : role === 'end' ? 'final' : `intermediario ${typeof vertexIndex === 'number' ? vertexIndex + 1 : ''}`.trim()} ajustado e aproximado de outra extremidade.`
+      : `No ${role === 'start' ? 'inicial' : role === 'end' ? 'final' : `intermediario ${typeof vertexIndex === 'number' ? vertexIndex + 1 : ''}`.trim()} atualizado em X ${targetPoint.x.toFixed(3)} / Y ${targetPoint.y.toFixed(3)}.`
+  ),
+  editCurveSelectionErrorNotice: 'Nao foi possivel editar a curva selecionada.',
+  buildEditCurveSelectionNotice: ({ role, targetPoint }) => (
+    `Alca ${role === 'control1' ? '1' : '2'} da curva atualizada em X ${targetPoint.x.toFixed(3)} / Y ${targetPoint.y.toFixed(3)}.`
   ),
   extendSelectionErrorNotice: 'Nao foi possivel estender a entidade selecionada.',
   buildExtendSelectionNotice: ({ role, vertexIndex, targetPoint }) => (
@@ -158,7 +170,7 @@ const DEFAULT_VIEWER_CONTROLLER_MESSAGES: NonNullable<UseCadEditorViewerControll
       : sourceEntityType === 'CIRCLE'
         ? 'no circulo'
         : `no segmento ${segmentIndex + 1}`;
-    return `Aparar aplicado ${targetLabel} em X ${splitPoint.x.toFixed(3)} / Y ${splitPoint.y.toFixed(3)}.`;
+    return `Corte aplicado ${targetLabel} em X ${splitPoint.x.toFixed(3)} / Y ${splitPoint.y.toFixed(3)}.`;
   },
   drawRequiresDocumentNotice: 'Inicie um novo desenho ou abra um DXF antes de desenhar.',
   drawCompletedNotice: 'Operacao concluida.',
@@ -443,7 +455,7 @@ export const useCadEditorViewerController = ({
 
     const nextEntities = currentEditorData.entities.map((entity, index) => (
       index === edit.entity.index
-        ? applyNodeEditToEntity(entity, edit.role, edit.targetPoint)
+        ? applyNodeEditToEntity(entity, edit.role, edit.vertexIndex, edit.targetPoint)
         : entity
     ));
     const nextData = buildUpdatedDxfData(currentEditorData, nextEntities);
@@ -471,8 +483,63 @@ export const useCadEditorViewerController = ({
     }
     setEditorNotice(resolvedMessages.buildEditNodeSelectionNotice({
       role: edit.role,
+      vertexIndex: edit.vertexIndex,
       targetPoint: edit.targetPoint,
       snappedToEntityId: edit.snappedToEntityId
+    }));
+  }, [
+    currentEditorData,
+    resolvedMessages,
+    setEditorNotice,
+    setLoadedDxfData,
+    setRedoStack,
+    setSelectedEntities,
+    setUndoStack,
+    setViewerSelectionOverride
+  ]);
+
+  const handleEditSelectedEntityCurve = useCallback((edit: ViewerEntityEditCurvePayload) => {
+    if (!currentEditorData) {
+      return;
+    }
+
+    const sourceEntity = currentEditorData.entities[edit.entity.index];
+    if (!sourceEntity) {
+      setEditorNotice(resolvedMessages.editCurveSelectionErrorNotice);
+      return;
+    }
+
+    const nextEntities = currentEditorData.entities.map((entity, index) => (
+      index === edit.entity.index
+        ? applyCurveEditToEntity(entity, edit.role, edit.targetPoint)
+        : entity
+    ));
+    const nextData = buildUpdatedDxfData(currentEditorData, nextEntities);
+    const updatedEntity = nextData.entities[edit.entity.index];
+    const nextSelectedEntity = updatedEntity ? buildSelectedEntityInfo(updatedEntity, edit.entity.index) : null;
+
+    commitCadEditorHistoryEntry({
+      currentEditorData,
+      nextData,
+      setUndoStack,
+      setRedoStack,
+      setLoadedDxfData
+    });
+    if (nextSelectedEntity) {
+      syncCadEditorSelection({
+        selectedEntities: [nextSelectedEntity],
+        setSelectedEntities,
+        setViewerSelectionOverride
+      });
+    } else {
+      clearCadEditorSelection({
+        setSelectedEntities,
+        setViewerSelectionOverride
+      });
+    }
+    setEditorNotice(resolvedMessages.buildEditCurveSelectionNotice({
+      role: edit.role,
+      targetPoint: edit.targetPoint
     }));
   }, [
     currentEditorData,
@@ -546,6 +613,10 @@ export const useCadEditorViewerController = ({
       index === trim.entity.index ? replacementEntities : [entity]
     ));
     const nextData = buildUpdatedDxfData(currentEditorData, nextEntities);
+    const replacementStartIndex = trim.entity.index;
+    const nextSelectedEntities = nextData.entities
+      .slice(replacementStartIndex, replacementStartIndex + replacementEntities.length)
+      .map((entity, index) => buildSelectedEntityInfo(entity, replacementStartIndex + index));
 
     commitCadEditorHistoryEntry({
       currentEditorData,
@@ -554,15 +625,18 @@ export const useCadEditorViewerController = ({
       setRedoStack,
       setLoadedDxfData
     });
-    clearCadEditorSelection({
+    syncCadEditorSelection({
+      selectedEntities: nextSelectedEntities,
       setSelectedEntities,
       setViewerSelectionOverride
     });
-    setEditorNotice(resolvedMessages.buildTrimSelectionNotice({
-      sourceEntityType: sourceEntity.type,
-      segmentIndex: trim.segmentIndex,
-      splitPoint: trim.splitPoint
-    }));
+    setEditorNotice(
+      `${resolvedMessages.buildTrimSelectionNotice({
+        sourceEntityType: sourceEntity.type,
+        segmentIndex: trim.segmentIndex,
+        splitPoint: trim.splitPoint
+      })} ${nextSelectedEntities.length > 1 ? 'Partes resultantes destacadas.' : 'Parte resultante destacada.'}`
+    );
   }, [
     currentEditorData,
     resolvedMessages,
@@ -623,6 +697,7 @@ export const useCadEditorViewerController = ({
     handleViewerViewportStateChange,
     handleViewerSelectionChange,
     handleCopySelectedEntity,
+    handleEditSelectedEntityCurve,
     handleEditSelectedEntityNode,
     handleExtendSelectedEntity,
     handleTrimSelectedEntity,

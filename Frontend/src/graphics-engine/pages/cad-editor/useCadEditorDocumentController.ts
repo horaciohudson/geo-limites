@@ -162,9 +162,26 @@ const waitForNextUiPaint = async () => {
   });
 };
 
+const GEOREFERENCE_LAYER_HINTS = ['georeferencia', 'georreferencia', 'georef', 'georref'];
+
+const normalizeLayerToken = (value: string | null | undefined): string => (
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+);
+
 const collectHiddenLayerNamesFromDxf = (dxfData: DXFData): string[] => (
   dxfData.layers
-    .filter((layer) => layer.hiddenByDefault)
+    .filter((layer) => {
+      if (!layer.hiddenByDefault) {
+        return false;
+      }
+
+      const normalizedLayerName = normalizeLayerToken(layer.name);
+      return !GEOREFERENCE_LAYER_HINTS.some((hint) => normalizedLayerName.includes(hint));
+    })
     .map((layer) => layer.name.trim())
     .filter((layerName) => layerName.length > 0)
 );

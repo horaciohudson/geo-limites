@@ -305,12 +305,16 @@ const mergeLinearVertexPaths = (
   const secondPath = bestOption.second.map(cloneVertex);
   const firstConnection = firstPath[firstPath.length - 1];
   const secondConnection = secondPath[0];
-  const weldedPoint = cloneVertex(bestOption.joint);
-
-  const mergedVertices = collapseConsecutiveVertices(
-    [...firstPath.slice(0, -1), weldedPoint, ...secondPath.slice(1)],
-    tolerance / 2
-  );
+  const shouldBridgeGap = bestOption.gap > tolerance;
+  const mergedVertices = shouldBridgeGap
+    ? collapseConsecutiveVertices(
+        [...firstPath, ...secondPath],
+        tolerance / 2
+      )
+    : collapseConsecutiveVertices(
+        [...firstPath.slice(0, -1), cloneVertex(bestOption.joint), ...secondPath.slice(1)],
+        tolerance / 2
+      );
 
   if (mergedVertices.length < 2) {
     return null;
@@ -528,20 +532,6 @@ export const getWeldAvailability = (
     };
   }
 
-  const selectedLayers = Array.from(new Set(selectedEditorEntities.map((entity) => entity.layer)));
-  if (selectedLayers.length !== 1) {
-    return {
-      canApply: false,
-      reason: 'O Weld em cadeia exige que todas as entidades estejam na mesma camada.',
-      gap: null,
-      previewSegments: [],
-      previewPoints: [],
-      mergedVertices: null,
-      mergedCount: selection.length,
-      failureDiagnostic: null
-    };
-  }
-
   if (selectedEditorEntities.some((entity) => {
     const props = entity.properties as DXFEntityProperties;
     return (entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') && polylineHasBulgeVertices(props.vertices);
@@ -640,5 +630,3 @@ export const getWeldAvailability = (
     failureDiagnostic: null
   };
 };
-
-

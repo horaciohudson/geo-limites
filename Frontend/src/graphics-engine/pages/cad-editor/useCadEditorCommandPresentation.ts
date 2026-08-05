@@ -64,11 +64,13 @@ const DEFAULT_BUILD_MENU_ACTIONS_BY_MENU: NonNullable<UseCadEditorCommandPresent
     { id: 'tool-join', label: 'Unir (Weld)' },
     { id: 'tool-join-apply', label: 'Aplicar Weld', disabled: !weldCanApply },
     { id: 'tool-mirror', label: 'Espelhar' },
+    { id: 'tool-edit-nodes', label: 'Editar Nos' },
+    { id: 'tool-edit-curve', label: 'Editar Curva' },
     { id: 'tool-rotate', label: 'Rotacionar' },
     { id: 'tool-scale', label: 'Escalar' },
     { id: 'tool-offset', label: 'Offset' },
     { id: 'tool-extend', label: 'Estender' },
-    { id: 'tool-trim', label: 'Aparar' },
+    { id: 'tool-knife', label: 'Cortar (Faca)' },
     { id: 'tool-mirror-apply', label: 'Aplicar Espelhar', disabled: selectedEntityCount !== 1 }
   ],
   help: [

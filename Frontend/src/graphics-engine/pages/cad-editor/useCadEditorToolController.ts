@@ -107,12 +107,16 @@ const DEFAULT_TOOL_CONTROLLER_MESSAGES: NonNullable<UseCadEditorToolControllerPa
         return `Selecione uma Linha, Circulo ou Polilinha, mova o cursor para definir a distancia do offset e clique para confirmar. Enter aplica o preview atual.${snapSummary}`;
       case 'extend':
         return `Selecione uma Linha, Polilinha aberta ou Arco, aproxime o cursor da extremidade, vertice ou segmento que deseja alongar e clique para confirmar. Enter aplica o preview atual ate a primeira interseccao encontrada com Linha, Polilinha, Circulo ou Arco.${snapSummary}`;
-      case 'trim':
-        return `Selecione uma Linha, Polilinha aberta ou Arco, aproxime o cursor da ponta, vertice ou segmento que deseja aparar e clique para confirmar. Enter aplica o preview atual ate a primeira interseccao no segmento ou no percurso do arco com Linha, Polilinha, Circulo ou Arco.${snapSummary}`;
+      case 'knife':
+        return `Selecione uma Linha, Polilinha aberta ou Arco, aproxime o cursor da ponta, vertice ou segmento que deseja cortar e clique para confirmar. Enter aplica o preview atual ate a primeira interseccao no segmento ou no percurso do arco com Linha, Polilinha, Circulo ou Arco.${snapSummary}`;
+      case 'edit-nodes':
+        return `Selecione uma Linha ou Polilinha aberta e arraste qualquer no visivel para reposicionar o vertice. Esc cancela o arrasto atual.${snapSummary}`;
+      case 'edit-curve':
+        return `Selecione uma curva do editor e arraste uma das duas alcas para remodelar o tracado. Esc cancela o arrasto atual.${snapSummary}`;
       case 'mirror':
         return `Selecione uma entidade para ver o preview do espelhamento. Clique confirma ou Enter aplica no eixo vertical da propria selecao.${snapSummary}`;
       case 'join':
-        return `Selecione duas ou mais entidades para unir. O preview do weld aparece no canvas; clique confirma ou Enter aplica. ${weldReason}${snapSummary}`;
+        return `Clique na primeira entidade e depois na segunda. Fora do modo de selecao multipla, o weld tenta aplicar no segundo clique; com selecao multipla ativa, clique no vazio, numa entidade ja selecionada ou pressione Enter para aplicar. ${weldReason}${snapSummary}`;
       default:
         return null;
     }
@@ -136,9 +140,12 @@ const CAD_EDITOR_TOOL_SHORTCUT_LABELS: Readonly<Record<string, string>> = {
   zoom: 'Z',
   join: 'J',
   mirror: 'M',
+  'edit-nodes': 'N',
+  'edit-curve': 'C',
   rotate: 'R',
   offset: 'O',
   extend: 'E',
+  knife: 'T',
   trim: 'T'
 };
 

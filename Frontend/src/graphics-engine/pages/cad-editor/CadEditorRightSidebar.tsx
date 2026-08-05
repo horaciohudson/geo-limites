@@ -125,7 +125,6 @@ interface CadEditorRightSidebarProps {
       applyToSelectionButton: string;
       clearFillButton: string;
       details: string;
-      extractStartActiveNotice: string;
     };
     properties: {
       file: string;
@@ -302,8 +301,7 @@ const DEFAULT_RIGHT_SIDEBAR_TEXTS: NonNullable<CadEditorRightSidebarProps['texts
     applyFillWhilePainting: 'Aplicar preenchimento ao pintar',
     applyToSelectionButton: 'Aplicar na selecao',
     clearFillButton: 'Limpar preench.',
-    details: 'Novas entidades nascem em aramado com a cor de linha atual. O preenchimento so entra ao pintar a selecao.',
-    extractStartActiveNotice: 'Ferramenta Pintar ativa. Selecione entidades no canvas e aplique as cores por este painel.'
+      details: 'Novas entidades nascem em aramado com a cor de linha atual. O preenchimento so entra ao pintar a selecao.'
   },
   properties: {
     file: 'Arquivo:',
@@ -641,11 +639,6 @@ export const CadEditorRightSidebar: React.FC<CadEditorRightSidebarProps> = ({
         <div className="cad-editor-info-details">
           {resolvedTexts.colors.details}
         </div>
-        {activeToolId === 'extract-start' && (
-          <div className="cad-editor-weld-diagnostic cad-editor-weld-diagnostic--ready">
-            {resolvedTexts.colors.extractStartActiveNotice}
-          </div>
-        )}
       </div>
     </details>
     <details className="cad-editor-side-panel" open={rightPanelState.properties}>

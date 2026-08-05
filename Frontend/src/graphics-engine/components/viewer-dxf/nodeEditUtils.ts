@@ -3,7 +3,7 @@ import { calculateDistance } from '@/graphics-engine/shared/geometry';
 import type { Point2D } from '@/graphics-engine/shared/geometry';
 import type { ViewerSelectedEntityInfo } from '@/graphics-engine/components/viewer-dxf/types';
 
-export type EditableNodeRole = 'start' | 'end';
+export type EditableNodeRole = 'start' | 'end' | 'vertex';
 
 export interface EditableNodeHandle {
   id: string;
@@ -11,6 +11,7 @@ export interface EditableNodeHandle {
   entityIndex: number;
   entityType: string;
   role: EditableNodeRole;
+  vertexIndex?: number;
   point: Point2D;
 }
 
@@ -36,7 +37,9 @@ export const isNodeEditableEntity = (entity: DXFEntity | null | undefined): bool
   return false;
 };
 
-const buildHandleId = (entityId: string, role: EditableNodeRole) => `${entityId}::${role}`;
+const buildHandleId = (entityId: string, role: EditableNodeRole, vertexIndex?: number) => (
+  `${entityId}::${role}${typeof vertexIndex === 'number' ? `::${vertexIndex}` : ''}`
+);
 
 export const getEditableNodeHandles = (
   dxfData: DXFData | null,
@@ -61,6 +64,7 @@ export const getEditableNodeHandles = (
           entityIndex: selectedEntity.index,
           entityType: entity.type,
           role: 'start' as const,
+          vertexIndex: 0,
           point: { x: props.x1 as number, y: props.y1 as number }
         },
         {
@@ -69,35 +73,29 @@ export const getEditableNodeHandles = (
           entityIndex: selectedEntity.index,
           entityType: entity.type,
           role: 'end' as const,
+          vertexIndex: 1,
           point: { x: props.x2 as number, y: props.y2 as number }
         }
       ];
     }
 
-    const firstVertex = props.vertices?.[0];
-    const lastVertex = props.vertices?.[props.vertices.length - 1];
-    if (!firstVertex || !lastVertex) {
+    if (!props.vertices?.length) {
       return [];
     }
 
-    return [
-      {
-        id: buildHandleId(selectedEntity.id, 'start'),
-        entityId: selectedEntity.id,
-        entityIndex: selectedEntity.index,
-        entityType: entity.type,
-        role: 'start' as const,
-        point: { x: firstVertex.x, y: firstVertex.y }
-      },
-      {
-        id: buildHandleId(selectedEntity.id, 'end'),
-        entityId: selectedEntity.id,
-        entityIndex: selectedEntity.index,
-        entityType: entity.type,
-        role: 'end' as const,
-        point: { x: lastVertex.x, y: lastVertex.y }
-      }
-    ];
+    return props.vertices.map((vertex, index) => ({
+      id: buildHandleId(
+        selectedEntity.id,
+        index === 0 ? 'start' : index === props.vertices!.length - 1 ? 'end' : 'vertex',
+        index
+      ),
+      entityId: selectedEntity.id,
+      entityIndex: selectedEntity.index,
+      entityType: entity.type,
+      role: index === 0 ? 'start' as const : index === props.vertices!.length - 1 ? 'end' as const : 'vertex' as const,
+      vertexIndex: index,
+      point: { x: vertex.x, y: vertex.y }
+    }));
   });
 };
 
@@ -150,9 +148,15 @@ export const findNearestNodeSnapTarget = (
 const cloneVerticesWithUpdatedEndpoint = (
   vertices: DXFVertex[],
   role: EditableNodeRole,
+  vertexIndex: number | undefined,
   targetPoint: Point2D
 ): DXFVertex[] => vertices.map((vertex, index) => {
-  const isTargetVertex = role === 'start' ? index === 0 : index === vertices.length - 1;
+  const resolvedVertexIndex = typeof vertexIndex === 'number'
+    ? vertexIndex
+    : role === 'start'
+      ? 0
+      : vertices.length - 1;
+  const isTargetVertex = index === resolvedVertexIndex;
   if (!isTargetVertex) {
     return { ...vertex };
   }
@@ -166,27 +170,34 @@ const cloneVerticesWithUpdatedEndpoint = (
 export const applyNodeEditToEntity = (
   entity: DXFEntity,
   role: EditableNodeRole,
+  vertexIndex: number | undefined,
   targetPoint: Point2D
 ): DXFEntity => {
   const props = entity.properties as DXFEntityProperties;
 
   if (entity.type === 'LINE') {
+    const resolvedVertexIndex = typeof vertexIndex === 'number'
+      ? vertexIndex
+      : role === 'end'
+        ? 1
+        : 0;
+    const isStart = resolvedVertexIndex === 0;
     return {
       ...entity,
       properties: {
         ...props,
-        x: role === 'start' ? targetPoint.x : props.x,
-        y: role === 'start' ? targetPoint.y : props.y,
-        x1: role === 'start' ? targetPoint.x : props.x1,
-        y1: role === 'start' ? targetPoint.y : props.y1,
-        x2: role === 'end' ? targetPoint.x : props.x2,
-        y2: role === 'end' ? targetPoint.y : props.y2
+        x: isStart ? targetPoint.x : props.x,
+        y: isStart ? targetPoint.y : props.y,
+        x1: isStart ? targetPoint.x : props.x1,
+        y1: isStart ? targetPoint.y : props.y1,
+        x2: !isStart ? targetPoint.x : props.x2,
+        y2: !isStart ? targetPoint.y : props.y2
       }
     };
   }
 
   if ((entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') && props.vertices?.length) {
-    const nextVertices = cloneVerticesWithUpdatedEndpoint(props.vertices, role, targetPoint);
+    const nextVertices = cloneVerticesWithUpdatedEndpoint(props.vertices, role, vertexIndex, targetPoint);
     return {
       ...entity,
       properties: {

@@ -463,7 +463,7 @@ export const applyTrimExtendToEntity = (
     }
   }
 
-  return applyNodeEditToEntity(entity, role, targetPoint);
+  return applyNodeEditToEntity(entity, role, undefined, targetPoint);
 };
 
 export const getPreferredOpenPolylineTrimExtendHandle = (
@@ -591,5 +591,4 @@ export const getOpenPolylineSegmentPoints = (
     end: { x: endVertex.x, y: endVertex.y }
   };
 };
-
 

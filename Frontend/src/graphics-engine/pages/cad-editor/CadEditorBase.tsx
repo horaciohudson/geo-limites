@@ -88,7 +88,6 @@ import {
   pointToSegmentDistance,
   segmentToSegmentDistance
 } from '@/graphics-engine/components/viewer-dxf/geometryAnalysis';
-import { sendSelectionDebug } from '@/utils/memorialDocument';
 const CadEditorLeftSidebar = React.lazy(() =>
   import('@/graphics-engine/pages/cad-editor/CadEditorLeftSidebar').then((module) => ({ default: module.CadEditorLeftSidebar }))
 );
@@ -808,6 +807,30 @@ const doesEntityIntersectSelectedLots = (
   });
 };
 
+const doesEntityBelongToExclusionSelection = (
+  entity: DXFEntity,
+  polygons: Point2D[][]
+): boolean => {
+  if (polygons.length === 0) {
+    return false;
+  }
+
+  const representativePoints = getEntityRepresentativePoints(entity);
+  if (representativePoints.length === 0) {
+    return false;
+  }
+
+  if (isTextLikeEntity(entity)) {
+    return polygons.some((polygon) => (
+      representativePoints.some((point) => isPointInsideOrNearPolygon(point, polygon))
+    ));
+  }
+
+  return polygons.some((polygon) => (
+    representativePoints.every((point) => isPointInsideOrNearPolygon(point, polygon))
+  ));
+};
+
 const doesDetectedPolygonMatchSelectedScope = (
   detectedPolygon: Point2D[],
   selectedPolygons: Point2D[][]
@@ -830,15 +853,18 @@ const doesDetectedPolygonMatchSelectedScope = (
   });
 };
 
-const buildEntityRemovalDebugSummary = (entity: DXFEntity) => {
-  const representativePoints = getEntityRepresentativePoints(entity);
-  return {
-    type: entity.type,
-    layer: entity.layer ?? null,
-    text: typeof entity.properties.text === 'string' ? entity.properties.text.slice(0, 80) : null,
-    representativePointCount: representativePoints.length,
-    representativePointSample: representativePoints.slice(0, 4)
-  };
+const doesDetectedPolygonMatchExclusionScope = (
+  detectedPolygon: Point2D[],
+  selectedPolygons: Point2D[][]
+): boolean => {
+  if (detectedPolygon.length === 0 || selectedPolygons.length === 0) {
+    return false;
+  }
+
+  const centroid = getPolygonCentroid(detectedPolygon);
+  return selectedPolygons.some((selectedPolygon) => (
+    isPointInsideOrNearPolygon(centroid, selectedPolygon, LOT_REMOVAL_ENTITY_TOLERANCE * 0.5)
+  ));
 };
 
 const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
@@ -948,6 +974,8 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
   const [rulerGuidePreview, setRulerGuidePreview] = useState<CadGuide | null>(null);
   const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
   const [hoveredGuideId, setHoveredGuideId] = useState<string | null>(null);
+  const [viewerDraftUndoAvailable, setViewerDraftUndoAvailable] = useState(false);
+  const [viewerDraftUndoNonce, setViewerDraftUndoNonce] = useState(0);
   const [guideContextMenu, setGuideContextMenu] = useState<CadGuideContextMenuState | null>(null);
   const [entityContextMenu, setEntityContextMenu] = useState<CadEntityContextMenuState | null>(null);
   const [isTextDialogOpen, setIsTextDialogOpen] = useState(false);
@@ -968,6 +996,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
   const [manualReviewLotNumbers, setManualReviewLotNumbers] = useState<number[]>([]);
   const savedPartialSelectionLotNumbersRef = useRef<number[]>([]);
   const savedPartialSelectionsRef = useRef<ConfirmedLotSelection[]>([]);
+  const savedBaseAreaReferencePointsRef = useRef<ConfirmedReferencePoint[]>([]);
   const [technicalSummaryScopeMode, setTechnicalSummaryScopeMode] = useState<TechnicalSummaryScopeMode>('full');
   const [isBaseAreaVisible, setIsBaseAreaVisible] = useState(true);
   const [isTechnicalSummaryDialogOpen, setIsTechnicalSummaryDialogOpen] = useState(false);
@@ -1055,6 +1084,10 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     }
   }, [activeToolId, openedDocument]);
   const currentEditorData = loadedDxfData || openedDocument?.dxfData || null;
+  const effectiveSavedBaseAreaReferencePoints = useMemo(
+    () => (savedBaseAreaReferencePoints.length > 0 ? savedBaseAreaReferencePoints : savedBaseAreaReferencePointsRef.current),
+    [savedBaseAreaReferencePoints]
+  );
   const referencePointsForSummary = useMemo<ConfirmedReferencePoint[]>(() => {
     const nonBaseAreaReferencePoints = [
       ...editorReferencePoints,
@@ -1064,9 +1097,9 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     );
     return [
       ...nonBaseAreaReferencePoints,
-      ...savedBaseAreaReferencePoints
+      ...effectiveSavedBaseAreaReferencePoints
     ];
-  }, [editorReferencePoints, savedBaseAreaReferencePoints, savedPartialReferencePoints]);
+  }, [editorReferencePoints, effectiveSavedBaseAreaReferencePoints, savedPartialReferencePoints]);
   useEffect(() => {
     setManualReviewLotNumbers([]);
   }, [openedDocument?.name, openedDocument?.sizeBytes]);
@@ -1084,22 +1117,25 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     savedPartialSelectionsRef.current = savedPartialSelections;
   }, [savedPartialSelections]);
   useEffect(() => {
+    savedBaseAreaReferencePointsRef.current = savedBaseAreaReferencePoints;
+  }, [savedBaseAreaReferencePoints]);
+  useEffect(() => {
     setTechnicalSummaryScopeMode('full');
   }, [openedDocument?.name, openedDocument?.sizeBytes]);
   const boundaryContextsForSummaryDialog = useMemo(() => ([
     {
       id: 'primary-boundary',
       title: 'Primarias',
-      label: savedBaseAreaReferencePoints[0]?.label?.replace(/\d+$/, '') || 'AREA_TOTAL',
-      pointCount: savedBaseAreaReferencePoints.length,
-      isSaved: savedBaseAreaReferencePoints.length > 0,
-      description: savedBaseAreaReferencePoints.length > 0
+      label: effectiveSavedBaseAreaReferencePoints[0]?.label?.replace(/\d+$/, '') || 'AREA_TOTAL',
+      pointCount: effectiveSavedBaseAreaReferencePoints.length,
+      isSaved: effectiveSavedBaseAreaReferencePoints.length > 0,
+      description: effectiveSavedBaseAreaReferencePoints.length > 0
         ? `Perimetral primaria salva em Operacoes a partir dos trechos marcados com Ctrl + Shift. ${isBaseAreaVisible ? 'Visivel no canvas.' : 'Oculta no canvas.'}`
         : 'Nenhum trecho primario foi salvo em Operacoes para esta geracao.'
     }
-  ]), [isBaseAreaVisible, savedBaseAreaReferencePoints]);
+  ]), [effectiveSavedBaseAreaReferencePoints, isBaseAreaVisible]);
   const technicalSummaryOperationalNotices = useMemo(() => {
-    if (savedBaseAreaReferencePoints.length === 0) {
+    if (effectiveSavedBaseAreaReferencePoints.length === 0) {
       return [{
         id: 'missing-primary-boundary',
         title: 'Primarias ausentes',
@@ -1108,7 +1144,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     }
 
     return [];
-  }, [savedBaseAreaReferencePoints.length]);
+  }, [effectiveSavedBaseAreaReferencePoints.length]);
   const primaryBoundaryValidation = useMemo(
     () => buildBoundaryVerticesFromAnnotations(editorSegmentAnnotations),
     [editorSegmentAnnotations]
@@ -1127,12 +1163,12 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
       && savedPartialSelectionLotNumbers.every((value, index) => value === currentDraftLotNumbers[index]);
   }, [editorConfirmedSelections, savedPartialSelectionLotNumbers]);
   const savedBoundaryOverlaySegments = useMemo<ViewerOverlaySegment[]>(
-    () => (isBaseAreaVisible ? buildBoundaryOverlaySegments(savedBaseAreaReferencePoints, '#2563eb') : []),
-    [isBaseAreaVisible, savedBaseAreaReferencePoints]
+    () => (isBaseAreaVisible ? buildBoundaryOverlaySegments(effectiveSavedBaseAreaReferencePoints, '#2563eb') : []),
+    [effectiveSavedBaseAreaReferencePoints, isBaseAreaVisible]
   );
   const savedBoundaryOverlayPoints = useMemo<ViewerOverlayPoint[]>(
-    () => (isBaseAreaVisible ? buildBoundaryOverlayPoints(savedBaseAreaReferencePoints, '#2563eb', 'PRIMARIAS') : []),
-    [isBaseAreaVisible, savedBaseAreaReferencePoints]
+    () => (isBaseAreaVisible ? buildBoundaryOverlayPoints(effectiveSavedBaseAreaReferencePoints, '#2563eb', 'PRIMARIAS') : []),
+    [effectiveSavedBaseAreaReferencePoints, isBaseAreaVisible]
   );
   const canInteractWithEntity = useCallback((entity: DXFEntity) => (
     technicalSummaryScopeMode === 'partial'
@@ -1158,8 +1194,9 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
   }, [loadedDxfData, setOpenedDocument]);
   useEffect(() => {
     setSavedBaseAreaReferencePoints([]);
+    savedBaseAreaReferencePointsRef.current = [];
     setIsBaseAreaVisible(true);
-  }, [openedDocument?.name]);
+  }, [openedDocument?.name, openedDocument?.sizeBytes]);
   const hiddenLayerNameSet = useMemo(() => new Set(hiddenLayerNames), [hiddenLayerNames]);
   const resolveFunctionalLayerName = host.resolveFunctionalLayerName;
   const viewerData = useMemo<DXFData | null>(() => {
@@ -1405,11 +1442,11 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
         return [];
       }
 
-      if (currentSelectedLotNumbersForTechnicalSummary.length > 0) {
-        return currentSelectedLotNumbersForTechnicalSummary;
+      if (savedPartialSelectionLotNumbers.length > 0) {
+        return savedPartialSelectionLotNumbers;
       }
 
-      return savedPartialSelectionLotNumbers;
+      return currentSelectedLotNumbersForTechnicalSummary;
     },
     [
       currentSelectedLotNumbersForTechnicalSummary,
@@ -1423,12 +1460,12 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
         return [];
       }
 
-      const activeSelections = editorConfirmedSelections.filter((selection) => Number.isFinite(selection.lotNumber));
-      if (activeSelections.length > 0) {
-        return activeSelections;
+      const savedSelections = savedPartialSelections.filter((selection) => Number.isFinite(selection.lotNumber));
+      if (savedSelections.length > 0) {
+        return savedSelections;
       }
 
-      return savedPartialSelections.filter((selection) => Number.isFinite(selection.lotNumber));
+      return editorConfirmedSelections.filter((selection) => Number.isFinite(selection.lotNumber));
     },
     [
       editorConfirmedSelections,
@@ -1478,7 +1515,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
   );
   const selectedLotSelectionsForRemovalExperiment = useMemo(
     () => {
-      const activeSelections = editorConfirmedSelections.filter((selection) => Number.isFinite(selection.lotNumber));
+      const activeSelections = editorConfirmedSelections.filter((selection) => selection.polygon.length >= 3);
       if (activeSelections.length > 0) {
         return activeSelections;
       }
@@ -1561,18 +1598,22 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     return {
       stage: technicalSummaryScopeMode === 'exclude'
         ? 'Pronto para Exclusao'
-        : savedBaseAreaReferencePoints.length > 0
+        : effectiveSavedBaseAreaReferencePoints.length > 0
           ? (technicalSummaryScopeMode === 'partial' ? 'Pronto para Parciais' : technicalSummaryScopeMode === 'mixed' ? 'Pronto para Total + Parciais' : 'Pronto para Confrontacoes')
           : 'Aguardando Primaria',
       detail: technicalSummaryScopeMode === 'exclude'
-        ? 'Selecionar lotes para remover.'
-        : savedBaseAreaReferencePoints.length > 0
+        ? 'Selecionar contornos para remover.'
+        : effectiveSavedBaseAreaReferencePoints.length > 0
           ? (technicalSummaryScopeMode === 'partial' ? 'Definir o recorte manual.' : technicalSummaryScopeMode === 'mixed' ? 'Selecionar lotes para destaque manual dentro do resumo total.' : 'Selecionar ruas e confrontacoes.')
           : 'Limitar o terreno.',
-      nextStep: savedBaseAreaReferencePoints.length === 0
-        ? (technicalSummaryScopeMode === 'exclude' ? 'Marcar lotes' : 'Salvar Primarias')
+      nextStep: effectiveSavedBaseAreaReferencePoints.length === 0
+        ? (
+          technicalSummaryScopeMode === 'exclude'
+            ? (partialDraftCount > 0 ? 'Remover Selecao' : 'Marcar selecao')
+            : 'Salvar Primarias'
+        )
         : partialDraftCount > 0
-          ? (technicalSummaryScopeMode === 'exclude' ? 'Remover Lote' : 'Salvar Parcial')
+          ? (technicalSummaryScopeMode === 'exclude' ? 'Remover Selecao' : 'Salvar Parcial')
           : confrontationTextCount > 0 || confrontationSegmentCount > 0
             ? 'Gerar Resumo'
             : (technicalSummaryScopeMode === 'partial' ? 'Fazer Parciais' : technicalSummaryScopeMode === 'mixed' ? 'Marcar Destaques' : technicalSummaryScopeMode === 'exclude' ? 'Marcar Exclusao' : 'Fazer Confrontacoes'),
@@ -1584,7 +1625,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     currentSelectedLotNumbersForTechnicalSummary.length,
     editorSegmentAnnotations.length,
     editorSelectedConfrontationTexts.length,
-    savedBaseAreaReferencePoints.length,
+    effectiveSavedBaseAreaReferencePoints.length,
     savedPartialSelectionLotNumbers.length,
     technicalSummaryScopeMode
   ]);
@@ -1640,9 +1681,9 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
         ? {
             mode: 'full' as const,
             title: 'Exclusao de lotes',
-            detail: 'O modo Exclusao esta ativo. Use Alt + Select para marcar os lotes e remova-os em Utilitarios.',
-            badgeLabel: selectedLotNumbersForRemovalExperiment.length > 0
-              ? `${selectedLotNumbersForRemovalExperiment.length} lote(s) marcados`
+            detail: 'O modo Exclusao esta ativo. Use Alt + Select para marcar o contorno que deseja remover e execute pelo botao principal Remover Selecao ou em Utilitarios.',
+            badgeLabel: selectedLotSelectionsForRemovalExperiment.length > 0
+              ? `${selectedLotSelectionsForRemovalExperiment.length} contorno(s) marcados`
               : 'Aguardando exclusao',
             lotNumbers: []
           }
@@ -1656,6 +1697,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
   ), [
     currentSelectedLotNumbersForTechnicalSummary.length,
     selectedLotNumbersForRemovalExperiment.length,
+    selectedLotSelectionsForRemovalExperiment.length,
     savedPartialSelectionLotNumbers,
     selectedLotNumbersForMixedSummary,
     selectedLotNumbersForTechnicalSummary,
@@ -1679,8 +1721,8 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     if (mode === 'partial') {
       setEditorNotice(
         savedPartialSelectionLotNumbers.length > 0 || currentSelectedLotNumbersForTechnicalSummary.length > 0
-          ? 'Modo Parciais ativado. O Resumo Tecnico saira apenas com os lotes do recorte manual. Use Substituir Lote em Utilitarios para gravar o parcial no desenho.'
-          : 'Modo Parciais ativado. Salve ao menos um recorte manual com Alt + Select antes de gerar o resumo ou aplicar a substituicao persistente.'
+          ? 'Modo Parciais ativado. O Resumo Tecnico saira apenas com os lotes do recorte manual. Se marcar novos lotes com Alt + Select, clique em Salvar Parcial na barra esquerda.'
+          : 'Modo Parciais ativado. Marque os lotes com Alt + Select e clique em Salvar Parcial na barra esquerda antes de gerar o resumo ou aplicar a substituicao persistente.'
       );
       return;
     }
@@ -1688,8 +1730,8 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     if (mode === 'mixed') {
       setEditorNotice(
         savedPartialSelectionLotNumbers.length > 0
-          ? 'Modo Total + Parciais ativado. O resumo saira para o terreno todo, e os parciais salvos substituirao os lotes automaticos correspondentes. Use Substituir Lote em Utilitarios para tornar essa troca permanente no desenho.'
-          : 'Modo Total + Parciais ativado. Salve ao menos um parcial com Alt + Select para substituir lotes dentro do resumo total ou gravar a substituicao no desenho.'
+          ? `Modo Total + Parciais ativado. Ja existe(m) ${savedPartialSelectionLotNumbers.length} lote(s) parcial(is) salvo(s). Para atualizar, marque com Alt + Select e clique em Salvar Parcial na barra esquerda.`
+          : 'Modo Total + Parciais ativado. Marque os lotes com Alt + Select e clique em Salvar Parcial na barra esquerda para substituir lotes dentro do resumo total ou gravar a substituicao no desenho.'
       );
       return;
     }
@@ -1701,7 +1743,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
       setEditorSegmentAnnotations([]);
       setClearPrimarySelectionNonce((currentValue) => currentValue + 1);
       setEditorNotice(
-        'Modo Exclusao ativado. A selecao anterior foi limpa. Marque os lotes que deseja remover com Alt + Select e use Remover Lote em Utilitarios.'
+        'Modo Exclusao ativado. A selecao anterior foi limpa. Marque o contorno que deseja remover com Alt + Select e use o botao principal Remover Selecao ou o atalho em Utilitarios.'
       );
       return;
     }
@@ -1757,19 +1799,6 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     referencePoints?: ConfirmedReferencePoint[];
   }) => {
     const normalizedSelections = normalizeConfirmedSelectionsWithFullEditorData(payload.selections);
-    // #region debug-point R:lot-selection-confirmed
-    sendSelectionDebug('A', 'CadEditorBase:handleViewerPolygonConfirmed', '[DEBUG] Selecoes de lote confirmadas no editor', {
-      mode: technicalSummaryScopeMode,
-      selectionCount: normalizedSelections.length,
-      selections: normalizedSelections.map((selection, index) => ({
-        index,
-        lotNumber: selection.lotNumber ?? null,
-        polygonVertexCount: selection.polygon.length,
-        textsInside: selection.textsInside.slice(0, 8),
-        polygonSample: selection.polygon.slice(0, 4)
-      }))
-    });
-    // #endregion
     setEditorConfirmedSelections(normalizedSelections);
     if (payload.referencePoints) {
       setEditorReferencePoints(payload.referencePoints);
@@ -1800,11 +1829,14 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     selections: ConfirmedLotSelection[];
     referencePoints?: ConfirmedReferencePoint[];
   }) => {
-    setEditorConfirmedSelections(normalizeConfirmedSelectionsWithFullEditorData(payload.selections));
+    const normalizedSelections = normalizeConfirmedSelectionsWithFullEditorData(payload.selections);
+    setEditorConfirmedSelections(normalizedSelections);
     if (payload.referencePoints) {
       setEditorReferencePoints(payload.referencePoints);
     }
-  }, [normalizeConfirmedSelectionsWithFullEditorData]);
+  }, [
+    normalizeConfirmedSelectionsWithFullEditorData,
+  ]);
   const handleManualReviewLotSelectionChange = useCallback((payload: ManualReviewLotSelectionPayload) => {
     setManualReviewLotNumbers(payload.lotNumbers);
     setEditorNotice(
@@ -1813,6 +1845,10 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
         : `Lote ${payload.lotNumber} removido da revisao manual.`
     );
   }, [setEditorNotice]);
+  const handleViewerDraftUndo = useCallback(() => viewerDraftUndoAvailable, [viewerDraftUndoAvailable]);
+  const requestViewerDraftUndo = useCallback(() => {
+    setViewerDraftUndoNonce((currentValue) => currentValue + 1);
+  }, []);
   const {
     geometryEntityCount,
     textEntityCount,
@@ -1923,22 +1959,50 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     disabledReason?: string;
   }) => {
     if (tool.id === 'save-primary-boundary') {
-      const hasSavedPrimaryBoundary = savedBaseAreaReferencePoints.length > 0;
+      const hasSavedPrimaryBoundary = effectiveSavedBaseAreaReferencePoints.length > 0;
+      const draftPartialSelectionCount = editorConfirmedSelections.length;
       const draftPartialLotCount = currentSelectedLotNumbersForTechnicalSummary.length;
       const savedPartialLotCount = savedPartialSelectionLotNumbers.length;
-      if (hasSavedPrimaryBoundary && (draftPartialLotCount > 0 || savedPartialLotCount > 0)) {
+      const isPartialSaveMode = technicalSummaryScopeMode === 'partial' || technicalSummaryScopeMode === 'mixed';
+      const isExcludeRemoveMode = technicalSummaryScopeMode === 'exclude';
+      if (isPartialSaveMode) {
+        const partialReadyStatus = !hasSavedPrimaryBoundary
+          ? 'Salve as Primarias primeiro'
+          : draftPartialLotCount > 0
+          ? (
+            isSavedPartialSelectionSynced
+              ? `${draftPartialLotCount} lote(s) parciais salvos`
+              : `${draftPartialLotCount} lote(s) parciais prontos para salvar`
+          )
+          : draftPartialSelectionCount > 0
+            ? `${draftPartialSelectionCount} contorno(s) fechado(s), aguardando reconhecimento do lote`
+          : savedPartialLotCount > 0
+            ? `${savedPartialLotCount} lote(s) parciais salvos`
+            : 'Marque os lotes com Alt + Select';
         return {
           ...tool,
-          label: 'Salvar Parcial',
-          statusText: draftPartialLotCount > 0
-            ? (
-              isSavedPartialSelectionSynced
-                ? `${draftPartialLotCount} lote(s) parciais salvos`
-                : `${draftPartialLotCount} lote(s) parciais prontos para salvar`
-            )
-            : `${savedPartialLotCount} lote(s) parciais salvos`,
-          disabled: draftPartialLotCount === 0,
-          disabledReason: 'Confirme pelo menos um lote manual com Alt + Select para salvar o parcial.'
+          label: 'Salvar Parciais',
+          statusText: technicalSummaryScopeMode === 'mixed'
+            ? `${partialReadyStatus} para Total + Parciais`
+            : partialReadyStatus,
+          disabled: !hasSavedPrimaryBoundary || draftPartialSelectionCount === 0,
+          disabledReason: !hasSavedPrimaryBoundary
+            ? 'Salve as Primarias antes de usar Salvar Parciais.'
+            : technicalSummaryScopeMode === 'mixed'
+              ? 'Feche o recorte com Alt + Select para habilitar Salvar Parciais no modo Total + Parciais.'
+              : 'Feche o recorte com Alt + Select para habilitar Salvar Parciais.'
+        };
+      }
+      if (isExcludeRemoveMode) {
+        const exclusionReadyStatus = draftPartialSelectionCount > 0
+          ? `${draftPartialSelectionCount} contorno(s) prontos para remover`
+          : 'Marque o contorno com Alt + Select';
+        return {
+          ...tool,
+          label: 'Remover Selecao',
+          statusText: exclusionReadyStatus,
+          disabled: draftPartialSelectionCount === 0,
+          disabledReason: 'Feche o recorte com Alt + Select para habilitar Remover Selecao.'
         };
       }
 
@@ -1947,8 +2011,8 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
       const primaryBoundaryStatusText = formatPrimaryBoundaryValidationMessage(validationError);
       return {
         ...tool,
-        statusText: savedBaseAreaReferencePoints.length > 0
-          ? `${savedBaseAreaReferencePoints.length} vertice(s) salvos | ${totalMarkedSegments} trecho(s) marcados`
+        statusText: effectiveSavedBaseAreaReferencePoints.length > 0
+          ? `${effectiveSavedBaseAreaReferencePoints.length} vertice(s) salvos | ${totalMarkedSegments} trecho(s) marcados`
           : primaryBoundaryStatusText
             ? primaryBoundaryStatusText
             : totalMarkedSegments > 0
@@ -1962,13 +2026,16 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     }
     return tool;
   }), [
+    editorConfirmedSelections.length,
     currentSelectedLotNumbersForTechnicalSummary.length,
     editorSegmentAnnotations.length,
+    effectiveSavedBaseAreaReferencePoints.length,
     isSavedPartialSelectionSynced,
     leftSidebarTools,
     primaryBoundaryValidation.error,
-    savedBaseAreaReferencePoints.length,
-    savedPartialSelectionLotNumbers.length
+    savedPartialSelectionLotNumbers.length,
+    selectedLotNumbersForRemovalExperiment.length,
+    technicalSummaryScopeMode
   ]);
   const { applyTextToolPreset, restoreSelectedTextToolPreset } = host.useCadEditorTextToolController({
     textToolPresets: host.textToolPresets,
@@ -2047,6 +2114,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     handleViewerViewportStateChange,
     handleViewerSelectionChange,
     handleCopySelectedEntity,
+    handleEditSelectedEntityCurve,
     handleEditSelectedEntityNode,
     handleExtendSelectedEntity,
     handleTrimSelectedEntity,
@@ -2419,6 +2487,9 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     setEditorNotice,
     isShortcutsDialogOpen,
     setIsShortcutsDialogOpen,
+    canViewerDraftUndo: viewerDraftUndoAvailable,
+    requestViewerDraftUndo,
+    handleViewerDraftUndo,
     handleUndoEdit,
     handleRedoEdit,
     handleCreateNewDocument,
@@ -2818,11 +2889,13 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     }
 
     const highlightedLotCount = new Set(nextIssues.map((issue) => issue.lotNumber)).size;
+    const blockingCount = nextIssues.filter((issue) => issue.severity === 'BLOQUEANTE').length;
+    const warningCount = nextIssues.length - blockingCount;
     const primaryIssue = nextIssues.find((issue) => issue.severity === 'BLOQUEANTE') || nextIssues[0];
     setEditorNotice(
       highlightedLotCount > 1
-        ? `Scanner destacou ${highlightedLotCount} lotes. Primeiro caso: lote ${primaryIssue.lotNumber} (${primaryIssue.code}) - ${primaryIssue.message}`
-        : `Scanner destacou o lote ${primaryIssue.lotNumber} (${primaryIssue.code}) - ${primaryIssue.message}`
+        ? `Scanner destacou ${highlightedLotCount} lotes, com ${blockingCount} bloqueante(s) e ${warningCount} aviso(s). Primeiro caso: lote ${primaryIssue.lotNumber} (${primaryIssue.code}) - ${primaryIssue.message}`
+        : `Scanner destacou o lote ${primaryIssue.lotNumber}, com ${blockingCount} bloqueante(s) e ${warningCount} aviso(s). Primeiro caso: ${primaryIssue.code} - ${primaryIssue.message}`
     );
   }, [currentEditorData, hiddenLayerNames, host, setEditorNotice, viewerData]);
   const handleFocusNextEditorError = useCallback(() => {
@@ -2851,36 +2924,17 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
   }, [editorCorrectiveFocusLotNumber, editorCorrectiveIssues.length, setEditorNotice]);
   const handleSavePrimaryBoundaryInEditor = useCallback(() => {
     if (!currentEditorData && !viewerData) {
-      // #region debug-point G:save-primary-no-document
-      sendSelectionDebug('G', 'CadEditorBase:handleSavePrimaryBoundaryInEditor', '[DEBUG] Salvar Primarias sem desenho aberto', {
-        hasCurrentEditorData: Boolean(currentEditorData),
-        hasViewerData: Boolean(viewerData)
-      });
-      // #endregion
       setEditorNotice('Abra um desenho no editor antes de salvar as Primarias.');
       return;
     }
 
     const { vertices, error } = primaryBoundaryValidation;
     if (error) {
-      // #region debug-point H:save-primary-validation-error
-      sendSelectionDebug('H', 'CadEditorBase:handleSavePrimaryBoundaryInEditor', '[DEBUG] Salvar Primarias bloqueado por validacao', {
-        error,
-        vertexCandidateCount: vertices.length,
-        segmentAnnotationCount: editorSegmentAnnotations.length
-      });
-      // #endregion
       setEditorNotice(formatPrimaryBoundaryValidationMessage(error));
       return;
     }
 
     const nextReferencePoints = buildBoundaryReferencePoints(vertices, BASE_AREA_REFERENCE_LABEL_PREFIX);
-    // #region debug-point I:save-primary-success
-    sendSelectionDebug('I', 'CadEditorBase:handleSavePrimaryBoundaryInEditor', '[DEBUG] Primarias salvas no editor', {
-      vertexCount: nextReferencePoints.length,
-      segmentAnnotationCount: editorSegmentAnnotations.length
-    });
-    // #endregion
     setSavedBaseAreaReferencePoints(nextReferencePoints);
     setIsBaseAreaVisible(false);
     setEditorSelectedConfrontationTexts([]);
@@ -2888,57 +2942,21 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     setClearPrimarySelectionNonce((currentValue) => currentValue + 1);
     setEditorNotice(`Primarias salvas com ${nextReferencePoints.length} vertice(s) a partir de ${editorSegmentAnnotations.length} trecho(s). A selecao foi limpa e a perimetral salva ficou oculta para nao confundir o proximo passo.`);
   }, [currentEditorData, editorSegmentAnnotations.length, primaryBoundaryValidation, setEditorNotice, viewerData]);
-  useEffect(() => {
-    // #region debug-point J:primary-boundary-ready-prop
-    sendSelectionDebug('J', 'CadEditorBase:primaryBoundaryReadyProp', '[DEBUG] Estado de primaryBoundaryReady recalculado no editor', {
-      savedBaseAreaReferencePointsCount: savedBaseAreaReferencePoints.length,
-      primaryBoundaryReady: savedBaseAreaReferencePoints.length > 0,
-      openedDocumentName: openedDocument?.name ?? null
-    });
-    // #endregion
-  }, [openedDocument?.name, savedBaseAreaReferencePoints.length]);
   const handleSavePartialScopeInEditor = useCallback(() => {
-    if (savedBaseAreaReferencePoints.length === 0) {
+    if (effectiveSavedBaseAreaReferencePoints.length === 0) {
       setEditorNotice('Salve as Primarias primeiro. O parcial so aparece depois da base do terreno.');
       return;
     }
 
-    if (currentSelectedLotNumbersForTechnicalSummary.length === 0) {
-      setEditorNotice('Confirme pelo menos um lote manual com Alt + Select antes de salvar o parcial.');
+    if (editorConfirmedSelections.length === 0) {
+      setEditorNotice('Feche ao menos um contorno manual com Alt + Select antes de salvar o parcial.');
       return;
     }
 
-    // #region debug-point B:save-partial-selection
-    void fetch('http://127.0.0.1:7777/event', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        sessionId: 'mixed-partial-lot-shift',
-        runId: 'pre-fix',
-        hypothesisId: 'B',
-        location: 'CadEditorBase.tsx:handleSavePartialScopeInEditor',
-        msg: '[DEBUG] Saving partial lot selections',
-        data: {
-          currentSelectedLotNumbersForTechnicalSummary,
-          savedBaseAreaReferencePointsCount: savedBaseAreaReferencePoints.length,
-          savedSelections: editorConfirmedSelections
-            .filter((selection) => (
-              Number.isFinite(selection.lotNumber)
-              && currentSelectedLotNumbersForTechnicalSummary.includes(selection.lotNumber as number)
-            ))
-            .map((selection) => ({
-              lotNumber: selection.lotNumber,
-              polygonPointCount: selection.polygon.length,
-              firstPoint: selection.polygon[0] ?? null,
-              lastPoint: selection.polygon[selection.polygon.length - 1] ?? null
-            }))
-        },
-        ts: Date.now()
-      })
-    }).catch(() => undefined);
-    // #endregion
+    if (currentSelectedLotNumbersForTechnicalSummary.length === 0) {
+      setEditorNotice('O contorno foi fechado, mas o lote ainda nao foi reconhecido. Confira se o numero do lote ficou dentro do recorte e tente novamente.');
+      return;
+    }
 
     const partialSelectionsToSave = editorConfirmedSelections.filter((selection) => (
         Number.isFinite(selection.lotNumber)
@@ -2953,13 +2971,17 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     );
     setClearPrimarySelectionNonce((currentValue) => currentValue + 1);
     setEditorNotice(
-      `Parcial salvo com ${currentSelectedLotNumbersForTechnicalSummary.length} lote(s): ${currentSelectedLotNumbersForTechnicalSummary.join(', ')}. A selecao foi limpa. Agora prossiga com ruas e confrontacoes.`
+      technicalSummaryScopeMode === 'mixed'
+        ? `Parcial salvo com ${currentSelectedLotNumbersForTechnicalSummary.length} lote(s): ${currentSelectedLotNumbersForTechnicalSummary.join(', ')}. O modo Total + Parciais ja pode usar essa substituicao no Resumo Tecnico.`
+        : `Parcial salvo com ${currentSelectedLotNumbersForTechnicalSummary.length} lote(s): ${currentSelectedLotNumbersForTechnicalSummary.join(', ')}. A selecao foi limpa. Agora prossiga com ruas e confrontacoes.`
     );
   }, [
     currentSelectedLotNumbersForTechnicalSummary,
+    editorConfirmedSelections.length,
     editorConfirmedSelections,
     editorReferencePoints,
-    savedBaseAreaReferencePoints.length,
+    effectiveSavedBaseAreaReferencePoints.length,
+    technicalSummaryScopeMode,
     setEditorNotice
   ]);
   const handleRemoveSelectedLotsFromDrawing = useCallback(() => {
@@ -2969,58 +2991,43 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     }
 
     const lotSelections = selectedLotSelectionsForRemovalExperiment.filter((selection) => selection.polygon.length >= 3);
-    const lotNumbers = Array.from(new Set(
+
+    if (lotSelections.length === 0) {
+      setEditorNotice('Marque e feche ao menos um contorno com Alt + Select antes de remover do arquivo.');
+      return;
+    }
+    const targetPolygons = lotSelections.map((selection) => selection.polygon);
+    const { detectedPolygonEntries } = analyzeGeoLimitesLotDetection({
+      dxfData: currentEditorData,
+      manualBridgeSegments: []
+    });
+    const matchedDetectedTargetPolygons = detectedPolygonEntries
+      .filter((entry) => doesDetectedPolygonMatchExclusionScope(entry.polygon, targetPolygons))
+      .map((entry) => entry.polygon);
+    const effectiveTargetPolygons = matchedDetectedTargetPolygons.length > 0
+      ? matchedDetectedTargetPolygons
+      : targetPolygons;
+    const remainingLotPolygons = detectedPolygonEntries
+      .filter((entry) => !doesDetectedPolygonMatchExclusionScope(entry.polygon, effectiveTargetPolygons))
+      .map((entry) => entry.polygon);
+
+    const removedEntities = currentEditorData.entities.filter((entity) => (
+      doesEntityBelongToExclusionSelection(entity, effectiveTargetPolygons)
+      && !shouldPreserveEntityForRemainingLots(entity, remainingLotPolygons)
+    ));
+    const nextEntities = currentEditorData.entities.filter((entity) => (
+      !doesEntityBelongToExclusionSelection(entity, effectiveTargetPolygons)
+      || shouldPreserveEntityForRemainingLots(entity, remainingLotPolygons)
+    ));
+    const removedCount = removedEntities.length;
+    const recognizedLotNumbers = Array.from(new Set(
       lotSelections
         .map((selection) => selection.lotNumber)
         .filter((value): value is number => Number.isFinite(value))
     )).sort((left, right) => left - right);
 
-    if (lotSelections.length === 0 || lotNumbers.length === 0) {
-      setEditorNotice('Marque os lotes com Alt + Select e, se quiser, Salve Parciais antes de remover do arquivo.');
-      return;
-    }
-
-    const targetPolygons = lotSelections.map((selection) => selection.polygon);
-    const lotNumberSet = new Set(lotNumbers);
-    const { detectedPolygonEntries } = analyzeGeoLimitesLotDetection({
-      dxfData: currentEditorData,
-      manualBridgeSegments: []
-    });
-    const remainingLotPolygons = detectedPolygonEntries
-      .filter((entry) => Number.isFinite(entry.lotNumber) && !lotNumberSet.has(entry.lotNumber as number))
-      .map((entry) => entry.polygon);
-
-    const removedEntities = currentEditorData.entities.filter((entity) => (
-      doesEntityIntersectSelectedLots(entity, targetPolygons)
-      && !shouldPreserveEntityForRemainingLots(entity, remainingLotPolygons)
-    ));
-    const nextEntities = currentEditorData.entities.filter((entity) => (
-      !doesEntityIntersectSelectedLots(entity, targetPolygons)
-      || shouldPreserveEntityForRemainingLots(entity, remainingLotPolygons)
-    ));
-    const removedCount = removedEntities.length;
-
-    // #region debug-point S:lot-removal-decision
-    sendSelectionDebug('B', 'CadEditorBase:handleRemoveSelectedLotsFromDrawing', '[DEBUG] Decisao de remocao de lotes calculada', {
-      mode: technicalSummaryScopeMode,
-      lotNumbers,
-      lotSelections: lotSelections.map((selection, index) => ({
-        index,
-        lotNumber: selection.lotNumber ?? null,
-        polygonVertexCount: selection.polygon.length,
-        textsInside: selection.textsInside.slice(0, 8),
-        polygonSample: selection.polygon.slice(0, 4)
-      })),
-      originalEntityCount: currentEditorData.entities.length,
-      removedCount,
-      keptCount: nextEntities.length,
-      removedEntitySample: removedEntities.slice(0, 12).map(buildEntityRemovalDebugSummary),
-      keptEntitySample: nextEntities.slice(0, 12).map(buildEntityRemovalDebugSummary)
-    });
-    // #endregion
-
     if (removedCount <= 0) {
-      setEditorNotice(`Nao encontrei entidades suficientes para remover os lotes ${lotNumbers.join(', ')} do desenho atual.`);
+      setEditorNotice('Nao encontrei entidades suficientes dentro do contorno marcado para remover do desenho atual.');
       return;
     }
 
@@ -3038,18 +3045,16 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
       setViewerSelectionOverride
     });
     setEditorConfirmedSelections([]);
-    setSavedPartialSelections((current) => current.filter((selection) => !lotNumberSet.has(selection.lotNumber ?? -1)));
-    setSavedPartialSelectionLotNumbers((current) => current.filter((lotNumber) => !lotNumberSet.has(lotNumber)));
-    setSavedPartialReferencePoints([]);
     setEditorSelectedConfrontationTexts([]);
     setEditorSegmentAnnotations([]);
     setEditorReferencePoints((current) => current.filter((referencePoint) => isReservedBoundaryReferencePoint(referencePoint.label)));
-    setManualReviewLotNumbers((current) => current.filter((lotNumber) => !lotNumberSet.has(lotNumber)));
     setClearPrimarySelectionNonce((currentValue) => currentValue + 1);
     setEditorCorrectiveIssues([]);
     setEditorCorrectiveFocusLotNumber(null);
     setEditorNotice(
-      `Lotes ${lotNumbers.join(', ')} removidos do desenho (${removedCount} entidade(s)). A selecao foi limpa para conferencia visual do resultado.`
+      recognizedLotNumbers.length > 0
+        ? `Selecao removida do desenho (${removedCount} entidade(s)). Lotes reconhecidos dentro do contorno: ${recognizedLotNumbers.join(', ')}.`
+        : `Selecao removida do desenho (${removedCount} entidade(s)). A selecao foi limpa para conferencia visual do resultado.`
     );
   }, [
     currentEditorData,
@@ -3188,7 +3193,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     if (technicalSummaryScopeMode === 'mixed' && mixedReplacementSelections.length === 0) {
       setIsGeneratingTechnicalSummary(false);
       setTechnicalSummaryError('Salve ao menos um parcial antes de gerar o resumo em modo Total + Parciais.');
-      setEditorNotice('Salve ao menos um parcial com Alt + Select antes de gerar o Resumo Tecnico em modo Total + Parciais.');
+      setEditorNotice('Salve ao menos um parcial com Alt + Select e clique em Salvar Parcial na barra esquerda antes de gerar o Resumo Tecnico em modo Total + Parciais.');
       return;
     }
 
@@ -3268,29 +3273,15 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     host.openStandardsAndTemplates();
   }, [host, setEditorNotice]);
   const handleLeftSidebarToolActivate = useCallback((toolId: string) => {
-    // #region debug-point K:left-sidebar-tool-activate
-    sendSelectionDebug('K', 'CadEditorBase:handleLeftSidebarToolActivate', '[DEBUG] Acionamento de ferramenta na sidebar esquerda', {
-      toolId,
-      savedBaseAreaReferencePointsCount: savedBaseAreaReferencePoints.length,
-      currentSelectedLotNumbersForTechnicalSummaryCount: currentSelectedLotNumbersForTechnicalSummary.length
-    });
-    // #endregion
     if (toolId === 'save-primary-boundary') {
-      if (savedBaseAreaReferencePoints.length > 0 && currentSelectedLotNumbersForTechnicalSummary.length > 0) {
-        // #region debug-point L:left-sidebar-save-routed-to-partial
-        sendSelectionDebug('L', 'CadEditorBase:handleLeftSidebarToolActivate', '[DEBUG] Botao salvar roteado para parcial', {
-          savedBaseAreaReferencePointsCount: savedBaseAreaReferencePoints.length,
-          currentSelectedLotNumbersForTechnicalSummaryCount: currentSelectedLotNumbersForTechnicalSummary.length
-        });
-        // #endregion
+      if (technicalSummaryScopeMode === 'exclude') {
+        handleRemoveSelectedLotsFromDrawing();
+      } else if (
+        effectiveSavedBaseAreaReferencePoints.length > 0
+        && (technicalSummaryScopeMode === 'partial' || technicalSummaryScopeMode === 'mixed')
+      ) {
         handleSavePartialScopeInEditor();
       } else {
-        // #region debug-point M:left-sidebar-save-routed-to-primary
-        sendSelectionDebug('M', 'CadEditorBase:handleLeftSidebarToolActivate', '[DEBUG] Botao salvar roteado para primarias', {
-          savedBaseAreaReferencePointsCount: savedBaseAreaReferencePoints.length,
-          currentSelectedLotNumbersForTechnicalSummaryCount: currentSelectedLotNumbersForTechnicalSummary.length
-        });
-        // #endregion
         handleSavePrimaryBoundaryInEditor();
       }
       return;
@@ -3323,11 +3314,12 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     handleFocusNextEditorError,
     handleGenerateTechnicalSummaryInEditor,
     handleOpenStandardsAndTemplates,
+    handleRemoveSelectedLotsFromDrawing,
     handleSavePartialScopeInEditor,
     handleSavePrimaryBoundaryInEditor,
     handleScanErrorsInEditor,
-    currentSelectedLotNumbersForTechnicalSummary.length,
-    savedBaseAreaReferencePoints.length,
+    effectiveSavedBaseAreaReferencePoints.length,
+    technicalSummaryScopeMode,
   ]);
 
   return (
@@ -3373,6 +3365,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
             replaceableSelectionCount={partialSelectionCountForPersistentReplacement}
             onApplySavedPartialReplacementsInEditor={handleApplySavedPartialReplacementsInEditor}
             removableLotNumbers={selectedLotNumbersForRemovalExperiment}
+            removableSelectionCount={selectedLotSelectionsForRemovalExperiment.length}
             onRemoveSelectedLotsFromDrawing={handleRemoveSelectedLotsFromDrawing}
           />
         </Suspense>
@@ -3443,7 +3436,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
                   minimumWorkspaceSize={openedDocument.source === 'new' ? newDocumentWorkspaceSize : undefined}
                   viewportCommand={viewportCommand}
                   activeLayerName={
-                    technicalSummaryScopeMode === 'partial' || technicalSummaryScopeMode === 'exclude'
+                    technicalSummaryScopeMode === 'partial' || technicalSummaryScopeMode === 'exclude' || technicalSummaryScopeMode === 'mixed'
                       ? undefined
                       : activeLayerName
                   }
@@ -3459,6 +3452,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
                     setIsTextDialogOpen(true);
                   }}
                   onEntityCopy={handleCopySelectedEntity}
+                  onEntityEditCurve={handleEditSelectedEntityCurve}
                   onEntityEditNode={handleEditSelectedEntityNode}
                   onEntityExtend={handleExtendSelectedEntity}
                   onEntityTrim={handleTrimSelectedEntity}
@@ -3474,12 +3468,14 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
                   onReferencePointsChange={handleViewerReferencePointsChange}
                   onPolygonConfirmed={handleViewerPolygonConfirmed}
                   onSelectionSummaryChange={handleViewerSelectionSummaryChange}
+                  onDraftUndoAvailabilityChange={setViewerDraftUndoAvailable}
+                  draftUndoNonce={viewerDraftUndoNonce}
                   onManualReviewLotSelectionChange={handleManualReviewLotSelectionChange}
                   onInitialCanvasRendered={finishOpeningDocumentRender}
                   interactive={false}
-                  primaryBoundaryReady={savedBaseAreaReferencePoints.length > 0}
+                  primaryBoundaryReady={effectiveSavedBaseAreaReferencePoints.length > 0}
                   allowLotSelectionWithoutPrimaryBoundary={
-                    technicalSummaryScopeMode === 'exclude' || technicalSummaryScopeMode === 'partial'
+                    technicalSummaryScopeMode === 'exclude' || technicalSummaryScopeMode === 'partial' || technicalSummaryScopeMode === 'mixed'
                   }
                   showDetectedPolygonMeasurements={true}
                 />

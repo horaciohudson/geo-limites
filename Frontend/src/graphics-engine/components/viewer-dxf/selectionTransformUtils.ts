@@ -170,7 +170,7 @@ const buildTransformedPolylineVertices = (
 const transformPointFields = (
   props: DXFEntityProperties,
   previewTransform?: EntityPreviewTransform | null
-): Pick<DXFEntityProperties, 'x' | 'y' | 'x1' | 'y1' | 'x2' | 'y2' | 'centerX' | 'centerY' | 'alignmentX' | 'alignmentY'> => {
+): Pick<DXFEntityProperties, 'x' | 'y' | 'x1' | 'y1' | 'x2' | 'y2' | 'centerX' | 'centerY' | 'alignmentX' | 'alignmentY' | 'editorCurveControl1X' | 'editorCurveControl1Y' | 'editorCurveControl2X' | 'editorCurveControl2Y'> => {
   const transformXY = (x?: number, y?: number) => {
     if (typeof x !== 'number' || typeof y !== 'number') {
       return null;
@@ -183,6 +183,8 @@ const transformPointFields = (
   const p2 = transformXY(props.x2, props.y2);
   const center = transformXY(props.centerX, props.centerY);
   const alignment = transformXY(props.alignmentX, props.alignmentY);
+  const curveControl1 = transformXY(props.editorCurveControl1X, props.editorCurveControl1Y);
+  const curveControl2 = transformXY(props.editorCurveControl2X, props.editorCurveControl2Y);
 
   return {
     x: point?.x ?? props.x,
@@ -194,7 +196,11 @@ const transformPointFields = (
     centerX: center?.x ?? props.centerX,
     centerY: center?.y ?? props.centerY,
     alignmentX: alignment?.x ?? props.alignmentX,
-    alignmentY: alignment?.y ?? props.alignmentY
+    alignmentY: alignment?.y ?? props.alignmentY,
+    editorCurveControl1X: curveControl1?.x ?? props.editorCurveControl1X,
+    editorCurveControl1Y: curveControl1?.y ?? props.editorCurveControl1Y,
+    editorCurveControl2X: curveControl2?.x ?? props.editorCurveControl2X,
+    editorCurveControl2Y: curveControl2?.y ?? props.editorCurveControl2Y
   };
 };
 
@@ -522,5 +528,4 @@ export const applyPreviewTransformToSelection = (
     ? applyPreviewTransformToEntity(entity, previewTransform)
     : entity
 ));
-
 

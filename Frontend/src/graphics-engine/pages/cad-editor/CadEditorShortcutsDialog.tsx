@@ -42,7 +42,7 @@ const DEFAULT_SHORTCUTS_DIALOG_TEXTS: NonNullable<CadEditorShortcutsDialogProps[
         { keys: 'Ctrl+Z', description: 'Undo' },
         { keys: 'Ctrl+Y', description: 'Redo' },
         { keys: 'Delete / Backspace', description: 'Remover selecao' },
-        { keys: 'Esc', description: 'Desativar selecao multipla, limpar selecao ou fechar a ajuda' }
+        { keys: 'Esc', description: 'Voltar para Selecionar, desativar selecao multipla, limpar selecao ou fechar a ajuda' }
       ]
     },
     {

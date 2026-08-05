@@ -80,6 +80,10 @@ export const useCadEditorModifyController = ({
       index === primarySelectedEntity.index ? mirrorEntityAcrossVerticalAxis(entity, axisX) : entity
     );
     const nextData = buildUpdatedDxfData(currentEditorData, nextEntities);
+    const mirroredEntity = nextData.entities[primarySelectedEntity.index];
+    const mirroredSelectionId = mirroredEntity
+      ? buildCadEntitySelectionId(mirroredEntity, primarySelectedEntity.index)
+      : buildCadEntitySelectionId(entityToMirror, primarySelectedEntity.index);
 
     commitCadEditorHistoryEntry({
       currentEditorData,
@@ -88,7 +92,7 @@ export const useCadEditorModifyController = ({
       setRedoStack,
       setLoadedDxfData
     });
-    setViewerSelectionOverride(undefined);
+    setViewerSelectionOverride([mirroredSelectionId]);
     setEditorNotice(resolvedMessages.buildMirrorAppliedNotice({ entityType: primarySelectedEntity.type }));
   }, [
     currentEditorData,

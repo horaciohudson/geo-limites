@@ -37,7 +37,7 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
           { keys: 'Ctrl+Z', description: 'Undo' },
           { keys: 'Ctrl+Y', description: 'Redo' },
           { keys: 'Delete / Backspace', description: 'Remover selecao' },
-          { keys: 'Esc', description: 'Desativar selecao multipla, limpar selecao ou fechar a ajuda' }
+        { keys: 'Esc', description: 'Voltar para Selecionar, desativar selecao multipla, limpar selecao ou fechar a ajuda' }
         ]
       },
       {
@@ -49,10 +49,12 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
           { keys: 'Z', description: 'Zoom' },
           { keys: 'J', description: 'Weld' },
           { keys: 'M', description: 'Mirror' },
+          { keys: 'N', description: 'Editar nos' },
+          { keys: 'C', description: 'Editar curva' },
           { keys: 'R', description: 'Rotate' },
           { keys: 'O', description: 'Offset' },
           { keys: 'E', description: 'Extend' },
-          { keys: 'T', description: 'Trim' }
+          { keys: 'T', description: 'Cortar (Faca)' }
         ]
       },
       {
@@ -226,8 +228,7 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
       applyFillWhilePainting: 'Aplicar preenchimento ao pintar',
       applyToSelectionButton: 'Aplicar na selecao',
       clearFillButton: 'Limpar preench.',
-      details: 'Novas entidades nascem em aramado com a cor de linha atual. O preenchimento so entra ao pintar a selecao.',
-      extractStartActiveNotice: 'Ferramenta Pintar ativa. Selecione entidades no canvas e aplique as cores por este painel.'
+      details: 'Novas entidades nascem em aramado com a cor de linha atual. O preenchimento so entra ao pintar a selecao.'
     },
     properties: {
       file: 'Arquivo:',
@@ -428,15 +429,15 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
     }) => `Texto em curso: ${textValue.trim() || defaultTextValue} | h=${height.toFixed(2)} | rot=${rotation.toFixed(1)}° | alin=${alignment} | anc=${verticalAlignment}`,
     mirrorSelectOneNotice: 'Espelhar: selecione uma entidade.',
     mirrorSelectOnlyOneNotice: 'Espelhar: selecione apenas uma entidade.',
-    mirrorReadyNotice: 'Espelhar: preview pronto. Clique confirma ou Enter aplica.',
+    mirrorReadyNotice: 'Espelhar: preview pronto no eixo central da entidade. Clique confirma ou Enter aplica.',
     joinSelectTwoNotice: 'Unir: selecione duas ou mais entidades para aplicar o weld.',
     buildJoinInvalidNotice: ({ weldReason }: { weldReason: string }) => `Unir: ${weldReason || 'ajuste a selecao para aplicar o weld.'}`,
     joinReadyNotice: 'Unir: preview pronto. Clique no canvas ou Enter aplica.',
     editNodesSelectNotice: 'Editar Nos: selecione uma Linha ou Polilinha aberta.',
     editNodesUnsupportedNotice: 'Editar Nos: suporte atual para Linha e Polilinha aberta.',
-    editNodesDragNotice: 'Editar Nos: arraste uma extremidade para reposicionar ou encostar em outra ponta.',
+    editNodesDragNotice: 'Editar Nos: arraste qualquer no visivel para reposicionar o vertice ou encostar em outro no.',
     buildEditNodesSnappedNotice: ({ distance }: { distance: number }) => `Editar Nos: snap travado | dist ${distance.toFixed(3)} | solte para aplicar`,
-    buildEditNodesMovingNotice: ({ distance }: { distance: number }) => `Editar Nos: movendo extremidade | dist ${distance.toFixed(3)} | solte para aplicar`
+    buildEditNodesMovingNotice: ({ distance }: { distance: number }) => `Editar Nos: movendo vertice | dist ${distance.toFixed(3)} | solte para aplicar`
   },
   viewerHeader: {
     buildCorrectiveToolLabel: (tool: 'inspect' | 'move-vertex' | 'join-endpoints' | 'close-gap-guided') => {
@@ -542,7 +543,7 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
     fitApplied: 'Desenho ajustado ao canvas.',
     resetApplied: 'Viewport resetado.',
     helpShortcuts:
-      'Atalhos: Alt+N novo desenho, Ctrl+O abrir, Ctrl+S salvar, Ctrl+W fechar, Ctrl+Z undo, Ctrl+Y redo, Delete remover, Esc limpar, V selecionar, H pan, Z zoom, J weld, M mirror, R rotate, O offset, E extend, T trim, F fit, + zoom in, - zoom out, 0 reset, F1 ou ? ajuda.',
+      'Atalhos: Alt+N novo desenho, Ctrl+O abrir, Ctrl+S salvar, Ctrl+W fechar, Ctrl+Z undo, Ctrl+Y redo, Delete remover, Esc limpar, V selecionar, H pan, Z zoom, J weld, M mirror, N editar nos, C editar curva, R rotate, O offset, E extend, T faca, F fit, + zoom in, - zoom out, 0 reset, F1 ou ? ajuda.',
     helpAbout: 'Editor CAD independente em construcao, com foco em fluxo proprio de abertura DXF e comandos de viewport.'
   },
   commandPresentation: {
@@ -591,11 +592,13 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
         { id: 'tool-join', label: 'Unir (Weld)' },
         { id: 'tool-join-apply', label: 'Aplicar Weld', disabled: !weldCanApply },
         { id: 'tool-mirror', label: 'Espelhar' },
+        { id: 'tool-edit-nodes', label: 'Editar Nos' },
+        { id: 'tool-edit-curve', label: 'Editar Curva' },
         { id: 'tool-rotate', label: 'Rotacionar' },
         { id: 'tool-scale', label: 'Escalar' },
         { id: 'tool-offset', label: 'Offset' },
         { id: 'tool-extend', label: 'Estender' },
-        { id: 'tool-trim', label: 'Aparar' },
+        { id: 'tool-knife', label: 'Cortar (Faca)' },
         { id: 'tool-mirror-apply', label: 'Aplicar Espelhar', disabled: selectedEntityCount !== 1 }
       ],
       help: [
@@ -672,24 +675,34 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
     editNodeSelectionErrorNotice: 'Nao foi possivel editar o no selecionado.',
     buildEditNodeSelectionNotice: ({
       role,
+      vertexIndex,
       targetPoint,
       snappedToEntityId
     }: {
-      role: 'start' | 'end';
+      role: 'start' | 'end' | 'vertex';
+      vertexIndex?: number;
       targetPoint: { x: number; y: number };
       snappedToEntityId?: string | null;
     }) => (
       snappedToEntityId
-        ? `No ${role === 'start' ? 'inicial' : 'final'} ajustado e aproximado de outra extremidade.`
-        : `No ${role === 'start' ? 'inicial' : 'final'} atualizado em X ${targetPoint.x.toFixed(3)} / Y ${targetPoint.y.toFixed(3)}.`
+        ? `No ${role === 'vertex' ? `interno ${typeof vertexIndex === 'number' ? vertexIndex + 1 : ''}`.trim() : role === 'start' ? 'inicial' : 'final'} ajustado e aproximado de outra extremidade.`
+        : `No ${role === 'vertex' ? `interno ${typeof vertexIndex === 'number' ? vertexIndex + 1 : ''}`.trim() : role === 'start' ? 'inicial' : 'final'} atualizado em X ${targetPoint.x.toFixed(3)} / Y ${targetPoint.y.toFixed(3)}.`
     ),
+    editCurveSelectionErrorNotice: 'Nao foi possivel editar a curva selecionada.',
+    buildEditCurveSelectionNotice: ({
+      role,
+      targetPoint
+    }: {
+      role: 'control1' | 'control2';
+      targetPoint: { x: number; y: number };
+    }) => `Alca ${role === 'control1' ? '1' : '2'} da curva atualizada em X ${targetPoint.x.toFixed(3)} / Y ${targetPoint.y.toFixed(3)}.`,
     extendSelectionErrorNotice: 'Nao foi possivel estender a entidade selecionada.',
     buildExtendSelectionNotice: ({
       role,
       vertexIndex,
       targetPoint
     }: {
-      role: 'start' | 'end';
+      role: 'start' | 'end' | 'vertex';
       vertexIndex?: number;
       targetPoint: { x: number; y: number };
     }) => (
@@ -712,7 +725,7 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
         : sourceEntityType === 'CIRCLE'
           ? 'no circulo'
           : `no segmento ${segmentIndex + 1}`;
-      return `Aparar aplicado ${targetLabel} em X ${splitPoint.x.toFixed(3)} / Y ${splitPoint.y.toFixed(3)}.`;
+      return `Corte aplicado ${targetLabel} em X ${splitPoint.x.toFixed(3)} / Y ${splitPoint.y.toFixed(3)}.`;
     },
     drawRequiresDocumentNotice: 'Inicie um novo desenho ou abra um DXF antes de desenhar.',
     drawCompletedNotice: 'Operacao concluida.',
@@ -1008,12 +1021,12 @@ export const GEO_LIMITES_CAD_EDITOR_TEXTS = {
           return `Selecione uma Linha, Circulo ou Polilinha, mova o cursor para definir a distancia do offset e clique para confirmar. Enter aplica o preview atual.${snapSummary}`;
         case 'extend':
           return `Selecione uma Linha, Polilinha aberta ou Arco, aproxime o cursor da extremidade, vertice ou segmento que deseja alongar e clique para confirmar. Enter aplica o preview atual ate a primeira interseccao encontrada com Linha, Polilinha, Circulo ou Arco.${snapSummary}`;
-        case 'trim':
-          return `Selecione uma Linha, Polilinha aberta ou Arco, aproxime o cursor da ponta, vertice ou segmento que deseja aparar e clique para confirmar. Enter aplica o preview atual ate a primeira interseccao no segmento ou no percurso do arco com Linha, Polilinha, Circulo ou Arco.${snapSummary}`;
+        case 'knife':
+          return `Selecione uma Linha, Polilinha aberta ou Arco, aproxime o cursor da ponta, vertice ou segmento que deseja cortar e clique para confirmar. Enter aplica o preview atual ate a primeira interseccao no segmento ou no percurso do arco com Linha, Polilinha, Circulo ou Arco.${snapSummary}`;
         case 'mirror':
           return `Selecione uma entidade para ver o preview do espelhamento. Clique confirma ou Enter aplica no eixo vertical da propria selecao.${snapSummary}`;
         case 'join':
-          return `Selecione duas ou mais entidades para unir. O preview do weld aparece no canvas; clique confirma ou Enter aplica. ${weldReason}${snapSummary}`;
+          return `Clique na primeira entidade e depois na segunda. Fora do modo de selecao multipla, o weld tenta aplicar no segundo clique; com selecao multipla ativa, clique no vazio, numa entidade ja selecionada ou pressione Enter para aplicar. ${weldReason}${snapSummary}`;
         default:
           return null;
       }

@@ -36,6 +36,7 @@ interface CadEditorLeftSidebarProps {
   replaceableSelectionCount: number;
   onApplySavedPartialReplacementsInEditor: () => void;
   removableLotNumbers: number[];
+  removableSelectionCount: number;
   onRemoveSelectedLotsFromDrawing: () => void;
 }
 
@@ -59,6 +60,7 @@ export const CadEditorLeftSidebar: React.FC<CadEditorLeftSidebarProps> = ({
   replaceableSelectionCount,
   onApplySavedPartialReplacementsInEditor,
   removableLotNumbers,
+  removableSelectionCount,
   onRemoveSelectedLotsFromDrawing
 }) => {
   const canApplyPersistentReplacement = (
@@ -153,20 +155,22 @@ export const CadEditorLeftSidebar: React.FC<CadEditorLeftSidebarProps> = ({
                 <button
                   type="button"
                   className="cad-editor-tool-row"
-                  disabled={technicalSummaryScopeMode !== 'exclude' || removableLotNumbers.length === 0}
+                  disabled={technicalSummaryScopeMode !== 'exclude' || removableSelectionCount === 0}
                   onClick={onRemoveSelectedLotsFromDrawing}
-                  aria-disabled={technicalSummaryScopeMode !== 'exclude' || removableLotNumbers.length === 0}
+                  aria-disabled={technicalSummaryScopeMode !== 'exclude' || removableSelectionCount === 0}
                   title={
                     technicalSummaryScopeMode !== 'exclude'
-                      ? 'Ative o modo Exclusao em Operacao nos lotes para remover lotes do desenho.'
-                      : removableLotNumbers.length > 0
-                        ? `Remove do desenho os lotes ${removableLotNumbers.join(', ')} marcados pelo contorno manual.`
-                        : 'Marque e feche ao menos um lote com Alt + Select para habilitar a remocao.'
+                      ? 'Ative o modo Exclusao em Operacao nos lotes para remover selecoes do desenho.'
+                      : removableSelectionCount > 0
+                        ? removableLotNumbers.length > 0
+                          ? `Remove do desenho ${removableSelectionCount} contorno(s) marcado(s) manualmente. Lotes reconhecidos: ${removableLotNumbers.join(', ')}.`
+                          : `Remove do desenho ${removableSelectionCount} contorno(s) marcado(s) manualmente com Alt + Select.`
+                        : 'Marque e feche ao menos um contorno com Alt + Select para habilitar a remocao.'
                   }
                   style={{ marginBottom: '0.45rem' }}
                 >
                   <span className="cad-editor-tool-row-copy">
-                    <span className="cad-editor-tool-row-label">Remover Lote</span>
+                    <span className="cad-editor-tool-row-label">Remover Selecao</span>
                   </span>
                 </button>
                 <button

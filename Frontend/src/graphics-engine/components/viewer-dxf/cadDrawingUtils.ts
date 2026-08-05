@@ -61,6 +61,75 @@ export const buildPolylineEntity = (vertices: DXFVertex[], layer: string, closed
   }
 });
 
+export const sampleCubicBezier = (
+  start: Point2D,
+  control1: Point2D,
+  control2: Point2D,
+  end: Point2D,
+  steps = 24
+): DXFVertex[] => {
+  const vertices: DXFVertex[] = [];
+
+  for (let index = 0; index <= steps; index += 1) {
+    const t = index / steps;
+    const mt = 1 - t;
+    vertices.push({
+      x: (mt ** 3 * start.x)
+        + (3 * mt * mt * t * control1.x)
+        + (3 * mt * t * t * control2.x)
+        + (t ** 3 * end.x),
+      y: (mt ** 3 * start.y)
+        + (3 * mt * mt * t * control1.y)
+        + (3 * mt * t * t * control2.y)
+        + (t ** 3 * end.y)
+    });
+  }
+
+  return vertices;
+};
+
+export const buildBezierControlPointsFromQuadratic = (
+  start: Point2D,
+  control: Point2D,
+  end: Point2D
+): { control1: Point2D; control2: Point2D } => ({
+  control1: {
+    x: start.x + ((2 / 3) * (control.x - start.x)),
+    y: start.y + ((2 / 3) * (control.y - start.y))
+  },
+  control2: {
+    x: end.x + ((2 / 3) * (control.x - end.x)),
+    y: end.y + ((2 / 3) * (control.y - end.y))
+  }
+});
+
+export const buildBezierEntity = (
+  start: Point2D,
+  control1: Point2D,
+  control2: Point2D,
+  end: Point2D,
+  layer: string
+): DXFEntity => {
+  const vertices = sampleCubicBezier(start, control1, control2, end);
+  return {
+    type: 'LWPOLYLINE',
+    layer,
+    properties: {
+      x: vertices[0]?.x,
+      y: vertices[0]?.y,
+      closed: false,
+      polylineFlag: 0,
+      vertexCount: vertices.length,
+      vertices,
+      editorCurveKind: 'bezier-cubic',
+      editorCurveControl1X: control1.x,
+      editorCurveControl1Y: control1.y,
+      editorCurveControl2X: control2.x,
+      editorCurveControl2Y: control2.y
+    }
+  };
+};
+
 export const buildCircleEntity = (center: Point2D, edge: Point2D, layer: string): DXFEntity => ({
   type: 'CIRCLE',
   layer,

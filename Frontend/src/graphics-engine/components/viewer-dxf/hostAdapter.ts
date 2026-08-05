@@ -247,7 +247,7 @@ export const DEFAULT_VIEWER_TEXTS: ViewerDXFHostTexts = {
   }) => `Texto em curso: ${textValue.trim() || defaultTextValue} | h=${height.toFixed(2)} | rot=${rotation.toFixed(1)}° | alin=${alignment} | anc=${verticalAlignment}`,
   mirrorSelectOneNotice: 'Espelhar: selecione uma entidade.',
   mirrorSelectOnlyOneNotice: 'Espelhar: selecione apenas uma entidade.',
-  mirrorReadyNotice: 'Espelhar: preview ativo | Clique/Enter aplica',
+  mirrorReadyNotice: 'Espelhar: preview ativo no eixo central | Clique/Enter aplica',
   joinSelectTwoNotice: 'Weld: selecione ao menos duas entidades.',
   buildJoinInvalidNotice: ({ weldReason }) => `Weld: ${weldReason || 'ajuste a selecao para aplicar.'}`,
   joinReadyNotice: 'Weld: preview ativo | Clique/Enter aplica',

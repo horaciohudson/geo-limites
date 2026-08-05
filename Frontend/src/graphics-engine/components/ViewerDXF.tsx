@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { type DXFData, type DXFEntity, type DXFEntityProperties } from '@/graphics-engine/shared/dxf';
-import { calculateDistance, calculatePolygonArea, type Point2D } from '@/graphics-engine/shared/geometry';
+import { calculateDistance, type Point2D } from '@/graphics-engine/shared/geometry';
 import { parseDxfAsync } from '@/graphics-engine/shared/dxfParseAsync';
 import {
   buildSelectedEntityInfo,
@@ -13,9 +13,6 @@ import {
 import {
   pointToSegmentDistance
 } from '@/graphics-engine/components/viewer-dxf/geometryAnalysis';
-import {
-  summarizePolygonTexts
-} from '@/graphics-engine/components/viewer-dxf/lotSelectionUtils';
 import { useCanvasViewport } from '@/graphics-engine/components/viewer-dxf/useCanvasViewport';
 import { useEmbeddedEntitySelection } from '@/graphics-engine/components/viewer-dxf/useEmbeddedEntitySelection';
 import { useViewerCanvasRenderer } from '@/graphics-engine/components/viewer-dxf/useViewerCanvasRenderer';
@@ -33,13 +30,21 @@ import {
   getEditableNodeHandles,
   type EditableNodeHandle
 } from '@/graphics-engine/components/viewer-dxf/nodeEditUtils';
+import {
+  findEditableCurveHandleAtPoint,
+  getEditableCurveHandles,
+  type EditableCurveHandle
+} from '@/graphics-engine/components/viewer-dxf/curveEditUtils';
 import { buildExtendEntityPreview, buildExtendHoverCandidate, isExtendSupportedEntity } from '@/graphics-engine/components/viewer-dxf/extendUtils';
 import { buildOffsetEntityPreview, buildPreviewOverlaySegmentsFromEntity, isOffsetSupportedEntity } from '@/graphics-engine/components/viewer-dxf/offsetUtils';
 import { buildTrimEntityPreview, isTrimSupportedEntity } from '@/graphics-engine/components/viewer-dxf/trimUtils';
 import { getEntityMirrorAxisX, mirrorEntityAcrossVerticalAxis } from '@/graphics-engine/pages/cad-editor/cadEditorEntityUtils';
 import { ViewerHeaderPanel } from '@/graphics-engine/components/viewer-dxf/ViewerHeaderPanel';
 import { ViewerSegmentContextMenu } from '@/graphics-engine/components/viewer-dxf/ViewerSegmentContextMenu';
-import { buildDrawingPreview, isDrawingToolMode } from '@/graphics-engine/components/viewer-dxf/cadDrawingUtils';
+import {
+  buildDrawingPreview,
+  isDrawingToolMode
+} from '@/graphics-engine/components/viewer-dxf/cadDrawingUtils';
 import type {
   HoverConfrontationText,
   HoverReferencePoint,
@@ -97,9 +102,6 @@ const buildPolarPoint = (origin: Point2D, distance: number, angleDegrees: number
   };
 };
 
-const DEBUG_SELECTION_URL = 'http://127.0.0.1:7778/event';
-const DEBUG_SELECTION_SESSION = 'lot-selection-mismatch';
-const DEBUG_SELECTION_ENABLED = false;
 const EXTEND_HOVER_PICK_RADIUS_PX = 28;
 const EXTEND_RAY_PICK_RADIUS_PX = 16;
 
@@ -179,31 +181,15 @@ const evaluateExtendHoverScore = (
   return endpointPickRadius + perpendicularDistance;
 };
 
-const sendSelectionDebug = (hypothesisId: string, location: string, msg: string, data: Record<string, unknown>) => {
-  if (!DEBUG_SELECTION_ENABLED) {
-    return;
-  }
-  // #region debug-point A:browser-selection-report
-  fetch(DEBUG_SELECTION_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: DEBUG_SELECTION_SESSION,
-      runId: 'pre-fix',
-      hypothesisId,
-      location,
-      msg,
-      data,
-      ts: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
-};
-
 interface ActiveEditNodeDrag {
   handle: EditableNodeHandle;
   currentPoint: Point2D;
   snappedHandle: EditableNodeHandle | null;
+}
+
+interface ActiveEditCurveDrag {
+  handle: EditableCurveHandle;
+  currentPoint: Point2D;
 }
 
 type ViewerDXFComponentProps = ViewerDXFProps & {
@@ -241,6 +227,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   onViewportStateChange,
   onEntitySelectionChange,
   onEntityCopy,
+  onEntityEditCurve,
   onEntityEditNode,
   onEntityExtend,
   onEntityTrim,
@@ -266,6 +253,9 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   onReferencePointsChange,
   onPolygonConfirmed,
   onSelectionSummaryChange,
+  onDraftUndoAvailabilityChange,
+  onDraftUndoRequestChange,
+  draftUndoNonce = 0,
   onGenerateTechnicalSummary,
   isGeneratingTechnicalSummary,
   primaryBoundaryReady = false,
@@ -369,6 +359,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   } | null>(null);
   const lastHandledClearConfrontationSelectionNonceRef = useRef<number>(0);
   const [activeEditNodeDrag, setActiveEditNodeDrag] = useState<ActiveEditNodeDrag | null>(null);
+  const [activeEditCurveDrag, setActiveEditCurveDrag] = useState<ActiveEditCurveDrag | null>(null);
   const [segmentContextMenu, setSegmentContextMenu] = useState<{
     open: boolean;
     x: number;
@@ -380,6 +371,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   const [pointToPointDistanceDirty, setPointToPointDistanceDirty] = useState(false);
   const [pointToPointAngleDirty, setPointToPointAngleDirty] = useState(false);
   const [pointToPointActiveField, setPointToPointActiveField] = useState<'distance' | 'angle' | null>(null);
+  const lastHandledDraftUndoNonceRef = useRef(0);
 
   const pointToPointBasePoint = useMemo(
     () => embeddedToolMode === 'point-to-point' && embeddedDrawingPoints.length > 0
@@ -431,7 +423,6 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     detectedPolygons,
     detectedPolygonEntries,
     extractionTolerance: segmentExtractionTolerance,
-    segmentMedianLength
   } = useViewerLotDetection({
     dxfData,
     manualBridgeSegments
@@ -541,14 +532,20 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   const isGuidedMoveTool = activeToolId === 'move';
   const isGuidedCopyTool = activeToolId === 'copy';
   const isEditNodesTool = activeToolId === 'edit-nodes';
+  const isEditCurveTool = activeToolId === 'edit-curve';
+  const isKnifeTool = activeToolId === 'knife';
   const isMirrorTool = activeToolId === 'mirror';
   const isOffsetTool = activeToolId === 'offset';
   const isExtendTool = activeToolId === 'extend';
-  const isTrimTool = activeToolId === 'trim';
+  const isTrimTool = activeToolId === 'trim' || activeToolId === 'knife';
   const isJoinTool = activeToolId === 'join';
   const isGuidedTranslateTool = isGuidedMoveTool || isGuidedCopyTool;
   const editableNodeHandles = useMemo(
     () => getEditableNodeHandles(dxfData, selectedEntities),
+    [dxfData, selectedEntities]
+  );
+  const editableCurveHandles = useMemo(
+    () => getEditableCurveHandles(dxfData, selectedEntities),
     [dxfData, selectedEntities]
   );
   const commitEntityCopy = useCallback((endPoint: Point2D) => {
@@ -859,6 +856,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     onEntityEditNode?.({
       entity,
       role: activeEditNodeDrag.handle.role,
+      vertexIndex: activeEditNodeDrag.handle.vertexIndex,
       targetPoint,
       snappedToEntityId: activeEditNodeDrag.snappedHandle?.entityId || null
     });
@@ -868,6 +866,62 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   const isEditNodeHandleAtPoint = useCallback((point: Point2D) => (
     Boolean(findEditableNodeHandleAtPoint(editableNodeHandles, point, scale))
   ), [editableNodeHandles, scale]);
+  const beginEditCurveDragAtPoint = useCallback((point: Point2D) => {
+    if (!isEditCurveTool) {
+      return false;
+    }
+
+    const handle = findEditableCurveHandleAtPoint(editableCurveHandles, point, scale);
+    if (!handle) {
+      return false;
+    }
+
+    setActiveEditCurveDrag({
+      handle,
+      currentPoint: handle.point
+    });
+    return true;
+  }, [editableCurveHandles, isEditCurveTool, scale]);
+  const updateEditCurveDrag = useCallback((point: Point2D) => {
+    setActiveEditCurveDrag((current) => (
+      current
+        ? {
+            ...current,
+            currentPoint: point
+          }
+        : current
+    ));
+  }, []);
+  const cancelEditCurveDrag = useCallback(() => {
+    setActiveEditCurveDrag(null);
+  }, []);
+  const commitEditCurveDrag = useCallback(() => {
+    if (!activeEditCurveDrag) {
+      return false;
+    }
+
+    if (calculateDistance(activeEditCurveDrag.handle.point, activeEditCurveDrag.currentPoint) <= 0.001) {
+      setActiveEditCurveDrag(null);
+      return false;
+    }
+
+    const entity = selectedEntities.find((candidate) => candidate.id === activeEditCurveDrag.handle.entityId);
+    if (!entity) {
+      setActiveEditCurveDrag(null);
+      return false;
+    }
+
+    onEntityEditCurve?.({
+      entity,
+      role: activeEditCurveDrag.handle.role,
+      targetPoint: activeEditCurveDrag.currentPoint
+    });
+    setActiveEditCurveDrag(null);
+    return true;
+  }, [activeEditCurveDrag, onEntityEditCurve, selectedEntities]);
+  const isEditCurveHandleAtPoint = useCallback((point: Point2D) => (
+    Boolean(findEditableCurveHandleAtPoint(editableCurveHandles, point, scale))
+  ), [editableCurveHandles, scale]);
   const activeTransformOrthogonal = useMemo(() => {
     if (selectedEntityPreviewTransform?.mode !== 'rotate') {
       return false;
@@ -1109,31 +1163,35 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   }, [confirmedReferencePoints, onReferencePointsChange]);
 
   useEffect(() => {
+    if (
+      clearConfrontationSelectionNonce
+      && lastHandledClearConfrontationSelectionNonceRef.current !== clearConfrontationSelectionNonce
+    ) {
+      return;
+    }
     onSelectionSummaryChange?.({
       selections: confirmedSelections,
       referencePoints: confirmedReferencePoints
     });
-  }, [confirmedReferencePoints, confirmedSelections, onSelectionSummaryChange]);
+  }, [
+    clearConfrontationSelectionNonce,
+    confirmedReferencePoints,
+    confirmedSelections,
+    onSelectionSummaryChange,
+  ]);
 
   useEffect(() => {
     resetCorrectiveHistory(detectedPolygons);
 
-    sendSelectionDebug(
-      'A',
-      'ViewerDXF:detected-polygons',
-      '[DEBUG] Poligonos detectados e pre-selecionados',
-      {
-        extractionTolerance: segmentExtractionTolerance,
-        segmentMedianLength: Number.isFinite(segmentMedianLength) ? Number(segmentMedianLength.toFixed(6)) : null,
-        detectedCount: detectedPolygons.length,
-        detectedSummaries: detectedPolygons.slice(0, 30).map((poly, index) => ({
-          index: index + 1,
-          area: Number(calculatePolygonArea(poly).toFixed(2)),
-          textsInside: summarizePolygonTexts(poly, dxfData)
-        }))
-      }
-    );
-  }, [detectedPolygons, dxfData, resetCorrectiveHistory, segmentExtractionTolerance, segmentMedianLength]);
+    if (embeddedMode && allowLotSelectionWithoutPrimaryBoundary) {
+      setSelectedPolygons([]);
+    }
+  }, [
+    allowLotSelectionWithoutPrimaryBoundary,
+    detectedPolygons,
+    embeddedMode,
+    resetCorrectiveHistory,
+  ]);
 
   const lastSuggestionApplyTokenRef = useRef(0);
 
@@ -1294,10 +1352,14 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     applyCloseGapGuidedCorrection,
     applyJoinEndpointsCorrection,
     applyMoveVertexCorrection,
+    activeEditCurveDrag,
     beginEditNodeDragAtPoint,
+    beginEditCurveDragAtPoint,
     beginEntityDrag,
     beginEntityTransform,
+    cancelEditCurveDrag,
     cancelEditNodeDrag,
+    commitEditCurveDrag,
     commitMirrorSelection,
     commitWeldSelection,
     commitEditNodeDrag,
@@ -1309,6 +1371,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     hasExtendPreview: Boolean(extendPreview),
     hasTrimPreview: Boolean(trimPreview),
     commitEntityTransform,
+    weldCanApply,
     closePointToPointShape,
     canInteractWithEntity,
     correctiveFocusLotNumber,
@@ -1339,6 +1402,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     hoverPolygon,
     hoverSegmentTargetPoint,
     interactive,
+    isEditCurveHandleAtPoint,
     isDragging,
     isEditNodeHandleAtPoint,
     activeEditNodeDrag,
@@ -1396,6 +1460,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     startPanDrag,
     stopPanDrag,
     suppressNextCanvasClickRef,
+    updateEditCurveDrag,
     updateEditNodeDrag,
     updateEntityDragPreview,
     updateEntityTransformPreview,
@@ -1478,13 +1543,15 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
       return null;
     }
 
+    const trimToolLabel = isKnifeTool ? 'Faca' : 'Aparar';
+
     if (!hoverTrimSourceEntity) {
-      return 'Aparar: aproxime o cursor do segmento. A lente marca o foco de corte e o clique divide a entidade em duas.';
+      return `${trimToolLabel}: aproxime o cursor do segmento. A lente marca o foco de corte e o clique divide a entidade em duas.`;
     }
 
     const sourceEntity = dxfData?.entities[hoverTrimSourceEntity.index];
     if (!sourceEntity || !isTrimSupportedEntity(sourceEntity)) {
-      return 'Aparar: suporte atual para Linha, Polilinha, Arco e Circulo.';
+      return `${trimToolLabel}: suporte atual para Linha, Polilinha, Arco e Circulo.`;
     }
     const entityLabel = getTrimEntityLabel(sourceEntity);
     const trimActionLabel = sourceEntity.type === 'LINE' || sourceEntity.type === 'ARC' || !((sourceEntity.properties as DXFEntityProperties).closed)
@@ -1492,15 +1559,15 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
       : 'Clique abre o contorno';
 
     if (!trimPreview) {
-      return `Aparar: ${entityLabel} | mova no contorno para travar o foco | Clique/Enter aplica`;
+      return `${trimToolLabel}: ${entityLabel} | mova no contorno para travar o foco | Clique/Enter aplica`;
     }
 
     if (sourceEntity.type === 'ARC' || sourceEntity.type === 'CIRCLE') {
-      return `Aparar: ${entityLabel} | foco X ${trimPreview.splitPoint.x.toFixed(3)} / Y ${trimPreview.splitPoint.y.toFixed(3)} | ${trimActionLabel} | Enter aplica`;
+      return `${trimToolLabel}: ${entityLabel} | foco X ${trimPreview.splitPoint.x.toFixed(3)} / Y ${trimPreview.splitPoint.y.toFixed(3)} | ${trimActionLabel} | Enter aplica`;
     }
 
-    return `Aparar: ${entityLabel} | seg ${trimPreview.segmentIndex + 1} | foco X ${trimPreview.splitPoint.x.toFixed(3)} / Y ${trimPreview.splitPoint.y.toFixed(3)} | ${trimActionLabel} | Enter aplica`;
-  }, [dxfData, hoverTrimSourceEntity, isTrimTool, trimPreview]);
+    return `${trimToolLabel}: ${entityLabel} | seg ${trimPreview.segmentIndex + 1} | foco X ${trimPreview.splitPoint.x.toFixed(3)} / Y ${trimPreview.splitPoint.y.toFixed(3)} | ${trimActionLabel} | Enter aplica`;
+  }, [dxfData, hoverTrimSourceEntity, isKnifeTool, isTrimTool, trimPreview]);
   const mirrorToolPreviewLabel = useMemo(() => {
     if (!isMirrorTool) {
       return null;
@@ -1554,6 +1621,26 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
       ? resolvedViewerTexts.buildEditNodesSnappedNotice({ distance })
       : resolvedViewerTexts.buildEditNodesMovingNotice({ distance });
   }, [activeEditNodeDrag, editableNodeHandles.length, isEditNodesTool, resolvedViewerTexts, selectedEntities.length]);
+  const editCurveToolPreviewLabel = useMemo(() => {
+    if (!isEditCurveTool) {
+      return null;
+    }
+
+    if (selectedEntities.length === 0) {
+      return 'Editar Curva: selecione uma curva do editor.';
+    }
+
+    if (editableCurveHandles.length === 0) {
+      return 'Editar Curva: suporte atual para curvas Bezier criadas no editor.';
+    }
+
+    if (!activeEditCurveDrag) {
+      return 'Editar Curva: arraste uma das duas alcas para remodelar a curva.';
+    }
+
+    const distance = calculateDistance(activeEditCurveDrag.handle.point, activeEditCurveDrag.currentPoint);
+    return `Editar Curva: alca ${activeEditCurveDrag.handle.role === 'control1' ? '1' : '2'} | dist ${distance.toFixed(3)} | solte para aplicar`;
+  }, [activeEditCurveDrag, editableCurveHandles.length, isEditCurveTool, selectedEntities.length]);
   const moveToolOverlaySegments = useMemo(() => {
     if (!isGuidedTranslateTool || !draggingSelectedEntities) {
       return [];
@@ -1643,11 +1730,82 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
       }
     ];
   }, [activeEditNodeDrag, editableNodeHandles, isEditNodesTool]);
+  const editCurveOverlaySegments = useMemo(() => {
+    if (!isEditCurveTool || editableCurveHandles.length === 0) {
+      return [];
+    }
+
+    const segments = editableCurveHandles.flatMap((handle) => {
+      const controlPoint = activeEditCurveDrag?.handle.id === handle.id ? activeEditCurveDrag.currentPoint : handle.point;
+      return [{
+        start: handle.role === 'control1' ? handle.startPoint : handle.endPoint,
+        end: controlPoint,
+        color: activeEditCurveDrag?.handle.id === handle.id ? '#0f766e' : '#2563eb',
+        dashed: true,
+        strokeWidth: activeEditCurveDrag?.handle.id === handle.id ? 1.45 : 1.2
+      }];
+    });
+
+    if (
+      activeEditCurveDrag
+      && calculateDistance(activeEditCurveDrag.handle.point, activeEditCurveDrag.currentPoint) > 0.001
+    ) {
+      segments.push({
+        start: activeEditCurveDrag.handle.point,
+        end: activeEditCurveDrag.currentPoint,
+        color: '#0f766e',
+        dashed: true,
+        strokeWidth: 1.25
+      });
+    }
+
+    return segments;
+  }, [activeEditCurveDrag, editableCurveHandles, isEditCurveTool]);
+  const editCurveOverlayPoints = useMemo(() => {
+    if (!isEditCurveTool || editableCurveHandles.length === 0) {
+      return [];
+    }
+
+    const anchorPoints = editableCurveHandles.flatMap((handle) => (
+      handle.role === 'control1'
+        ? [
+            {
+              point: handle.startPoint,
+              color: 'rgba(148, 163, 184, 0.38)',
+              radius: 4.2
+            }
+          ]
+        : [
+            {
+              point: handle.endPoint,
+              color: 'rgba(148, 163, 184, 0.38)',
+              radius: 4.2
+            }
+          ]
+    ));
+    const controlPoints = editableCurveHandles.map((handle) => ({
+      point: activeEditCurveDrag?.handle.id === handle.id ? activeEditCurveDrag.currentPoint : handle.point,
+      color: activeEditCurveDrag?.handle.id === handle.id ? '#0f766e' : '#2563eb',
+      radius: activeEditCurveDrag?.handle.id === handle.id ? 5.8 : 5.1,
+      label: handle.role === 'control1' ? 'A1' : 'A2',
+      labelColor: '#0f172a',
+      labelBackgroundColor: 'rgba(219, 234, 254, 0.94)',
+      labelBorderColor: '#2563eb',
+      labelOffsetX: 10,
+      labelOffsetY: -16
+    }));
+
+    return [
+      ...anchorPoints,
+      ...controlPoints
+    ];
+  }, [activeEditCurveDrag, editableCurveHandles, isEditCurveTool]);
   const effectiveOverlaySegments = useMemo(
     () => [
       ...mergedOverlaySegments,
       ...moveToolOverlaySegments,
       ...editNodesOverlaySegments,
+      ...editCurveOverlaySegments,
       ...(offsetPreview?.overlaySegments || []),
       ...((!extendPreview && extendHoverCandidate?.overlaySegments) || []),
       ...(extendPreview?.overlaySegments || []),
@@ -1655,7 +1813,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
       ...(mirrorPreview?.overlaySegments || []),
       ...(mirrorPreview?.axisSegment || [])
     ],
-    [editNodesOverlaySegments, extendHoverCandidate, extendPreview, mergedOverlaySegments, mirrorPreview, moveToolOverlaySegments, offsetPreview, trimPreview]
+    [editCurveOverlaySegments, editNodesOverlaySegments, extendHoverCandidate, extendPreview, mergedOverlaySegments, mirrorPreview, moveToolOverlaySegments, offsetPreview, trimPreview]
   );
   const referenceOverlayPoints = useMemo(
     () => (
@@ -1688,12 +1846,13 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
       ...mergedOverlayPoints,
       ...moveToolOverlayPoints,
       ...editNodesOverlayPoints,
+      ...editCurveOverlayPoints,
       ...(offsetPreview?.overlayPoints || []),
       ...((!extendPreview && extendHoverCandidate?.overlayPoints) || []),
       ...(extendPreview?.overlayPoints || []),
       ...(trimPreview?.overlayPoints || [])
     ],
-    [editNodesOverlayPoints, extendHoverCandidate, extendPreview, mergedOverlayPoints, moveToolOverlayPoints, offsetPreview, referenceOverlayPoints, trimPreview]
+    [editCurveOverlayPoints, editNodesOverlayPoints, extendHoverCandidate, extendPreview, mergedOverlayPoints, moveToolOverlayPoints, offsetPreview, referenceOverlayPoints, trimPreview]
   );
   useViewerCanvasRenderer({
     activeConfrontationTextId,
@@ -1715,6 +1874,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     drawingBounds,
     drawingPreviewLabel: moveToolPreviewLabel
       || editNodesToolPreviewLabel
+      || editCurveToolPreviewLabel
       || offsetToolPreviewLabel
       || extendToolPreviewLabel
       || trimToolPreviewLabel
@@ -1874,6 +2034,15 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
 
     if (manualPolygon.length > 0) {
       setManualPolygon((prev) => prev.slice(0, -1));
+      setSegmentInspectorMessage('Ultimo ponto do contorno parcial desfeito.');
+      return true;
+    }
+
+    if (partialScopePolygons.length > 0) {
+      setPartialScopePolygons((prev) => prev.slice(0, -1));
+      setSelectedPolygons((prev) => prev.slice(0, -1));
+      setHoverSegmentTargetPoint(null);
+      setSegmentInspectorMessage('Ultimo contorno parcial desfeito.');
       return true;
     }
 
@@ -1889,9 +2058,43 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     embeddedToolMode,
     manualPolygon.length,
     pendingConfrontationSegmentPoints.length,
+    partialScopePolygons.length,
     segmentAnnotations,
     resetPointToPointCadInputs
   ]);
+
+  useEffect(() => {
+    onDraftUndoRequestChange?.(handleUndoLastDraftPoint);
+    return () => {
+      onDraftUndoRequestChange?.(null);
+    };
+  }, [handleUndoLastDraftPoint, onDraftUndoRequestChange]);
+
+  useEffect(() => {
+    onDraftUndoAvailabilityChange?.(
+      pendingConfrontationSegmentPoints.length > 0
+      || segmentAnnotations.length > 0
+      || manualPolygon.length > 0
+      || partialScopePolygons.length > 0
+      || (embeddedToolMode === 'point-to-point' && embeddedDrawingPoints.length > 0)
+    );
+  }, [
+    embeddedDrawingPoints.length,
+    embeddedToolMode,
+    manualPolygon.length,
+    onDraftUndoAvailabilityChange,
+    partialScopePolygons.length,
+    pendingConfrontationSegmentPoints.length,
+    segmentAnnotations.length
+  ]);
+
+  useEffect(() => {
+    if (!draftUndoNonce || draftUndoNonce === lastHandledDraftUndoNonceRef.current) {
+      return;
+    }
+    lastHandledDraftUndoNonceRef.current = draftUndoNonce;
+    handleUndoLastDraftPoint();
+  }, [draftUndoNonce, handleUndoLastDraftPoint]);
 
   useEffect(() => {
     if (!clearConfrontationSelectionNonce) {
@@ -1902,13 +2105,18 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     }
     lastHandledClearConfrontationSelectionNonceRef.current = clearConfrontationSelectionNonce;
     handleClearSelection();
-  }, [clearConfrontationSelectionNonce, handleClearSelection, segmentAnnotations.length, selectedConfrontationTexts.length, selectedSegmentIds.length]);
+  }, [
+    clearConfrontationSelectionNonce,
+    handleClearSelection,
+    selectedSegmentIds.length
+  ]);
 
   useEffect(() => {
     if (
       pendingConfrontationSegmentPoints.length === 0
       && segmentAnnotations.length === 0
       && manualPolygon.length === 0
+      && partialScopePolygons.length === 0
       && !(embeddedToolMode === 'point-to-point' && embeddedDrawingPoints.length > 0)
     ) {
       return;
@@ -1917,7 +2125,6 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       const normalizedKey = event.key.toLowerCase();
       const isUndoShortcut = (event.ctrlKey || event.metaKey)
-        && !event.altKey
         && (normalizedKey === 'z' || normalizedKey === 'undo' || event.code === 'KeyZ');
       if (!isUndoShortcut) {
         return;
@@ -1948,28 +2155,40 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     handleUndoLastDraftPoint,
     manualPolygon.length,
     pendingConfrontationSegmentPoints.length,
+    partialScopePolygons.length,
     segmentAnnotations.length
   ]);
 
-  const handleConfirmPolygonSelection = useCallback(() => {
-    sendSelectionDebug(
-      'B',
-      'ViewerDXF:confirmed-selection',
-      '[DEBUG] Selecao confirmada pelo usuario',
-      {
-        selectedCount: confirmedSelections.length,
-        selectedSummaries: confirmedSelections.map((selection, index) => ({
-          index: index + 1,
-          lotNumber: selection.lotNumber,
-          area: Number(calculatePolygonArea(selection.polygon).toFixed(2)),
-          textsInside: selection.textsInside,
-          selectedConfrontationTexts: selection.selectedConfrontationTexts
-        }))
-      }
-    );
+  useEffect(() => {
+    if (!embeddedMode || interactive || embeddedToolMode !== 'select' || !allowLotSelectionWithoutPrimaryBoundary) {
+      return;
+    }
 
+    const handleAltKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Alt') {
+        return;
+      }
+
+      const eventTarget = event.target;
+      if (
+        eventTarget instanceof HTMLInputElement
+        || eventTarget instanceof HTMLTextAreaElement
+        || eventTarget instanceof HTMLSelectElement
+        || (eventTarget instanceof HTMLElement && eventTarget.isContentEditable)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+    };
+
+    window.addEventListener('keydown', handleAltKeyDown, true);
+    return () => window.removeEventListener('keydown', handleAltKeyDown, true);
+  }, [allowLotSelectionWithoutPrimaryBoundary, embeddedMode, embeddedToolMode, interactive]);
+
+  const handleConfirmPolygonSelection = useCallback(() => {
     confirmPolygonSelection();
-  }, [confirmPolygonSelection, confirmedSelections]);
+  }, [confirmPolygonSelection]);
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(50, prev * 1.2));
@@ -1980,7 +2199,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   }, [setZoom]);
 
   useEffect(() => {
-    if (!embeddedMode || interactive || (!activeEntityTransform && !draggingSelectedEntities && !activeEditNodeDrag)) {
+    if (!embeddedMode || interactive || (!activeEntityTransform && !draggingSelectedEntities && !activeEditNodeDrag && !activeEditCurveDrag)) {
       return;
     }
 
@@ -2000,6 +2219,11 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
         return;
       }
 
+      if (activeEditCurveDrag) {
+        cancelEditCurveDrag();
+        return;
+      }
+
       if (draggingSelectedEntities) {
         endEntityDrag();
       }
@@ -2008,8 +2232,10 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [
+    activeEditCurveDrag,
     activeEditNodeDrag,
     activeEntityTransform,
+    cancelEditCurveDrag,
     cancelEditNodeDrag,
     draggingSelectedEntities,
     embeddedMode,
@@ -2021,6 +2247,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
   useEffect(() => {
     const hasGuidedTranslatePreview = isGuidedTranslateTool && Boolean(draggingSelectedEntities);
     const hasEditNodePreview = isEditNodesTool && Boolean(activeEditNodeDrag);
+    const hasEditCurvePreview = isEditCurveTool && Boolean(activeEditCurveDrag);
     const hasOffsetEntityPreview = isOffsetTool && Boolean(offsetPreview);
     const hasExtendEntityPreview = isExtendTool && Boolean(extendPreview);
     const hasTrimEntityPreview = isTrimTool && Boolean(trimPreview);
@@ -2033,6 +2260,7 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
         embeddedDrawingPoints.length === 0
         && !hasGuidedTranslatePreview
         && !hasEditNodePreview
+        && !hasEditCurvePreview
         && !hasOffsetEntityPreview
         && !hasExtendEntityPreview
         && !hasTrimEntityPreview
@@ -2155,10 +2383,12 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
     embeddedDrawingPoints.length,
     embeddedMode,
     embeddedToolMode,
+    activeEditCurveDrag,
     activeEditNodeDrag,
     endEntityDrag,
     focusPointToPointField,
     isGuidedCopyTool,
+    isEditCurveTool,
     isEditNodesTool,
     isGuidedTranslateTool,
     isJoinTool,
@@ -2252,7 +2482,11 @@ const ViewerDXF: React.FC<ViewerDXFComponentProps> = ({
         <canvas
           ref={canvasRef}
           onClick={handleCanvasClick}
-          onMouseDown={handleMouseDown}
+          tabIndex={0}
+          onMouseDown={(event) => {
+            canvasRef.current?.focus({ preventScroll: true });
+            handleMouseDown(event);
+          }}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp} onContextMenu={handleContextMenu}

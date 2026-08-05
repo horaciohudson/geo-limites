@@ -267,6 +267,12 @@ export const useCadEditorCommandController = <
       case 'tool-mirror':
         activateEditorTool('mirror', 'ajustes');
         break;
+      case 'tool-edit-nodes':
+        activateEditorTool('edit-nodes', 'ajustes');
+        break;
+      case 'tool-edit-curve':
+        activateEditorTool('edit-curve', 'ajustes');
+        break;
       case 'tool-rotate':
         activateEditorTool('rotate', 'ajustes');
         break;
@@ -280,7 +286,8 @@ export const useCadEditorCommandController = <
         activateEditorTool('extend', 'ajustes');
         break;
       case 'tool-trim':
-        activateEditorTool('trim', 'ajustes');
+      case 'tool-knife':
+        activateEditorTool('knife', 'ajustes');
         break;
       case 'tool-mirror-apply':
         handleApplyMirrorToSelection();

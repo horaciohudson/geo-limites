@@ -30,8 +30,8 @@ const LEADING_MEMORIAL_HEADER_PATTERN =
   /^\s*(Memorial Descritivo\s*\n(?:Projeto:.*\n)?(?:Arquivo:.*\n)?(?:Data:.*\n)?(?:Metodo:.*\n?)?)/i;
 
 const DEBUG_SELECTION_URL = 'http://127.0.0.1:7777/event';
-const DEBUG_SELECTION_SESSION = 'lot-removal-inverted';
-const DEBUG_SELECTION_ENABLED = true;
+const DEBUG_SELECTION_SESSION = 'cad-editor';
+const DEBUG_SELECTION_ENABLED = false;
 
 export const normalizeMemorialText = (content: string): string =>
   content

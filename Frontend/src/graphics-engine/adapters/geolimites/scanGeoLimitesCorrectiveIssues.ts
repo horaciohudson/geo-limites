@@ -1,8 +1,7 @@
-import { getSegmentGapCandidates, getVertexGapCandidates } from '@/graphics-engine/components/viewer-dxf/correctiveUtils';
 import { pointToSegmentDistance } from '@/graphics-engine/components/viewer-dxf/geometryAnalysis';
 import { extractLotNumberFromTexts, summarizePolygonTexts } from '@/graphics-engine/components/viewer-dxf/lotSelectionUtils';
 import { analyzeGeoLimitesLotDetection } from '@/graphics-engine/adapters/geolimites/useGeoLimitesLotDetection';
-import { collectGeoLimitesLotTextAnchors } from '@/graphics-engine/adapters/geolimites/geoLimitesLotTextUtils';
+import { collectPrimaryGeoLimitesLotTextAnchors } from '@/graphics-engine/adapters/geolimites/geoLimitesLotTextUtils';
 import type { DXFData } from '@/graphics-engine/shared/dxf';
 import { calculateDistance, type Point2D } from '@/graphics-engine/shared/geometry';
 import type { CorrectiveIssueView } from '@/utils/viewerCorrective';
@@ -111,70 +110,14 @@ const buildLayerInterferenceHint = (
   return `Ha segmentos proximos vindos de outras camadas funcionais: ${functionalLayerSummary}.${originalLayerSummary ? ` Camadas DXF suspeitas: ${originalLayerSummary}.` : ''}`;
 };
 
-const getPolygonBounds = (polygon: Point2D[]) => polygon.reduce((bounds, point) => ({
-  minX: Math.min(bounds.minX, point.x),
-  minY: Math.min(bounds.minY, point.y),
-  maxX: Math.max(bounds.maxX, point.x),
-  maxY: Math.max(bounds.maxY, point.y)
-}), {
-  minX: Number.POSITIVE_INFINITY,
-  minY: Number.POSITIVE_INFINITY,
-  maxX: Number.NEGATIVE_INFINITY,
-  maxY: Number.NEGATIVE_INFINITY
-});
+const buildIssueMessage = (baseMessage: string, extraHint?: string | null) => (
+  extraHint ? `${baseMessage} ${extraHint}` : baseMessage
+);
 
-const calculatePolygonPerimeter = (polygon: Point2D[]) => {
-  if (polygon.length < 2) {
-    return 0;
-  }
-
-  let perimeter = 0;
-  for (let index = 0; index < polygon.length; index += 1) {
-    const start = polygon[index];
-    const end = polygon[(index + 1) % polygon.length];
-    perimeter += calculateDistance(start, end);
-  }
-  return perimeter;
-};
-
-const calculateMedian = (values: number[]) => {
-  const validValues = values
-    .filter((value) => Number.isFinite(value) && value > 0)
-    .sort((left, right) => left - right);
-
-  if (validValues.length === 0) {
-    return null;
-  }
-
-  const middleIndex = Math.floor(validValues.length / 2);
-  if (validValues.length % 2 === 1) {
-    return validValues[middleIndex];
-  }
-
-  return (validValues[middleIndex - 1] + validValues[middleIndex]) / 2;
-};
-
-const buildPolygonInterferenceHint = (
-  polygon: Point2D[],
-  rawSegments: ReturnType<typeof analyzeGeoLimitesLotDetection>['rawSegments'],
+const getOpenContourBlockingGapLimit = (
+  extractionTolerance: number,
   segmentMedianLength: number
-) => {
-  const bounds = getPolygonBounds(polygon);
-  const padding = Math.max(segmentMedianLength * 0.35, 2);
-  return buildLayerInterferenceHint(rawSegments, (segment) => (
-    (
-      segment.p1.x >= bounds.minX - padding
-      && segment.p1.x <= bounds.maxX + padding
-      && segment.p1.y >= bounds.minY - padding
-      && segment.p1.y <= bounds.maxY + padding
-    ) || (
-      segment.p2.x >= bounds.minX - padding
-      && segment.p2.x <= bounds.maxX + padding
-      && segment.p2.y >= bounds.minY - padding
-      && segment.p2.y <= bounds.maxY + padding
-    )
-  ));
-};
+) => Math.max(extractionTolerance * 120, Math.min(Math.max(segmentMedianLength * 0.08, 0.8), 2.5));
 
 export const scanGeoLimitesCorrectiveIssues = (dxfData: DXFData | null | undefined): CorrectiveIssueView[] => {
   if (!dxfData) {
@@ -190,6 +133,8 @@ export const scanGeoLimitesCorrectiveIssues = (dxfData: DXFData | null | undefin
     dxfData,
     manualBridgeSegments: []
   });
+  const lotTextAnchors = collectPrimaryGeoLimitesLotTextAnchors(dxfData);
+  const primaryLotNumberSet = new Set(lotTextAnchors.map((anchor) => anchor.lotNumber));
 
   const polygonEntries = detectedPolygonEntries
     .map((entry) => {
@@ -200,31 +145,23 @@ export const scanGeoLimitesCorrectiveIssues = (dxfData: DXFData | null | undefin
       if (lotNumber === null) {
         return null;
       }
-
-      const nearestVertexGapDistance = getVertexGapCandidates(entry.polygon)[0]?.distance ?? null;
-      const nearestSegmentGapDistance = getSegmentGapCandidates(entry.polygon)[0]?.distance ?? null;
+      if (primaryLotNumberSet.size > 0 && !primaryLotNumberSet.has(lotNumber)) {
+        return null;
+      }
 
       return {
         polygon: entry.polygon,
         lotNumber,
         textsInside,
-        detectionSource: entry.source,
-        area: entry.area,
-        perimeter: calculatePolygonPerimeter(entry.polygon),
-        nearestVertexGapDistance,
-        nearestSegmentGapDistance
+        detectionSource: entry.source
       };
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
     .sort((left, right) => left.lotNumber - right.lotNumber);
 
-  const polygonAreaMedian = calculateMedian(polygonEntries.map((entry) => entry.area));
-  const polygonPerimeterMedian = calculateMedian(polygonEntries.map((entry) => entry.perimeter));
-
   const polygonEntryByLotNumber = new Map(
     polygonEntries.map((entry) => [entry.lotNumber, entry] as const)
   );
-  const lotTextAnchors = collectGeoLimitesLotTextAnchors(dxfData);
   const lotTextAnchorByLotNumber = new Map(
     lotTextAnchors.map((anchor) => [anchor.lotNumber, anchor] as const)
   );
@@ -251,14 +188,28 @@ export const scanGeoLimitesCorrectiveIssues = (dxfData: DXFData | null | undefin
         : null;
 
       if (openContourHint && openContourHint.nearbySegmentsCount > 0) {
+        const blockingGapLimit = getOpenContourBlockingGapLimit(extractionTolerance, segmentMedianLength);
+        const isLikelyBlockingGap = openContourHint.openNodeCount >= 2
+          && openContourHint.openNodeCount <= 6
+          && openContourHint.closestGapDistance !== null
+          && openContourHint.closestGapDistance <= blockingGapLimit;
+        const severity = isLikelyBlockingGap ? 'BLOQUEANTE' : 'AVISO';
         return {
           id: `scan-lot-${lotNumber}-contorno-aberto`,
           lotNumber,
           code: 'CONTORNO_ABERTO',
-          severity: 'BLOQUEANTE',
+          severity,
           message: openContourHint.closestGapDistance !== null
-            ? `O texto do lote foi encontrado e a geometria proxima indica contorno aberto. O menor vao estimado e ${openContourHint.closestGapDistance.toFixed(2)}. Revise o fechamento manualmente.${layerInterferenceHint ? ` ${layerInterferenceHint}` : ''}`
-            : `O texto do lote foi encontrado e a geometria proxima indica contorno aberto. Revise o fechamento manualmente.${layerInterferenceHint ? ` ${layerInterferenceHint}` : ''}`,
+            ? buildIssueMessage(
+                isLikelyBlockingGap
+                  ? `O texto do lote foi encontrado e a geometria proxima indica contorno aberto. O menor vao estimado e ${openContourHint.closestGapDistance.toFixed(2)}. Feche essa lacuna antes de seguir.`
+                  : `O texto do lote foi encontrado e a geometria proxima indica contorno aberto. O menor vao estimado e ${openContourHint.closestGapDistance.toFixed(2)}. Vale revisar o fechamento manualmente.`,
+                layerInterferenceHint
+              )
+            : buildIssueMessage(
+                'O texto do lote foi encontrado e a geometria proxima indica contorno aberto. Vale revisar o fechamento manualmente.',
+                layerInterferenceHint
+              ),
           statusLabel: 'SCAN_MANUAL',
           detectionSource: 'anchor'
         } satisfies CorrectiveIssueView;
@@ -268,98 +219,13 @@ export const scanGeoLimitesCorrectiveIssues = (dxfData: DXFData | null | undefin
         id: `scan-lot-${lotNumber}-contorno-nao-identificado`,
         lotNumber,
         code: 'CONTORNO_NAO_IDENTIFICADO',
-        severity: 'BLOQUEANTE',
-        message: `O texto do lote foi encontrado, mas o contorno nao foi materializado no scan atual. Revise a regiao do lote e feche manualmente o desenho.${layerInterferenceHint ? ` ${layerInterferenceHint}` : ''}`,
+        severity: 'AVISO',
+        message: buildIssueMessage(
+          'O texto do lote foi encontrado, mas o contorno nao foi materializado no scan atual. Revise a regiao do lote antes de concluir o desenho.',
+          layerInterferenceHint
+        ),
         statusLabel: 'SCAN_MANUAL',
         detectionSource: 'anchor'
-      } satisfies CorrectiveIssueView;
-    }
-
-    const polygonInterferenceHint = buildPolygonInterferenceHint(polygonEntry.polygon, rawSegments, segmentMedianLength);
-
-    if (polygonEntry.nearestVertexGapDistance !== null && polygonEntry.nearestVertexGapDistance <= 1.5) {
-      return {
-        id: `scan-lot-${lotNumber}-pontas-proximas`,
-        lotNumber,
-        code: 'PONTAS_PROXIMAS',
-        severity: 'BLOQUEANTE',
-        message: polygonEntry.detectionSource === 'face'
-          ? `O lote foi identificado por face inferida e o scan encontrou pontas muito proximas (${polygonEntry.nearestVertexGapDistance.toFixed(2)}). Revise o fechamento manualmente antes de gerar o memorial.${polygonInterferenceHint ? ` ${polygonInterferenceHint}` : ''}`
-          : `O scan encontrou pontas muito proximas (${polygonEntry.nearestVertexGapDistance.toFixed(2)}). Revise o fechamento manualmente antes de gerar o memorial.${polygonInterferenceHint ? ` ${polygonInterferenceHint}` : ''}`,
-        statusLabel: 'SCAN_MANUAL',
-        detectionSource: polygonEntry.detectionSource
-      } satisfies CorrectiveIssueView;
-    }
-
-    if (polygonEntry.nearestSegmentGapDistance !== null && polygonEntry.nearestSegmentGapDistance <= 3) {
-      return {
-        id: `scan-lot-${lotNumber}-arestas-proximas`,
-        lotNumber,
-        code: 'ARESTAS_PROXIMAS',
-        severity: 'AVISO',
-        message: polygonEntry.detectionSource === 'face'
-          ? `O lote foi identificado por face inferida e o scan encontrou arestas proximas (${polygonEntry.nearestSegmentGapDistance.toFixed(2)}). Vale revisar manualmente a lacuna deste lote.${polygonInterferenceHint ? ` ${polygonInterferenceHint}` : ''}`
-          : `O scan encontrou arestas proximas (${polygonEntry.nearestSegmentGapDistance.toFixed(2)}). Vale revisar manualmente a lacuna deste lote.${polygonInterferenceHint ? ` ${polygonInterferenceHint}` : ''}`,
-        statusLabel: 'SCAN_MANUAL',
-        detectionSource: polygonEntry.detectionSource
-      } satisfies CorrectiveIssueView;
-    }
-
-    if (polygonEntry.nearestVertexGapDistance !== null && polygonEntry.nearestVertexGapDistance <= 8) {
-      return {
-        id: `scan-lot-${lotNumber}-ajuste-local`,
-        lotNumber,
-        code: 'AJUSTE_LOCAL',
-        severity: 'AVISO',
-        message: polygonEntry.detectionSource === 'face'
-          ? `O lote foi identificado por face inferida e o scan sugere ajuste local de vertice (${polygonEntry.nearestVertexGapDistance.toFixed(2)}).`
-          : `O scan sugere ajuste local de vertice (${polygonEntry.nearestVertexGapDistance.toFixed(2)}). Use a correcao manual se o lote parecer desalinhado.`,
-        statusLabel: 'SCAN_MANUAL',
-        detectionSource: polygonEntry.detectionSource
-      } satisfies CorrectiveIssueView;
-    }
-
-    const suspiciousAreaRatio = polygonAreaMedian && polygonAreaMedian > 0
-      ? polygonEntry.area / polygonAreaMedian
-      : null;
-    const suspiciousPerimeterRatio = polygonPerimeterMedian && polygonPerimeterMedian > 0
-      ? polygonEntry.perimeter / polygonPerimeterMedian
-      : null;
-
-    if (
-      suspiciousAreaRatio !== null
-      && suspiciousPerimeterRatio !== null
-      && suspiciousAreaRatio >= 6
-      && suspiciousPerimeterRatio >= 1.8
-    ) {
-      return {
-        id: `scan-lot-${lotNumber}-contorno-fora-do-padrao`,
-        lotNumber,
-        code: 'CONTORNO_FORA_DO_PADRAO',
-        severity: 'BLOQUEANTE',
-        message: polygonEntry.detectionSource === 'direct'
-          ? `O lote esta fechado no desenho, mas o contorno ficou fora do padrao do conjunto. Area ${polygonEntry.area.toFixed(2)} m2 e perimetro ${polygonEntry.perimeter.toFixed(2)} m, contra medianas aproximadas de ${polygonAreaMedian?.toFixed(2)} m2 e ${polygonPerimeterMedian?.toFixed(2)} m. Isso sugere captura de contorno maior que o lote esperado ou associacao incorreta do texto.`
-          : `O lote foi inferido por face e ficou fora do padrao do conjunto. Area ${polygonEntry.area.toFixed(2)} m2 e perimetro ${polygonEntry.perimeter.toFixed(2)} m, contra medianas aproximadas de ${polygonAreaMedian?.toFixed(2)} m2 e ${polygonPerimeterMedian?.toFixed(2)} m. Revise o contorno porque ele pode ter absorvido geometria vizinha.`,
-        statusLabel: 'SCAN_MANUAL',
-        detectionSource: polygonEntry.detectionSource
-      } satisfies CorrectiveIssueView;
-    }
-
-    if (
-      suspiciousAreaRatio !== null
-      && suspiciousPerimeterRatio !== null
-      && suspiciousAreaRatio >= 3
-      && suspiciousPerimeterRatio >= 1.35
-      && (lotNumber <= 3 || lotNumber >= Math.max(...allLotNumbers) - 2)
-    ) {
-      return {
-        id: `scan-lot-${lotNumber}-contorno-suspeito-extremo`,
-        lotNumber,
-        code: 'CONTORNO_SUSPEITO_EXTREMO',
-        severity: 'AVISO',
-        message: `O lote esta nos extremos da sequencia e ficou bem acima do padrao do conjunto. Area ${polygonEntry.area.toFixed(2)} m2 e perimetro ${polygonEntry.perimeter.toFixed(2)} m, contra medianas aproximadas de ${polygonAreaMedian?.toFixed(2)} m2 e ${polygonPerimeterMedian?.toFixed(2)} m. Vale revisar a associacao do texto e o contorno usado pelo resumo.`,
-        statusLabel: 'SCAN_MANUAL',
-        detectionSource: polygonEntry.detectionSource
       } satisfies CorrectiveIssueView;
     }
 

@@ -1,4 +1,4 @@
-import { getPersistentEntitySelectionId } from '@/graphics-engine/components/viewer-dxf/entitySelectionUtils';
+import { getEntityBounds, getPersistentEntitySelectionId } from '@/graphics-engine/components/viewer-dxf/entitySelectionUtils';
 import { normalizeAngleDegrees } from '@/graphics-engine/components/viewer-dxf/trimExtendGeometryUtils';
 import type { ViewerSelectedEntityInfo } from '@/graphics-engine/components/viewer-dxf/types';
 import type { DXFData, DXFEntity, DXFEntityProperties, DXFVertex } from '@/graphics-engine/shared/dxf';
@@ -92,6 +92,11 @@ const isClosedFillableEntity = (entity: DXFEntity): boolean => {
 };
 
 export const getEntityMirrorAxisX = (selectedEntity: ViewerSelectedEntityInfo, entity: DXFEntity): number => {
+  const bounds = getEntityBounds(entity);
+  if (bounds) {
+    return (bounds.minX + bounds.maxX) / 2;
+  }
+
   if (typeof selectedEntity.position?.x === 'number') {
     return selectedEntity.position.x;
   }
@@ -132,6 +137,8 @@ export const mirrorEntityAcrossVerticalAxis = (entity: DXFEntity, axisX: number)
     x2: typeof props.x2 === 'number' ? mirrorX(props.x2, axisX) : props.x2,
     centerX: typeof props.centerX === 'number' ? mirrorX(props.centerX, axisX) : props.centerX,
     alignmentX: typeof props.alignmentX === 'number' ? mirrorX(props.alignmentX, axisX) : props.alignmentX,
+    editorCurveControl1X: typeof props.editorCurveControl1X === 'number' ? mirrorX(props.editorCurveControl1X, axisX) : props.editorCurveControl1X,
+    editorCurveControl2X: typeof props.editorCurveControl2X === 'number' ? mirrorX(props.editorCurveControl2X, axisX) : props.editorCurveControl2X,
     vertices: mirroredVertices
   };
 
@@ -228,6 +235,10 @@ export const translateEntity = (entity: DXFEntity, deltaX: number, deltaY: numbe
       centerY: typeof props.centerY === 'number' ? props.centerY + deltaY : props.centerY,
       alignmentX: typeof props.alignmentX === 'number' ? props.alignmentX + deltaX : props.alignmentX,
       alignmentY: typeof props.alignmentY === 'number' ? props.alignmentY + deltaY : props.alignmentY,
+      editorCurveControl1X: typeof props.editorCurveControl1X === 'number' ? props.editorCurveControl1X + deltaX : props.editorCurveControl1X,
+      editorCurveControl1Y: typeof props.editorCurveControl1Y === 'number' ? props.editorCurveControl1Y + deltaY : props.editorCurveControl1Y,
+      editorCurveControl2X: typeof props.editorCurveControl2X === 'number' ? props.editorCurveControl2X + deltaX : props.editorCurveControl2X,
+      editorCurveControl2Y: typeof props.editorCurveControl2Y === 'number' ? props.editorCurveControl2Y + deltaY : props.editorCurveControl2Y,
       vertices: translatedVertices
     }
   };

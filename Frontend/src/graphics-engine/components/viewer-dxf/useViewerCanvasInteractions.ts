@@ -28,6 +28,8 @@ import {
   summarizePolygonTexts
 } from '@/graphics-engine/components/viewer-dxf/lotSelectionUtils';
 import {
+  buildBezierControlPointsFromQuadratic,
+  buildBezierEntity,
   buildDistanceAnnotationEntities,
   buildCircleEntity,
   buildLineEntity,
@@ -38,8 +40,7 @@ import {
   DEFAULT_DRAWING_LAYER,
   getTextHorizontalAlignCode,
   getTextVerticalAlignCode,
-  isDrawingToolMode,
-  sampleQuadraticBezier
+  isDrawingToolMode
 } from '@/graphics-engine/components/viewer-dxf/cadDrawingUtils';
 import type {
   HoverConfrontationText,
@@ -168,6 +169,8 @@ interface UseViewerCanvasInteractionsParams {
     label: string;
   }) => boolean;
   activeEditNodeDrag: { currentPoint: Point2D } | null;
+  activeEditCurveDrag: { currentPoint: Point2D } | null;
+  beginEditCurveDragAtPoint: (point: Point2D) => boolean;
   beginEditNodeDragAtPoint: (point: Point2D) => boolean;
   beginEntityDrag: (nearestEntity: ViewerSelectedEntityInfo, startPoint: Point2D) => void;
   beginEntityTransform: (params: {
@@ -176,7 +179,10 @@ interface UseViewerCanvasInteractionsParams {
     handle: SelectionHandleKind;
   }) => boolean;
   cancelEditNodeDrag: () => void;
+  cancelEditCurveDrag: () => void;
+  commitEditCurveDrag: () => boolean;
   commitEditNodeDrag: () => boolean;
+  updateEditCurveDrag: (point: Point2D) => void;
   updateEditNodeDrag: (point: Point2D) => void;
   commitMirrorSelection: () => boolean;
   commitOffsetPreviewAtPoint: (point: Point2D) => boolean;
@@ -185,6 +191,7 @@ interface UseViewerCanvasInteractionsParams {
   hasExtendPreview: boolean;
   hasTrimPreview: boolean;
   commitWeldSelection: () => boolean;
+  weldCanApply: boolean;
   commitEntityCopy: (endPoint: Point2D) => { deltaX: number; deltaY: number } | null;
   commitEntityDrag: (endPoint: Point2D) => { deltaX: number; deltaY: number } | null;
   commitEntityTransform: () => boolean;
@@ -217,6 +224,7 @@ interface UseViewerCanvasInteractionsParams {
   hoverSegmentTargetPoint: Point2D | null;
   interactive?: boolean;
   isDragging: boolean;
+  isEditCurveHandleAtPoint: (point: Point2D) => boolean;
   isEditNodeHandleAtPoint: (point: Point2D) => boolean;
   lastShiftInteractionRef: React.MutableRefObject<{ x: number; y: number; ts: number } | null>;
   manualReviewLotNumbers?: number[];
@@ -555,12 +563,17 @@ export const useViewerCanvasInteractions = ({
   applyCloseGapGuidedCorrection,
   applyJoinEndpointsCorrection,
   applyMoveVertexCorrection,
+  activeEditCurveDrag,
   activeEditNodeDrag,
+  beginEditCurveDragAtPoint,
   beginEditNodeDragAtPoint,
   beginEntityDrag,
   beginEntityTransform,
+  cancelEditCurveDrag,
   cancelEditNodeDrag,
+  commitEditCurveDrag,
   commitEditNodeDrag,
+  updateEditCurveDrag,
   updateEditNodeDrag,
   commitMirrorSelection,
   commitOffsetPreviewAtPoint,
@@ -569,6 +582,7 @@ export const useViewerCanvasInteractions = ({
   hasExtendPreview,
   hasTrimPreview,
   commitWeldSelection,
+  weldCanApply,
   commitEntityCopy,
   commitEntityDrag,
   commitEntityTransform,
@@ -598,6 +612,7 @@ export const useViewerCanvasInteractions = ({
   hoverSegmentTargetPoint,
   interactive,
   isDragging,
+  isEditCurveHandleAtPoint,
   isEditNodeHandleAtPoint,
   lastShiftInteractionRef,
   manualReviewLotNumbers = [],
@@ -953,6 +968,7 @@ export const useViewerCanvasInteractions = ({
     currentClientX: number;
     currentClientY: number;
   } | null>(null);
+  const pendingAutoWeldCommitRef = useRef(false);
   const lastDrawingCommitTsRef = useRef(0);
   const getSelectedEntityBounds = useCallback(() => {
     if (!dxfData || selectedEntities.length === 0) {
@@ -977,10 +993,11 @@ export const useViewerCanvasInteractions = ({
   const isCopyToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'copy';
   const isRotateToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'rotate';
   const isScaleToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'scale';
+  const isEditCurveToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'edit-curve';
   const isEditNodesToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'edit-nodes';
   const isOffsetToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'offset';
   const isExtendToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'extend';
-  const isTrimToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'trim';
+  const isTrimToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && (activeToolId === 'trim' || activeToolId === 'knife');
   const isMirrorToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'mirror';
   const isJoinToolActive = embeddedMode && !interactive && embeddedToolMode === 'select' && activeToolId === 'join';
   const isGuidedTranslateToolActive = isMoveToolActive || isCopyToolActive;
@@ -990,6 +1007,15 @@ export const useViewerCanvasInteractions = ({
       setCopyPlacementLocked(false);
     }
   }, [draggingSelectedEntities, isCopyToolActive]);
+  useEffect(() => {
+    if (!pendingAutoWeldCommitRef.current || !isJoinToolActive) {
+      return;
+    }
+    pendingAutoWeldCommitRef.current = false;
+    if (selectedEntities.length >= 2 && weldCanApply && commitWeldSelection()) {
+      suppressNextCanvasClickRef.current = true;
+    }
+  }, [commitWeldSelection, isJoinToolActive, selectedEntities.length, suppressNextCanvasClickRef, weldCanApply]);
 
   const resolveHoveredSelectionHandle = useCallback((point: Point2D): SelectionHandleInfo | null => {
     const selectionBounds = getSelectedEntityBounds();
@@ -1254,11 +1280,16 @@ export const useViewerCanvasInteractions = ({
       if (!nearestEntity) {
         if (selectedEntities.length >= 2 && commitWeldSelection()) {
           suppressNextCanvasClickRef.current = true;
+        } else {
+          handleEmbeddedEntitySelection(null, false);
         }
         return;
       }
 
       if (!selectedEntityIds.includes(nearestEntity.id)) {
+        if (!entityMultiSelectModeActive && !e.ctrlKey && !e.metaKey && selectedEntities.length >= 1) {
+          pendingAutoWeldCommitRef.current = true;
+        }
         handleEmbeddedEntitySelection(nearestEntity, true);
         return;
       }
@@ -1270,6 +1301,13 @@ export const useViewerCanvasInteractions = ({
       if (commitWeldSelection()) {
         suppressNextCanvasClickRef.current = true;
       }
+      return;
+    }
+
+    if (isEditCurveToolActive) {
+      const nearestEntity = findNearestSelectableEntity(dxfCoords);
+      const additiveSelection = isEntityAdditiveSelectionActive(e);
+      handleEmbeddedEntitySelection(nearestEntity, additiveSelection);
       return;
     }
 
@@ -1339,6 +1377,7 @@ export const useViewerCanvasInteractions = ({
     handleEmbeddedEntitySelection,
     hasExtendPreview,
     hasTrimPreview,
+    isEditCurveToolActive,
     isEditNodesToolActive,
     isCopyPreviewLocked,
     isCopyToolActive,
@@ -1382,8 +1421,9 @@ export const useViewerCanvasInteractions = ({
         }
         const isShiftTextSelection = e.shiftKey && !e.ctrlKey && !e.metaKey;
         const isShiftSegmentSelection = e.shiftKey && (e.ctrlKey || e.metaKey);
+        const isCtrlOrMetaPressed = e.ctrlKey || e.metaKey;
         const isPartialScopeSelection = e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey;
-        const isManualReviewSelection = e.altKey && !e.shiftKey && (e.ctrlKey || e.metaKey);
+        const isManualReviewSelection = e.altKey && !e.shiftKey && isCtrlOrMetaPressed;
 
         if (isShiftTextSelection && !primaryBoundaryReady) {
           suppressNextCanvasClickRef.current = true;
@@ -1565,6 +1605,14 @@ export const useViewerCanvasInteractions = ({
           return;
         }
 
+        if (isEditCurveToolActive) {
+          if (beginEditCurveDragAtPoint(dxfCoords)) {
+            suppressNextCanvasClickRef.current = true;
+            setSelectHoverCursor('grabbing');
+          }
+          return;
+        }
+
         if (isEditNodesToolActive) {
           if (beginEditNodeDragAtPoint(dxfCoords)) {
             suppressNextCanvasClickRef.current = true;
@@ -1620,7 +1668,8 @@ export const useViewerCanvasInteractions = ({
           !e.metaKey &&
           !e.shiftKey &&
           !isScaleToolActive &&
-          !isEditNodesToolActive
+          !isEditCurveToolActive
+          && !isEditNodesToolActive
         ) {
           pendingEntityDragRef.current = {
             entity: nearestEntity,
@@ -1794,9 +1843,9 @@ export const useViewerCanvasInteractions = ({
           }
 
           const [startPoint, controlPoint] = embeddedDrawingPoints;
-          const vertices = sampleQuadraticBezier(startPoint, controlPoint, point);
+          const { control1, control2 } = buildBezierControlPointsFromQuadratic(startPoint, controlPoint, point);
           emitEntitiesDrawn({
-            entities: [buildPolylineEntity(vertices, layerName, false)],
+            entities: [buildBezierEntity(startPoint, control1, control2, point, layerName)],
             mode: embeddedToolMode,
             notice: resolvedMessages.buildBezierCreatedNotice({ layerName })
           });
@@ -2232,6 +2281,19 @@ export const useViewerCanvasInteractions = ({
       return;
     }
 
+    if (activeEditCurveDrag) {
+      const dxfCoords = getDxfCoords(e.clientX, e.clientY);
+      if (dxfCoords) {
+        updateEditCurveDrag(dxfCoords);
+        const deltaX = dxfCoords.x - activeEditCurveDrag.currentPoint.x;
+        const deltaY = dxfCoords.y - activeEditCurveDrag.currentPoint.y;
+        if (Math.abs(deltaX) > 0.001 || Math.abs(deltaY) > 0.001) {
+          suppressNextCanvasClickRef.current = true;
+        }
+      }
+      return;
+    }
+
     if (draggingSelectedEntities) {
       if (isCopyPreviewLocked) {
         return;
@@ -2297,6 +2359,7 @@ export const useViewerCanvasInteractions = ({
       const isShiftPressed = e.shiftKey;
       const isCtrlPressed = e.ctrlKey || e.metaKey;
       const isAltPressed = e.altKey;
+      const partialScopeHoverMode = isAltPressed && !isShiftPressed;
       const shiftSegmentMode = isShiftPressed && isCtrlPressed;
       const shiftTextHoverMode = isShiftPressed && !isCtrlPressed;
       if (shiftSegmentMode || shiftTextHoverMode || (isShiftPressed && isCtrlPressed)) {
@@ -2337,8 +2400,7 @@ export const useViewerCanvasInteractions = ({
       }
 
       const snapDist = 20 / scale;
-      const manualSelectionHoverMode = isAltPressed && !isShiftPressed;
-      const manualSelectionHoverPolygon = manualSelectionHoverMode
+      const manualSelectionHoverPolygon = partialScopeHoverMode
         ? (
           detectedPolygons
             .filter((polygon) => isPointInPolygon(dxfCoords, polygon))
@@ -2362,7 +2424,7 @@ export const useViewerCanvasInteractions = ({
       setHoverConfrontationText(null);
       setHoverPolygon(manualSelectionHoverPolygon);
 
-      if (manualSelectionHoverMode) {
+      if (partialScopeHoverMode) {
         const manualSelectionTargetPoint = resolveConfrontationSnapPoint(dxfCoords);
         setHoverSelectionHandle(null);
         setHoverSelectionMode(null);
@@ -2424,6 +2486,22 @@ export const useViewerCanvasInteractions = ({
           return;
         }
         setSelectHoverCursor(selectedEntities.length >= 2 ? 'crosshair' : 'default');
+        return;
+      }
+
+      if (isEditCurveToolActive) {
+        setHoverSelectionHandle(null);
+        setHoverSelectionMode(null);
+        if (isEditCurveHandleAtPoint(dxfCoords)) {
+          setSelectHoverCursor('alias');
+          return;
+        }
+        const nearestEntity = findNearestSelectableEntity(dxfCoords);
+        if (nearestEntity) {
+          setSelectHoverCursor(selectedEntityIds.includes(nearestEntity.id) ? 'pointer' : 'default');
+          return;
+        }
+        setSelectHoverCursor('default');
         return;
       }
 
@@ -2599,6 +2677,7 @@ export const useViewerCanvasInteractions = ({
   }, [
     activeConfrontationTextId,
     activeCorrectiveTool,
+    activeEditCurveDrag,
     activeEditNodeDrag,
     activeEntityTransform,
     beginEntityDrag,
@@ -2615,6 +2694,8 @@ export const useViewerCanvasInteractions = ({
     hoverPolygon,
     interactive,
     isEditNodeHandleAtPoint,
+    isEditCurveToolActive,
+    isEditNodesToolActive,
     isEditNodesToolActive,
     isExtendToolActive,
     hasExtendPreview,
@@ -2755,6 +2836,13 @@ export const useViewerCanvasInteractions = ({
       }
       cancelEditNodeDrag();
     }
+    if (activeEditCurveDrag) {
+      const didCommitEditCurve = commitEditCurveDrag();
+      if (didCommitEditCurve) {
+        suppressNextCanvasClickRef.current = true;
+      }
+      cancelEditCurveDrag();
+    }
     if (draggingSelectedEntities && e) {
       const dxfCoords = getDxfCoords(e.clientX, e.clientY);
       if (dxfCoords && !isGuidedTranslateToolActive) {
@@ -2779,11 +2867,14 @@ export const useViewerCanvasInteractions = ({
     setSelectHoverCursor('default');
     stopPanDrag();
   }, [
+    activeEditCurveDrag,
     activeEditNodeDrag,
     activeEntityTransform,
     canInteractWithEntity,
+    cancelEditCurveDrag,
     cancelEditNodeDrag,
     commitEntityDrag,
+    commitEditCurveDrag,
     commitEditNodeDrag,
     commitEntityTransform,
     dxfData,
