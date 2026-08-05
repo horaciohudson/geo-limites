@@ -1089,9 +1089,12 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     [savedBaseAreaReferencePoints]
   );
   const referencePointsForSummary = useMemo<ConfirmedReferencePoint[]>(() => {
+    const scopedPartialReferencePoints = technicalSummaryScopeMode === 'partial' || technicalSummaryScopeMode === 'mixed'
+      ? savedPartialReferencePoints
+      : [];
     const nonBaseAreaReferencePoints = [
       ...editorReferencePoints,
-      ...savedPartialReferencePoints
+      ...scopedPartialReferencePoints
     ].filter(
       (referencePoint) => !isReservedBoundaryReferencePoint(referencePoint.label)
     );
@@ -1099,7 +1102,7 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
       ...nonBaseAreaReferencePoints,
       ...effectiveSavedBaseAreaReferencePoints
     ];
-  }, [editorReferencePoints, effectiveSavedBaseAreaReferencePoints, savedPartialReferencePoints]);
+  }, [editorReferencePoints, effectiveSavedBaseAreaReferencePoints, savedPartialReferencePoints, technicalSummaryScopeMode]);
   useEffect(() => {
     setManualReviewLotNumbers([]);
   }, [openedDocument?.name, openedDocument?.sizeBytes]);
@@ -3173,6 +3176,9 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
     setIsTechnicalSummaryDialogOpen(true);
     setIsGeneratingTechnicalSummary(true);
     setTechnicalSummaryError('');
+    setTechnicalSummaryJson('');
+    setTechnicalSummaryText('');
+    setTechnicalSummaryAnalyzedFileName(openedDocument.name);
     setTechnicalSummaryProcessingContextStatus(null);
     if (technicalSummaryOperationalNotices.length > 0) {
       setEditorNotice(technicalSummaryOperationalNotices[0]?.message || 'Revise o contexto operacional antes de prosseguir.');
@@ -3199,13 +3205,20 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
 
     try {
       const summarySourceData = viewerData || currentEditorData;
-      const selectedLotNumbers = selectedLotNumbersForTechnicalSummary;
+      const selectedLotNumbers = technicalSummaryScopeMode === 'partial'
+        ? selectedLotNumbersForTechnicalSummary
+        : [];
       const replacementLotSelections = technicalSummaryScopeMode === 'mixed'
         ? mixedReplacementSelections
-        : selectedLotSelectionsForTechnicalSummary;
+        : technicalSummaryScopeMode === 'partial'
+          ? selectedLotSelectionsForTechnicalSummary
+          : [];
+      const scopeDrivenConfrontationTexts = technicalSummaryScopeMode === 'partial' || technicalSummaryScopeMode === 'mixed'
+        ? editorConfirmedSelections.flatMap((selection) => selection.selectedConfrontationTexts)
+        : [];
       const selectedConfrontationTexts = Array.from(new Map(
         [
-          ...editorConfirmedSelections.flatMap((selection) => selection.selectedConfrontationTexts),
+          ...scopeDrivenConfrontationTexts,
           ...summarySelectedConfrontationTexts
         ].map((selectedText) => [
           buildConfirmedConfrontationTextKey(selectedText),
@@ -3243,6 +3256,8 @@ const CadEditorBase: React.FC<CadEditorBaseProps> = ({ host }) => {
         ? error.message
         : 'Nao foi possivel gerar o Resumo Tecnico do desenho atual.';
       setTechnicalSummaryError(message);
+      setTechnicalSummaryJson('');
+      setTechnicalSummaryText('');
       setTechnicalSummaryProcessingContextStatus(null);
       setEditorNotice(message);
     } finally {

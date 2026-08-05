@@ -10,8 +10,22 @@ export interface TechnicalSummaryExampleRecord {
 }
 
 const DATABASE_NAME = 'geo-limites-documents';
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const STORE_NAME = 'technicalSummaryExamples';
+
+const normalizeTechnicalSummaryJsonCandidate = (rawContents: string): string => {
+  const withoutBom = rawContents.replace(/^\uFEFF/, '').trim();
+  if (!withoutBom) {
+    throw new Error('O arquivo JSON do resumo tecnico esta vazio.');
+  }
+
+  const fencedMatch = withoutBom.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]?.trim()) {
+    return fencedMatch[1].trim();
+  }
+
+  return withoutBom;
+};
 
 const openDatabase = async (): Promise<IDBDatabase> => (
   new Promise((resolve, reject) => {
@@ -19,10 +33,12 @@ const openDatabase = async (): Promise<IDBDatabase> => (
 
     request.onupgradeneeded = () => {
       const database = request.result;
-      if (database.objectStoreNames.contains(STORE_NAME)) {
-        database.deleteObjectStore(STORE_NAME);
+
+      // Preserve existing records and only create the store when migrating
+      // browsers that still have an older schema for this local database.
+      if (!database.objectStoreNames.contains(STORE_NAME)) {
+        database.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }
-      database.createObjectStore(STORE_NAME, { keyPath: 'id' });
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -68,12 +84,13 @@ export const listTechnicalSummaryExamples = async (): Promise<TechnicalSummaryEx
 
 export const saveTechnicalSummaryExample = async (file: File): Promise<TechnicalSummaryExampleRecord> => {
   const rawContents = await file.text();
-  let normalizedJson = rawContents.trim();
+  const jsonCandidate = normalizeTechnicalSummaryJsonCandidate(rawContents);
+  let normalizedJson = jsonCandidate;
   let analyzedFile: string | undefined;
   let generatedAt: string | undefined;
 
   try {
-    const parsed = JSON.parse(rawContents) as unknown;
+    const parsed = JSON.parse(jsonCandidate) as unknown;
 
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('O JSON do resumo tecnico deve conter um objeto valido.');
@@ -87,6 +104,10 @@ export const saveTechnicalSummaryExample = async (file: File): Promise<Technical
       ? (parsed as { generatedAt: string }).generatedAt
       : undefined;
   } catch (error) {
+    if (error instanceof Error && /Unexpected end of JSON input/i.test(error.message)) {
+      throw new Error('O arquivo JSON do resumo tecnico esta incompleto ou foi salvo de forma truncada.');
+    }
+
     throw new Error(
       error instanceof Error && error.message
         ? error.message
