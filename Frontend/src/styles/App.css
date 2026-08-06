@@ -606,6 +606,34 @@ body {
   text-decoration: underline;
 }
 
+.login-youtube-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1.5rem;
+  padding: 0.85rem 1.2rem;
+  border: 2px solid #667eea;
+  border-radius: 10px;
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  transition: all 0.2s ease;
+}
+
+.login-youtube-link:hover {
+  background: #f8fafc;
+  border-color: #764ba2;
+  color: #764ba2;
+  transform: translateY(-1px);
+}
+
+.login-youtube-link:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18);
+}
+
 .spinner {
   width: 16px;
   height: 16px;

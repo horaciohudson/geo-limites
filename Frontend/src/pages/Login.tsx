@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 
+const GEOLIMITES_YOUTUBE_CHANNEL_URL = 'https://www.youtube.com/@Geolimites';
+
 interface LoginLocationState {
   message?: string;
   username?: string;
@@ -216,6 +218,15 @@ const Login: React.FC = () => {
                 <span>Conformidade com normas ABNT</span>
               </div>
             </div>
+            <a
+              className="login-youtube-link"
+              href={GEOLIMITES_YOUTUBE_CHANNEL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir o canal do GeoLimites no YouTube"
+            >
+              Youtube - Ajuda em Videos
+            </a>
           </div>
         </div>
       </div>
